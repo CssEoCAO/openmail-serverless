@@ -83,15 +83,16 @@ describe("stats router", () => {
       expect(data.recipients).toContain("other@saasmail.test");
     });
 
-    it("recipients comes from sender_identities, not received emails", async () => {
-      // Seed a received email for an inbox that is NOT in sender_identities.
+    it("recipients spans received addresses and configured identities", async () => {
+      // A catch-all address that has received mail but was never given
+      // custom config, so it owns no sender_identities row.
       await createTestPerson({ id: "s1", email: "a@test.com" });
       await createTestEmail({
         id: "e1",
         personId: "s1",
         recipient: "received-only@saasmail.test",
       });
-      // And a sender_identity that has no received mail yet — e.g. freshly
+      // And a sender_identity that has no received mail yet - e.g. freshly
       // created via POST /api/admin/inboxes.
       const now = Math.floor(Date.now() / 1000);
       await getDb().insert(senderIdentities).values({
@@ -103,8 +104,21 @@ describe("stats router", () => {
 
       const res = await authFetch("/api/stats", { apiKey });
       const data = await res.json();
-      expect(data.recipients).toEqual(["created-only@saasmail.test"]);
-      expect(data.recipients).not.toContain("received-only@saasmail.test");
+      // Both, and configured first: ComposeModal defaults From to
+      // recipients[0], so a bare catch-all address must not lead.
+      expect(data.recipients).toEqual([
+        "created-only@saasmail.test",
+        "received-only@saasmail.test",
+      ]);
+      expect(
+        data.senderIdentities.find(
+          (s: { email: string }) => s.email === "received-only@saasmail.test",
+        ),
+      ).toEqual({
+        email: "received-only@saasmail.test",
+        displayName: null,
+        signatureHtml: null,
+      });
     });
 
     it("filters by recipient", async () => {

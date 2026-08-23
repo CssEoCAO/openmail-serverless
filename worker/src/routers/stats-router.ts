@@ -78,10 +78,35 @@ statsRouter.openapi(statsRoute, async (c) => {
           : sql`${people.id} IN (SELECT person_id FROM ${emails} WHERE ${emails.recipient} IN ${allowed.inboxes})`,
     );
 
-  const allIdentities = await db.select().from(senderIdentities);
+  // An inbox is any address that has received mail, plus any configured
+  // sender identity -- the same universe GET /api/admin/inboxes reports.
+  // Reading sender_identities alone hid every catch-all address that was
+  // never given custom config, and that table is deliberately sparse: the
+  // PUT handler deletes a row once all its fields are back at defaults, so
+  // an inbox could drop out of this list just by clearing its display name.
+  // Configured identities sort first because ComposeModal defaults the From
+  // field to recipients[0], which must stay an address someone set up.
+  const universe = await db.all<{
+    email: string;
+    displayName: string | null;
+    signatureHtml: string | null;
+  }>(sql`
+    WITH universe AS (
+      SELECT DISTINCT recipient AS email FROM ${emails}
+      UNION
+      SELECT email FROM ${senderIdentities}
+    )
+    SELECT
+      u.email AS email,
+      s.display_name AS displayName,
+      s.signature_html AS signatureHtml
+    FROM universe u
+    LEFT JOIN ${senderIdentities} s ON s.email = u.email
+    ORDER BY (s.email IS NULL), u.email
+  `);
   const identityRows = allowed.isAdmin
-    ? allIdentities
-    : allIdentities.filter((r) => isInboxAllowed(allowed, r.email));
+    ? universe
+    : universe.filter((r) => isInboxAllowed(allowed, r.email));
 
   return c.json(
     {
