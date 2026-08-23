@@ -59,6 +59,11 @@ export const SendEmailSchema = z
         "Sender address. Must be a sender identity configured in this SaaSMail instance.",
       example: "noreply@yourdomain.com",
     }),
+    agendarHorarioComercial: z.boolean().optional().openapi({
+      description:
+        'When true, the message is written to the outbox for the next Brazilian business-hours slot (Mon-Fri, 09:00-18:00, UTC-3, skipping national holidays) instead of being sent now. The hourly cron delivers it. The response carries `status: "scheduled"` and `scheduledFor` (epoch seconds).',
+      example: false,
+    }),
     cc: z
       .array(CcEntrySchema)
       .max(MAX_CC_ENTRIES)
@@ -202,6 +207,11 @@ export const ReplyEmailSchema = z
       description:
         "Sending identity for the reply. Must be one of your configured inboxes.",
       example: "support@yourdomain.com",
+    }),
+    agendarHorarioComercial: z.boolean().optional().openapi({
+      description:
+        "When true, the reply is written to the outbox for the next Brazilian business-hours slot instead of being sent now.",
+      example: false,
     }),
     bodyHtml: z.string().max(MAX_BODY_CHARS).optional().openapi({
       description:

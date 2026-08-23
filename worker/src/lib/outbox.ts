@@ -50,7 +50,17 @@ export const MAX_OUTBOX_ATTEMPTS = 24;
 /** Caps one cron tick's work; anything beyond drains on subsequent ticks. */
 const OUTBOX_BATCH_LIMIT = 200;
 
-export type OutboxOutcome = "sent" | "suppressed" | "retrying" | "failed";
+/**
+ * `scheduled` e' o unico desfecho em que NENHUM provider foi tocado: a linha do outbox
+ * nasce pendente com `next_retry_at` no futuro e quem entrega e' o cron horario, pelo
+ * mesmo caminho de primeiro envio que uma linha nunca tentada ja percorre.
+ */
+export type OutboxOutcome =
+  | "sent"
+  | "suppressed"
+  | "retrying"
+  | "failed"
+  | "scheduled";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = DrizzleD1Database<any>;
@@ -132,6 +142,16 @@ export interface OutboxSendParams {
   transactional?: boolean;
   /** Last-moment ownership/cancellation fence immediately before transport. */
   beforeSend?: () => Promise<void>;
+  /**
+   * Epoch SEGUNDOS. Quando presente, a unidade e' gravada pendente para esse instante e
+   * NENHUM provider e' chamado neste request — o cron horario entrega.
+   *
+   * Reaproveita `next_retry_at`, que ja e' exatamente "nao tente antes de T", em vez de
+   * uma coluna nova: `attemptOutboxRow` ja sabe atender linha nunca tentada (wire_from
+   * NULL) pelo caminho completo de primeiro envio. O instante precisa cair em hora cheia,
+   * senao a mensagem espera ate o proximo disparo do cron — ver lib/horario-comercial.
+   */
+  agendadoPara?: number;
 }
 
 export interface OutboxSendResult {
@@ -166,6 +186,7 @@ export async function sendViaOutbox(
     attachments,
     transactional,
     beforeSend,
+    agendadoPara,
   } = params;
   // Canonical callers already lowercase addresses, but reject duplicate
   // envelope recipients defensively (To repeated in Cc or duplicate Cc).
@@ -275,12 +296,23 @@ export async function sendViaOutbox(
         provider,
         status: "pending",
         attempts: 0,
-        nextRetryAt: now + 3600,
+        nextRetryAt: agendadoPara ?? now + 3600,
         createdAt: now,
         updatedAt: now,
       }),
     ) as any,
   );
+
+  // Agendado: as unidades ja estao no write-ahead log com a hora certa, e o trabalho
+  // deste request acabou. Sair AQUI, depois do insert e antes do laco de provider, e' o
+  // que separa "agendar" de "enviar" — o resto do arquivo continua sendo o caminho de
+  // envio imediato, sem um `if` espalhado por dentro dele.
+  if (agendadoPara != null) {
+    return {
+      outcome: "scheduled",
+      send: { delivered: [], attempted: [], suppressed: [] },
+    };
+  }
 
   const delivered: string[] = [];
   const attempted: string[] = [];

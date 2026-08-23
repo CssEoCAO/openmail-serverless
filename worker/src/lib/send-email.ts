@@ -16,6 +16,7 @@ import {
   fitsD1EmailTextBudget,
 } from "./email-limits";
 import { formatFromAddress, sanitizeHeaderValue } from "./format-from-address";
+import { proximoHorarioComercial } from "./horario-comercial";
 import { assertInboxAllowed, type AllowedInboxes } from "./inbox-permissions";
 import { renderTemplate, type TemplateVariables } from "./interpolate";
 import { generateMessageId } from "./message-id";
@@ -61,6 +62,9 @@ export type SendEmailPayload = {
   bodyText?: string;
   replyTo?: string;
   transactional?: boolean;
+  /** Grava no outbox para o proximo slot de horario comercial em vez de enviar agora.
+   *  O instante e' calculado no servidor — ver lib/horario-comercial. */
+  agendarHorarioComercial?: boolean;
 };
 
 export type SendEmailParams = {
@@ -79,6 +83,10 @@ export type SendEmailSuccess = {
   attachmentIds: string[];
   delivered: string[];
   suppressed: string[];
+  /** Epoch segundos, so' quando `status === "scheduled"`. A tela confirma a hora com o
+   *  numero que o SERVIDOR calculou, e nao com uma conta propria — duas implementacoes
+   *  do mesmo calendario divergem, e a que o usuario ve seria a errada. */
+  scheduledFor?: number;
 };
 
 // The compose path has no recoverable failure mode of its own: multipart
@@ -101,6 +109,9 @@ export type ReplyEmailPayload = {
   templateSlug?: string;
   variables?: TemplateVariables;
   replyTo?: string;
+  /** Grava no outbox para o proximo slot de horario comercial em vez de enviar agora.
+   *  O instante e' calculado no servidor — ver lib/horario-comercial. */
+  agendarHorarioComercial?: boolean;
 };
 
 export type ReplyEmailParams = {
@@ -354,6 +365,12 @@ export async function sendEmail(
   // call is transient, the outbox processor can immediately reload every
   // attachment instead of retrying a stripped-down message.
   const attachmentIds = await persistSentAttachments(db, env, id, files, now);
+  // Agendar e' decidido AQUI, no servidor, e nao aceita instante vindo do cliente: um
+  // horario do browser poderia cair de madrugada, no passado, ou em minuto quebrado (o
+  // cron e' horario) — os tres viram entrega errada sem erro nenhum.
+  const agendadoPara = raw.agendarHorarioComercial
+    ? proximoHorarioComercial(Date.now())
+    : undefined;
   let outboxResult: Awaited<ReturnType<typeof sendViaOutbox>>;
   try {
     outboxResult = await sendViaOutbox({
@@ -371,6 +388,7 @@ export async function sendEmail(
       headers,
       attachments: attachmentList,
       transactional,
+      agendadoPara,
     });
   } catch (err) {
     await deleteSentAttachmentsIfUnqueued(db, env, id);
@@ -454,6 +472,7 @@ export async function sendEmail(
     messageId,
     resendId: sendResult.result?.id ?? null,
     status: outcome,
+    ...(agendadoPara != null ? { scheduledFor: agendadoPara } : {}),
     cc: cc && cc.length > 0 ? JSON.stringify(cc) : null,
     conversationId,
     sentAt: now,
@@ -469,6 +488,7 @@ export async function sendEmail(
     id,
     resendId: sendResult.result?.id ?? null,
     status: outcome,
+    ...(agendadoPara != null ? { scheduledFor: agendadoPara } : {}),
     attachmentIds,
     delivered: sendResult.delivered,
     suppressed: sendResult.suppressed,
@@ -674,6 +694,12 @@ export async function replyToEmail(
   // a bulk send).
   const id = nanoid();
   const attachmentIds = await persistSentAttachments(db, env, id, files, now);
+  // Agendar e' decidido AQUI, no servidor, e nao aceita instante vindo do cliente: um
+  // horario do browser poderia cair de madrugada, no passado, ou em minuto quebrado (o
+  // cron e' horario) — os tres viram entrega errada sem erro nenhum.
+  const agendadoPara = raw.agendarHorarioComercial
+    ? proximoHorarioComercial(Date.now())
+    : undefined;
   let outboxResult: Awaited<ReturnType<typeof sendViaOutbox>>;
   try {
     outboxResult = await sendViaOutbox({
@@ -698,6 +724,7 @@ export async function replyToEmail(
             })),
           }
         : {}),
+      agendadoPara,
       transactional: true,
     });
   } catch (err) {
@@ -719,6 +746,7 @@ export async function replyToEmail(
     messageId,
     resendId: sendResult.result?.id ?? null,
     status: outcome,
+    ...(agendadoPara != null ? { scheduledFor: agendadoPara } : {}),
     cc: cc && cc.length > 0 ? JSON.stringify(cc) : null,
     conversationId: conversationIdReply,
     sentAt: now,
@@ -734,6 +762,7 @@ export async function replyToEmail(
     id,
     resendId: sendResult.result?.id ?? null,
     status: outcome,
+    ...(agendadoPara != null ? { scheduledFor: agendadoPara } : {}),
     attachmentIds,
   };
 }

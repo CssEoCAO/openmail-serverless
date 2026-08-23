@@ -354,7 +354,15 @@ export async function sendEmail(data: {
   bodyHtml: string;
   bodyText?: string;
   files?: AttachedFile[];
-}): Promise<{ id: string; attachmentIds: string[]; status: string }> {
+  /** Grava no outbox para o próximo horário comercial em vez de enviar agora. */
+  agendarHorarioComercial?: boolean;
+}): Promise<{
+  id: string;
+  attachmentIds: string[];
+  status: string;
+  /** Epoch segundos; só vem quando status === "scheduled". */
+  scheduledFor?: number;
+}> {
   const { files = [], ...payload } = data;
   const fd = new FormData();
   // Manually composed emails are 1:1 transactional messages: no unsubscribe
@@ -378,8 +386,15 @@ export async function replyToEmail(
     templateSlug?: string;
     variables?: Record<string, string>;
     files?: AttachedFile[];
+    /** Grava no outbox para o próximo horário comercial em vez de enviar agora. */
+    agendarHorarioComercial?: boolean;
   },
-): Promise<{ id: string; attachmentIds: string[]; status: string }> {
+): Promise<{
+  id: string;
+  attachmentIds: string[];
+  status: string;
+  scheduledFor?: number;
+}> {
   const { files = [], ...payload } = data;
   const fd = new FormData();
   fd.append("payload", JSON.stringify(payload));

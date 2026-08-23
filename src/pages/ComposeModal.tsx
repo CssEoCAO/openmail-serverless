@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { PenSquare, Send, X } from "lucide-react";
+import { Clock, PenSquare, Send, X } from "lucide-react";
 import TiptapEditor from "@/components/TiptapEditor";
 import CcInput from "@/components/CcInput";
 import {
@@ -9,6 +9,10 @@ import {
   trayContentClass,
 } from "@/components/Tray";
 import { sendEmail, fetchStats, type CcEntry } from "@/lib/api";
+import {
+  proximoHorarioComercial,
+  rotuloBrasilia,
+} from "@worker/lib/horario-comercial";
 import { dispatchEmailSent } from "@/lib/email-events";
 import { getFromLabel } from "@/lib/format";
 import { sanitizeEmailHtml } from "@/lib/sanitize-html";
@@ -154,7 +158,13 @@ export default function ComposeModal({
     setSignatureHtml(match?.signatureHtml ?? null);
   }, [fromAddress, senderIdentities]);
 
-  async function handleSend() {
+  // O rotulo vem do MESMO modulo que o servidor usa (alias @worker), nao de uma copia
+  // do calendario no cliente: duas implementacoes divergem, e a que o usuario le seria a
+  // errada. Recalculado a cada render porque o modal pode ficar aberto atravessando as
+  // 18h — um rotulo congelado prometeria um horario que ja passou.
+  const rotuloSlot = rotuloBrasilia(proximoHorarioComercial(Date.now()));
+
+  async function handleSend(agendar = false) {
     if (!to || bodyIsEmpty) return;
     setSending(true);
     setError("");
@@ -175,6 +185,7 @@ export default function ComposeModal({
         bodyHtml: finalBody,
         ...(bodyText.trim() ? { bodyText } : {}),
         ...(files.length > 0 ? { files: files.map((file) => ({ file })) } : {}),
+        ...(agendar ? { agendarHorarioComercial: true } : {}),
       });
       dispatchEmailSent({ fromAddress, to, origin: "compose" });
       setFiles([]);
@@ -367,8 +378,24 @@ export default function ComposeModal({
               </button>
               <button
                 type="button"
+                data-testid="compose-schedule-button"
+                onClick={() => handleSend(true)}
+                title={`Fica na fila e sai ${rotuloSlot}, em horário comercial`}
+                disabled={
+                  sending ||
+                  bodyIsEmpty ||
+                  !to ||
+                  totalAttachmentBytes > ATTACHMENT_CAP_BYTES
+                }
+                className="inline-flex items-center gap-1.5 rounded-[6px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Clock size={12} />
+                {sending ? "…" : `Agendar ${rotuloSlot}`}
+              </button>
+              <button
+                type="button"
                 data-testid="compose-send-button"
-                onClick={handleSend}
+                onClick={() => handleSend()}
                 disabled={
                   sending ||
                   bodyIsEmpty ||

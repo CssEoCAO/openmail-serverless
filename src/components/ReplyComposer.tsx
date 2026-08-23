@@ -3,6 +3,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   X,
   Send,
+  Clock,
   Reply as ReplyIcon,
   FileText,
   Sparkles,
@@ -37,6 +38,10 @@ import {
   rascunhoVazio,
   salvarRascunho,
 } from "@/lib/rascunho";
+import {
+  proximoHorarioComercial,
+  rotuloBrasilia,
+} from "@worker/lib/horario-comercial";
 import { analyzeTemplateClient, chipLabel } from "@/lib/template-syntax";
 import { cn } from "@/lib/utils";
 
@@ -110,6 +115,8 @@ export default function ReplyComposer({
   // O selo usa o MESMO criterio de "vale guardar" que o salvarRascunho, senao a
   // tela diria "rascunho salvo" para um composer vazio, que nao gravou nada.
   const rascunhoAtivo = !rascunhoVazio({ fromAddress, cc, bodyHtml, bodyText });
+  // Mesmo modulo do servidor (alias @worker) — ver ComposeModal.
+  const rotuloSlot = rotuloBrasilia(proximoHorarioComercial(Date.now()));
 
   // Grava com folga: escrever no localStorage a cada tecla e desperdicio, e o
   // risco que isso cobre (fechar a aba) nunca acontece dentro de 600ms.
@@ -253,7 +260,7 @@ export default function ReplyComposer({
       .finally(() => setTemplatesLoading(false));
   }, [tab, templates.length]);
 
-  async function handleSend() {
+  async function handleSend(agendar = false) {
     setSending(true);
     setError("");
     const ccPayload = cc.length > 0 ? cc : undefined;
@@ -267,6 +274,7 @@ export default function ReplyComposer({
           ? `${bodyHtml}<div data-signature>${safeSignatureHtml}</div>`
           : bodyHtml;
         await replyToEmail(emailId, {
+          ...(agendar ? { agendarHorarioComercial: true } : {}),
           bodyHtml: finalBody,
           ...(bodyText.trim() ? { bodyText } : {}),
           fromAddress,
@@ -282,6 +290,7 @@ export default function ReplyComposer({
           return;
         }
         await replyToEmail(emailId, {
+          ...(agendar ? { agendarHorarioComercial: true } : {}),
           templateSlug: selectedSlug,
           variables: templateVars,
           fromAddress,
@@ -601,7 +610,20 @@ export default function ReplyComposer({
               </button>
               <button
                 type="button"
-                onClick={handleSend}
+                data-testid="reply-schedule-button"
+                onClick={() => handleSend(true)}
+                title={`Fica na fila e sai ${rotuloSlot}, em horário comercial`}
+                disabled={
+                  sending || totalAttachmentBytes > ATTACHMENT_CAP_BYTES
+                }
+                className="inline-flex items-center gap-1.5 rounded-[6px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Clock size={12} />
+                {sending ? "…" : `Agendar ${rotuloSlot}`}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSend()}
                 data-testid="reply-send-button"
                 disabled={
                   sending || totalAttachmentBytes > ATTACHMENT_CAP_BYTES
