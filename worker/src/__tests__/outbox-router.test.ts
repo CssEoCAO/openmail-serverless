@@ -237,6 +237,50 @@ describe("outbox router", () => {
     expect(res.status).toBe(404);
   });
 
+  it("cancels a SCHEDULED row (future next_retry_at, never attempted)", async () => {
+    // O par deste teste e o de mid-claim logo abaixo: os dois tem next_retry_at no
+    // futuro, e a UNICA coisa que os separa e `attempts`. O claim sempre incrementa
+    // antes de tocar o provider, entao attempts = 0 prova que nenhum processador
+    // encostou. Sem este ramo, "Agendar" seria irreversivel.
+    const db = getDb();
+    const now = Math.floor(Date.now() / 1000);
+    await db.insert(sentEmails).values({
+      id: "sent-agendado",
+      personId: null,
+      fromAddress: "me@saasmail.test",
+      toAddress: "to@example.com",
+      subject: "Hi",
+      status: "scheduled",
+      sentAt: now,
+      createdAt: now,
+    });
+    await db.insert(outboxEmails).values({
+      id: "ob-agendado",
+      sentEmailId: "sent-agendado",
+      fromAddress: "me@saasmail.test",
+      toAddress: "to@example.com",
+      subject: "Hi",
+      bodyHtml: "<p>Hi</p>",
+      transactional: 1,
+      status: "pending",
+      attempts: 0,
+      nextRetryAt: now + 7200,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const res = await authFetch("/api/outbox/ob-agendado", {
+      apiKey,
+      method: "DELETE",
+    });
+    expect(res.status).toBe(200);
+    const restante = await db
+      .select({ id: outboxEmails.id })
+      .from(outboxEmails)
+      .where(eq(outboxEmails.id, "ob-agendado"));
+    expect(restante).toHaveLength(0);
+  });
+
   it("refuses to cancel a row that is mid-claim (next_retry_at in the future)", async () => {
     const db = getDb();
     const now = Math.floor(Date.now() / 1000);

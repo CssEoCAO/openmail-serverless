@@ -112,6 +112,10 @@ const SentEmailResponseSchema = z.object({
   attachmentIds: z.array(z.string()),
   delivered: z.array(z.string()).default([]),
   suppressed: z.array(z.string()).default([]),
+  scheduledFor: z.number().optional().openapi({
+    description:
+      'Epoch seconds. Present only when status is "scheduled" — the instant the hourly outbox cron will deliver the message.',
+  }),
 });
 
 // Compose and send a new email
@@ -196,6 +200,9 @@ sendRouter.openapi(sendEmailRoute, async (c) => {
       attachmentIds: result.attachmentIds,
       delivered: result.delivered,
       suppressed: result.suppressed,
+      ...(result.scheduledFor != null
+        ? { scheduledFor: result.scheduledFor }
+        : {}),
     },
     201,
   );

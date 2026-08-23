@@ -1,5 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { and, desc, eq, inArray, lt, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, lt, lte, or, sql } from "drizzle-orm";
 import { outboxEmails } from "../db/outbox-emails.schema";
 import { sentEmails } from "../db/sent-emails.schema";
 import { createEmailSender } from "../lib/email-sender";
@@ -305,10 +305,27 @@ outboxRouter.openapi(cancelRoute, async (c) => {
     .where(
       row.status === "failed"
         ? and(eq(outboxEmails.id, id), eq(outboxEmails.status, "failed"))
-        : and(
-            eq(outboxEmails.id, id),
-            eq(outboxEmails.status, "pending"),
-            lte(outboxEmails.nextRetryAt, now),
+        : // `next_retry_at` no futuro tem DOIS significados desde que o envio agendado
+          // passou a usar o mesmo campo: claim de um envio em voo, ou "so' mande depois
+          // de T". O que separa os dois e' `attempts`: o claim sempre faz
+          // `attempts = attempts + 1` antes de tocar o provider, entao attempts = 0
+          // prova que nenhum processador chegou perto desta linha. E como o drenador so'
+          // reivindica `next_retry_at <= now`, ele tambem nao pode chegar agora.
+          //
+          // Sem este ramo, agendar seria irreversivel: a mensagem sairia na segunda de
+          // manha e nao haveria como parar — agendar sem cancelar e' uma armadilha.
+          or(
+            and(
+              eq(outboxEmails.id, id),
+              eq(outboxEmails.status, "pending"),
+              lte(outboxEmails.nextRetryAt, now),
+            ),
+            and(
+              eq(outboxEmails.id, id),
+              eq(outboxEmails.status, "pending"),
+              eq(outboxEmails.attempts, 0),
+              gt(outboxEmails.nextRetryAt, now),
+            ),
           ),
     )
     .returning({ id: outboxEmails.id });
