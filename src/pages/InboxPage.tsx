@@ -457,7 +457,7 @@ export default function InboxPage() {
           <InboxToolbar
             filters={filters}
             onFiltersChange={setFilters}
-            inboxes={stats?.senderIdentities ?? []}
+            inboxes={stats?.inboxes ?? []}
             search={search}
             onSearchChange={setSearch}
             view={view}
@@ -528,7 +528,7 @@ export default function InboxPage() {
                   conversation={selectedConversation}
                   refreshKey={refreshKey}
                   internalDomains={
-                    stats?.senderIdentities?.map((s) => {
+                    stats?.inboxes?.map((s) => {
                       const at = s.email.lastIndexOf("@");
                       return at === -1
                         ? ""
@@ -683,7 +683,7 @@ export default function InboxPage() {
                       conversation={selectedConversation}
                       refreshKey={refreshKey}
                       internalDomains={
-                        stats?.senderIdentities?.map((s) => {
+                        stats?.inboxes?.map((s) => {
                           const at = s.email.lastIndexOf("@");
                           return at === -1
                             ? ""

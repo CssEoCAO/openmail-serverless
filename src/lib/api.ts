@@ -102,11 +102,21 @@ export interface Stats {
   totalPeople: number;
   totalEmails: number;
   unreadCount: number;
+  /** Addresses the caller may send AS — only these have a sender_identities row,
+   *  which is where `outbound_provider` lives. Feeds every "From" picker. */
   recipients: string[];
   senderIdentities: Array<{
     email: string;
     displayName: string | null;
     signatureHtml: string | null;
+  }>;
+  /** Addresses that RECEIVE mail — the catch-all universe. Feeds filtering and the
+   *  inbox picker. A superset of `recipients`: an address can receive without being
+   *  configured to send, and offering one of those as "From" fails the send. */
+  inboxes: Array<{
+    email: string;
+    displayName: string | null;
+    podeEnviar: boolean;
   }>;
 }
 

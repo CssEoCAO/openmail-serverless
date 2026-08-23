@@ -16,12 +16,23 @@ const StatsSchema = z.object({
   totalPeople: z.number(),
   totalEmails: z.number(),
   unreadCount: z.number(),
+  // `recipients` e `senderIdentities` sao quem pode ENVIAR (linha em sender_identities).
+  // `inboxes` e quem RECEBE. Sao listas diferentes e confundi-las quebra os dois lados:
+  // oferecer no "De:" um endereco sem identidade faz o envio cair no provedor default e
+  // falhar; e filtrar so pelas identidades esconde as caixas de catch-all que so recebem.
   recipients: z.array(z.string()),
   senderIdentities: z.array(
     z.object({
       email: z.string(),
       displayName: z.string().nullable(),
       signatureHtml: z.string().nullable(),
+    }),
+  ),
+  inboxes: z.array(
+    z.object({
+      email: z.string(),
+      displayName: z.string().nullable(),
+      podeEnviar: z.boolean(),
     }),
   ),
 });
@@ -90,6 +101,7 @@ statsRouter.openapi(statsRoute, async (c) => {
     email: string;
     displayName: string | null;
     signatureHtml: string | null;
+    configurada: number;
   }>(sql`
     WITH universe AS (
       SELECT DISTINCT recipient AS email FROM ${emails}
@@ -99,25 +111,35 @@ statsRouter.openapi(statsRoute, async (c) => {
     SELECT
       u.email AS email,
       s.display_name AS displayName,
-      s.signature_html AS signatureHtml
+      s.signature_html AS signatureHtml,
+      (s.email IS NOT NULL) AS configurada
     FROM universe u
     LEFT JOIN ${senderIdentities} s ON s.email = u.email
     ORDER BY (s.email IS NULL), u.email
   `);
-  const identityRows = allowed.isAdmin
+  const visiveis = allowed.isAdmin
     ? universe
     : universe.filter((r) => isInboxAllowed(allowed, r.email));
+  // Enviar exige linha em sender_identities: e ela que carrega o `outbound_provider`.
+  // Sem ela o envio cai no provedor default e falha na cara do usuario -- foi o que
+  // aconteceu com contact@example.com em 23/08/2026.
+  const podemEnviar = visiveis.filter((r) => !!r.configurada);
 
   return c.json(
     {
       totalPeople: personCountRow[0]?.count ?? 0,
       totalEmails,
       unreadCount,
-      recipients: identityRows.map((r) => r.email),
-      senderIdentities: identityRows.map((r) => ({
+      recipients: podemEnviar.map((r) => r.email),
+      senderIdentities: podemEnviar.map((r) => ({
         email: r.email,
         displayName: r.displayName,
         signatureHtml: r.signatureHtml,
+      })),
+      inboxes: visiveis.map((r) => ({
+        email: r.email,
+        displayName: r.displayName,
+        podeEnviar: !!r.configurada,
       })),
     },
     200,

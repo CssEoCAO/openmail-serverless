@@ -83,17 +83,19 @@ describe("stats router", () => {
       expect(data.recipients).toContain("other@saasmail.test");
     });
 
-    it("recipients spans received addresses and configured identities", async () => {
-      // A catch-all address that has received mail but was never given
-      // custom config, so it owns no sender_identities row.
+    it("separates who can SEND from who RECEIVES", async () => {
+      // A catch-all address that receives but was never configured to send: it owns no
+      // sender_identities row, so it has no outbound_provider. Offering it in a "From"
+      // picker makes the send fall through to the default provider and fail in the
+      // user's face — that is exactly what happened to contact@example.com on
+      // 23/08/2026, after these two lists were briefly merged into one.
       await createTestPerson({ id: "s1", email: "a@test.com" });
       await createTestEmail({
         id: "e1",
         personId: "s1",
         recipient: "received-only@saasmail.test",
       });
-      // And a sender_identity that has no received mail yet - e.g. freshly
-      // created via POST /api/admin/inboxes.
+      // And a configured identity that has no received mail yet.
       const now = Math.floor(Date.now() / 1000);
       await getDb().insert(senderIdentities).values({
         email: "created-only@saasmail.test",
@@ -104,20 +106,26 @@ describe("stats router", () => {
 
       const res = await authFetch("/api/stats", { apiKey });
       const data = await res.json();
-      // Both, and configured first: ComposeModal defaults From to
-      // recipients[0], so a bare catch-all address must not lead.
-      expect(data.recipients).toEqual([
+
+      // Sending: only the configured identity.
+      expect(data.recipients).toEqual(["created-only@saasmail.test"]);
+      expect(
+        data.senderIdentities.map((s: { email: string }) => s.email),
+      ).toEqual(["created-only@saasmail.test"]);
+
+      // Receiving: both, configured first so the compose default stays sendable.
+      expect(data.inboxes.map((i: { email: string }) => i.email)).toEqual([
         "created-only@saasmail.test",
         "received-only@saasmail.test",
       ]);
       expect(
-        data.senderIdentities.find(
-          (s: { email: string }) => s.email === "received-only@saasmail.test",
+        data.inboxes.find(
+          (i: { email: string }) => i.email === "received-only@saasmail.test",
         ),
       ).toEqual({
         email: "received-only@saasmail.test",
         displayName: null,
-        signatureHtml: null,
+        podeEnviar: false,
       });
     });
 
