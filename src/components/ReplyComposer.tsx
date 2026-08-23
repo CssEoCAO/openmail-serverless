@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   X,
@@ -31,6 +31,12 @@ import {
 import { dispatchEmailSent } from "@/lib/email-events";
 import { getFromLabel } from "@/lib/format";
 import { sanitizeEmailHtml } from "@/lib/sanitize-html";
+import {
+  apagarRascunho,
+  lerRascunho,
+  rascunhoVazio,
+  salvarRascunho,
+} from "@/lib/rascunho";
 import { analyzeTemplateClient, chipLabel } from "@/lib/template-syntax";
 import { cn } from "@/lib/utils";
 
@@ -80,6 +86,41 @@ export default function ReplyComposer({
   const totalAttachmentBytes = files.reduce((s, f) => s + f.size, 0);
   // Compact tray vs. full-viewport. Toggled by the maximize button.
   const [fullscreen, setFullscreen] = useState(false);
+
+  // --- rascunho automatico -------------------------------------------------
+  // Restaura UMA vez por mensagem. O ref e o que impede o efeito de reescrever
+  // por cima do que o usuario acabou de digitar caso ele volte a rodar.
+  const rascunhoRestaurado = useRef<string | null>(null);
+  useEffect(() => {
+    if (rascunhoRestaurado.current === emailId) return;
+    rascunhoRestaurado.current = emailId;
+    const r = lerRascunho(emailId);
+    if (!r) return;
+    // So restaura o remetente se ele AINDA pode enviar: a lista de identidades
+    // muda (revogar acesso, remover identidade), e um rascunho de semana passada
+    // reporia um "De:" que hoje falha no envio.
+    if (r.fromAddress && recipients.includes(r.fromAddress)) {
+      setFromAddress(r.fromAddress);
+    }
+    setCc((r.cc as CcEntry[]) ?? []);
+    setBodyHtml(r.bodyHtml ?? "");
+    setBodyText(r.bodyText ?? "");
+  }, [emailId, recipients]);
+
+  // O selo usa o MESMO criterio de "vale guardar" que o salvarRascunho, senao a
+  // tela diria "rascunho salvo" para um composer vazio, que nao gravou nada.
+  const rascunhoAtivo = !rascunhoVazio({ fromAddress, cc, bodyHtml, bodyText });
+
+  // Grava com folga: escrever no localStorage a cada tecla e desperdicio, e o
+  // risco que isso cobre (fechar a aba) nunca acontece dentro de 600ms.
+  useEffect(() => {
+    if (rascunhoRestaurado.current !== emailId) return;
+    const t = setTimeout(
+      () => salvarRascunho(emailId, { fromAddress, cc, bodyHtml, bodyText }),
+      600,
+    );
+    return () => clearTimeout(t);
+  }, [emailId, fromAddress, cc, bodyHtml, bodyText]);
 
   // Sync the signature trail to the active From inbox.
   useEffect(() => {
@@ -259,6 +300,7 @@ export default function ReplyComposer({
         to: personEmail,
         origin: "reply",
       });
+      apagarRascunho(emailId);
       onSent();
       onClose();
     } catch {
@@ -531,6 +573,18 @@ export default function ReplyComposer({
                 </span>
               )}
             </div>
+            {/* Selo de rascunho. Diz o que NAO foi salvo, porque o risco aqui e o
+                usuario supor que o anexo voltou junto com o texto: File nao
+                serializa, entao o rascunho guarda so o que da pra guardar. */}
+            {rascunhoAtivo && (
+              <span
+                data-testid="reply-draft-hint"
+                className="mr-auto text-[11px] font-light text-text-tertiary"
+              >
+                Rascunho salvo neste navegador
+                {files.length > 0 ? " — anexos não são salvos" : ""}
+              </span>
+            )}
             <div className="flex shrink-0 items-center gap-2">
               <AttachmentPicker
                 onFilesAdded={(added) =>
