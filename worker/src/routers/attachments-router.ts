@@ -12,6 +12,17 @@ export const attachmentsRouter = new OpenAPIHono<{
   Variables: Variables;
 }>();
 
+// Attachment metadata comes from untrusted inbound MIME. In particular, an
+// attacker can label a body as text/html or image/svg+xml. These headers keep a
+// direct navigation to the authenticated inline URL from becoming same-origin
+// script execution while preserving ordinary CID images and PDF previews.
+const attachmentSecurityHeaders = {
+  "Content-Security-Policy": "sandbox; default-src 'none'; img-src data:",
+  "Cross-Origin-Resource-Policy": "same-origin",
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+} as const;
+
 // The owning inbox is `emails.recipient` for inbound and
 // `sent_emails.from_address` for sent — the external `to_address` is nobody's
 // inbox. A single query left-joins the owner from whichever table `kind`
@@ -87,10 +98,11 @@ attachmentsRouter.openapi(downloadRoute, async (c) => {
 
   return new Response(object.body, {
     headers: {
+      ...attachmentSecurityHeaders,
       "Content-Type": att.contentType,
       "Content-Disposition": `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`,
       "Content-Length": att.size.toString(),
-      "Cache-Control": "private, max-age=31536000, immutable",
+      "Cache-Control": "private, no-store",
     },
   });
 });
@@ -128,12 +140,13 @@ attachmentsRouter.openapi(inlineRoute, async (c) => {
 
   return new Response(object.body, {
     headers: {
+      ...attachmentSecurityHeaders,
       "Content-Type": att.contentType,
       "Content-Disposition": "inline",
       "Content-Length": att.size.toString(),
-      // `public` would let shared caches serve this mailbox content to another
-      // caller.
-      "Cache-Control": "private, max-age=31536000, immutable",
+      // Browser caches also outlive logout/permission revocation in the same
+      // profile, so authenticated mailbox bytes must be re-authorized.
+      "Cache-Control": "private, no-store",
     },
   });
 });

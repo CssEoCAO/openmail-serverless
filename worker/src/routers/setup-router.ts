@@ -1,6 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { users } from "../db/auth.schema";
+import { appSettings } from "../db/app-settings.schema";
 import { createAuth } from "../auth";
 import { json200Response } from "../lib/helpers";
 import type { Variables } from "../variables";
@@ -53,6 +54,28 @@ const ErrorSchema = z.object({
 async function countUsers(db: Variables["db"]): Promise<number> {
   const result = await db.select({ count: sql<number>`COUNT(*)` }).from(users);
   return result[0]?.count ?? 0;
+}
+
+const SETUP_CLAIM_KEY = "__setup_claim";
+
+async function claimSetup(db: Variables["db"]): Promise<string | null> {
+  const now = Math.floor(Date.now() / 1000);
+  const claim = `claim:${now}:${crypto.randomUUID()}`;
+  const inserted = await db
+    .insert(appSettings)
+    .values({
+      key: SETUP_CLAIM_KEY,
+      value: claim,
+      updatedAt: now,
+      updatedBy: null,
+    })
+    .onConflictDoNothing()
+    .returning({ key: appSettings.key });
+  if (inserted.length > 0) return claim;
+  // Never recover this claim by age. createUser is a separate durable side
+  // effect, so an expired lease cannot prove a previous Worker did not create
+  // an administrator before it died. A stale claim requires operator review.
+  return null;
 }
 
 const statusRoute = createRoute({
@@ -131,17 +154,62 @@ setupRouter.openapi(createRouteDef, async (c) => {
     return c.json({ error: "Setup has already been completed" }, 403);
   }
 
+  let setupClaim: string | null;
+  try {
+    setupClaim = await claimSetup(db);
+  } catch (err) {
+    if (String(err).includes("no such table: app_settings")) {
+      return c.json(MIGRATION_REQUIRED_RESPONSE, 503);
+    }
+    throw err;
+  }
+  if (!setupClaim) {
+    return c.json({ error: "Setup is already in progress or completed" }, 403);
+  }
+
   const { name, email, password } = c.req.valid("json");
 
   const auth = createAuth(c.env);
 
+  let newUser;
   try {
-    await auth.api.createUser({
+    newUser = await auth.api.createUser({
       body: { name, email, password, role: "admin" },
     });
   } catch (err) {
+    // Better Auth and the claim use separate D1 statements. If account
+    // creation failed before writing a user, release only this request's claim
+    // so an operator can retry. If a user exists, keep the claim fail-closed.
+    if ((await countUsers(db)) === 0) {
+      await db
+        .delete(appSettings)
+        .where(
+          and(
+            eq(appSettings.key, SETUP_CLAIM_KEY),
+            eq(appSettings.value, setupClaim),
+          ),
+        );
+    }
     const message = err instanceof Error ? err.message : "Signup failed";
     return c.json({ error: message }, 400);
+  }
+  const finalized = await db
+    .update(appSettings)
+    .set({
+      value: "complete",
+      updatedAt: Math.floor(Date.now() / 1000),
+      updatedBy: newUser.user.id,
+    })
+    .where(
+      and(
+        eq(appSettings.key, SETUP_CLAIM_KEY),
+        eq(appSettings.value, setupClaim),
+      ),
+    )
+    .returning({ key: appSettings.key });
+
+  if (finalized.length === 0) {
+    throw new Error("Setup claim was lost after administrator creation");
   }
 
   return c.json({ success: true }, 200);

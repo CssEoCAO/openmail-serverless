@@ -284,6 +284,14 @@ function stringify(value: TemplateValue): string {
  */
 export const MAX_SECTION_RENDERS = 20_000;
 
+/**
+ * Bound materialized output as well as render work. A repeated large value can
+ * stay below MAX_SECTION_RENDERS while still growing into a multi-megabyte
+ * string and exhausting a Worker isolate before the caller's post-render D1
+ * check gets a chance to run.
+ */
+export const MAX_RENDERED_TEMPLATE_CHARS = 1_750_000;
+
 /** Render-time settings threaded down the tree. */
 interface RenderContext {
   /** HTML-escape substituted values. False for plain-text output. */
@@ -317,6 +325,22 @@ interface RenderContext {
   missing: Set<string>;
   /** Remaining section-body renders; shared across the whole call. */
   budget: { left: number };
+  /** Remaining UTF-16 code units that may be materialized. */
+  outputBudget: { left: number };
+}
+
+function appendRendered(
+  out: string,
+  value: string,
+  ctx: RenderContext,
+): string {
+  ctx.outputBudget.left -= value.length;
+  if (ctx.outputBudget.left < 0) {
+    throw new TemplateRenderError(
+      `Template expanded past the ${MAX_RENDERED_TEMPLATE_CHARS}-character output limit.`,
+    );
+  }
+  return out + value;
 }
 
 function renderNodes(
@@ -327,7 +351,7 @@ function renderNodes(
   let out = "";
   for (const node of nodes) {
     if (node.kind === "text") {
-      out += node.value;
+      out = appendRendered(out, node.value, ctx);
       continue;
     }
     if (node.kind === "var") {
@@ -346,14 +370,22 @@ function renderNodes(
         // the top level and simply was not supplied, so it is recorded even
         // though it still renders empty.
         if (!node.optional && !ctx.scoped) ctx.missing.add(node.name);
-        out += node.optional || ctx.inSection ? "" : node.source;
+        out = appendRendered(
+          out,
+          node.optional || ctx.inSection ? "" : node.source,
+          ctx,
+        );
         continue;
       }
       const text =
         node.raw || !ctx.escape
           ? stringify(value)
           : escapeHtml(stringify(value));
-      out += applyFilters(text, node.filters, ctx.escape);
+      out = appendRendered(
+        out,
+        applyFilters(text, node.filters, ctx.escape),
+        ctx,
+      );
       continue;
     }
     out += renderSection(node, stack, ctx);
@@ -445,6 +477,8 @@ export interface InterpolateOptions {
    * and body rendered for the same send cannot each spend the full cap.
    */
   budget?: { left: number };
+  /** Shares one materialized-output budget across related renders. */
+  outputBudget?: { left: number };
 }
 
 /**
@@ -466,6 +500,9 @@ export function interpolate(
     scoped: false,
     missing: options.collectMissing ?? new Set<string>(),
     budget: options.budget ?? { left: MAX_SECTION_RENDERS },
+    outputBudget: options.outputBudget ?? {
+      left: MAX_RENDERED_TEMPLATE_CHARS,
+    },
   });
 }
 
@@ -639,6 +676,7 @@ export function renderTemplate(
   // One budget for the pair: a send should not be able to spend the cap twice
   // by splitting the work between subject and body.
   const budget = { left: MAX_SECTION_RENDERS };
+  const outputBudget = { left: MAX_RENDERED_TEMPLATE_CHARS };
   const collectMissing = new Set<string>();
   let subject: string;
   let bodyHtml: string;
@@ -649,10 +687,12 @@ export function renderTemplate(
       escape: false,
       collectMissing,
       budget,
+      outputBudget,
     });
     bodyHtml = interpolate(template.bodyHtml, variables, {
       collectMissing,
       budget,
+      outputBudget,
     });
   } catch (err) {
     if (err instanceof TemplateParseError) {

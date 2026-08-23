@@ -33,6 +33,7 @@ export class BavimailSender implements EmailSender {
   ) {}
 
   async send(params: SendEmailParams): Promise<SendEmailResult> {
+    let transportStarted = false;
     try {
       let attachmentIds: string[] = [];
       if (params.attachments && params.attachments.length > 0) {
@@ -70,6 +71,7 @@ export class BavimailSender implements EmailSender {
         }));
       }
 
+      transportStarted = true;
       const res = await this.fetchFn("https://api.bavimail.com/emails", {
         method: "POST",
         headers: {
@@ -91,7 +93,14 @@ export class BavimailSender implements EmailSender {
       return { id: data.id ?? null, error: null };
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      return { id: null, error: { message, transient: true } };
+      return {
+        id: null,
+        error: {
+          message,
+          transient: true,
+          ...(transportStarted ? { ambiguous: true } : {}),
+        },
+      };
     }
   }
 

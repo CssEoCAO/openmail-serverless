@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { signToken, verifyToken } from "../lib/unsubscribe-token";
+import {
+  MAX_UNSUBSCRIBE_TOKEN_LENGTH,
+  signToken,
+  verifyToken,
+} from "../lib/unsubscribe-token";
 
 const SECRET = "test-secret-do-not-use-in-prod";
 
@@ -47,5 +51,22 @@ describe("unsubscribe-token", () => {
     expect(await verifyToken("no-dot", SECRET)).toBeNull();
     expect(await verifyToken("a.b.c", SECRET)).toBeNull();
     expect(await verifyToken("not-base64.not-base64", SECRET)).toBeNull();
+  });
+
+  it("fails closed when the signing secret is missing", async () => {
+    await expect(signToken("alice@example.com", undefined)).rejects.toThrow(
+      /UNSUBSCRIBE_SECRET/,
+    );
+    await expect(signToken("alice@example.com", "")).rejects.toThrow(
+      /UNSUBSCRIBE_SECRET/,
+    );
+    expect(await verifyToken("payload.signature", undefined)).toBeNull();
+    expect(await verifyToken("payload.signature", "")).toBeNull();
+  });
+
+  it("rejects oversized tokens before decoding or hashing", async () => {
+    expect(
+      await verifyToken("a".repeat(MAX_UNSUBSCRIBE_TOKEN_LENGTH + 1), SECRET),
+    ).toBeNull();
   });
 });

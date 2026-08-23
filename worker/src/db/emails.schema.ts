@@ -4,6 +4,7 @@ import {
   integer,
   real,
   index,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
 export const emails = sqliteTable(
@@ -16,7 +17,7 @@ export const emails = sqliteTable(
     bodyHtml: text("body_html"),
     bodyText: text("body_text"),
     rawHeaders: text("raw_headers"),
-    messageId: text("message_id").unique(),
+    messageId: text("message_id"),
     spf: text("spf"),
     dkim: text("dkim"),
     dmarc: text("dmarc"),
@@ -40,6 +41,12 @@ export const emails = sqliteTable(
     createdAt: integer("created_at").notNull(),
   },
   (table) => [
+    // One RFC message can legitimately be routed to more than one inbox on
+    // this instance. Deduplicate redeliveries within an inbox, not globally.
+    uniqueIndex("emails_message_recipient_unique").on(
+      table.messageId,
+      table.recipient,
+    ),
     index("emails_person_received_idx").on(table.personId, table.receivedAt),
     index("emails_recipient_received_idx").on(
       table.recipient,

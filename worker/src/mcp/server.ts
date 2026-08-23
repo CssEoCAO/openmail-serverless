@@ -5,7 +5,11 @@ import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type { AllowedInboxes } from "../lib/inbox-permissions";
 import { SCOPE_READ, SCOPE_SEND, SCOPE_MANAGE, hasScope } from "../auth/scopes";
 import { sendTemplate } from "../lib/send-template";
-import { enrollPersonInSequence } from "../lib/enroll-sequence";
+import {
+  enrollPersonInSequence,
+  MAX_SEQUENCE_DELAY_HOURS,
+  MAX_SEQUENCE_STEPS,
+} from "../lib/enroll-sequence";
 import { sendEmail, replyToEmail } from "../lib/send-email";
 import { listPeople, getPersonScoped } from "../lib/queries/people";
 import {
@@ -335,7 +339,7 @@ export function buildMcpServer(ctx: McpContext): McpServer {
         slug: z.string().describe("Template slug."),
         to: z.email().describe("Recipient email address."),
         fromAddress: z
-          .string()
+          .email()
           .describe("Sender identity; must be one of your allowed inboxes."),
         variables: templateVariablesSchema
           .optional()
@@ -417,7 +421,7 @@ export function buildMcpServer(ctx: McpContext): McpServer {
         },
         allowed,
       });
-      return ok(result);
+      return result.ok ? ok(result) : fail(result.message);
     }),
   );
 
@@ -518,7 +522,7 @@ export function buildMcpServer(ctx: McpContext): McpServer {
           .optional()
           .describe("Existing contact id. Use instead of personEmail."),
         fromAddress: z
-          .string()
+          .email()
           .describe("Sender identity; must be one of your allowed inboxes."),
         variables: templateVariablesSchema
           .optional()
@@ -526,11 +530,19 @@ export function buildMcpServer(ctx: McpContext): McpServer {
             "Values for placeholders used by the sequence templates. May be nested arrays/objects for {{#section}} bodies.",
           ),
         skipSteps: z
-          .array(z.number().int())
+          .array(z.number().int().min(1).max(MAX_SEQUENCE_STEPS))
+          .max(MAX_SEQUENCE_STEPS)
           .optional()
           .describe("Step `order` numbers to skip entirely."),
         delayOverrides: z
-          .record(z.string(), z.number())
+          .record(
+            z.string().regex(/^\d{1,9}$/),
+            z.number().int().min(0).max(MAX_SEQUENCE_DELAY_HOURS),
+          )
+          .refine(
+            (overrides) => Object.keys(overrides).length <= MAX_SEQUENCE_STEPS,
+            `At most ${MAX_SEQUENCE_STEPS} delay overrides are supported`,
+          )
           .optional()
           .describe(
             "Map of step order (as a string) to hours, overriding that step's delay. The first step always sends immediately.",

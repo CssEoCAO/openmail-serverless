@@ -719,6 +719,7 @@ export interface AdminInbox {
   email: string;
   displayName: string | null;
   displayMode: InboxDisplayMode;
+  outboundProvider: "cloudflare" | "resend";
   signatureHtml: string | null;
   /** Destination address for per-inbox forwarding; null = forwarding off. */
   forwardTo: string | null;
@@ -733,6 +734,7 @@ export async function createInbox(data: {
   email: string;
   displayName?: string | null;
   displayMode?: InboxDisplayMode;
+  outboundProvider?: "cloudflare" | "resend";
 }): Promise<AdminInbox> {
   return apiFetch("/api/admin/inboxes", {
     method: "POST",
@@ -746,6 +748,7 @@ export async function updateInboxSettings(
   patch: {
     displayName?: string | null;
     displayMode?: InboxDisplayMode;
+    outboundProvider?: "cloudflare" | "resend";
     signatureHtml?: string | null;
     forwardTo?: string | null;
   },
@@ -753,6 +756,7 @@ export async function updateInboxSettings(
   email: string;
   displayName: string | null;
   displayMode: InboxDisplayMode;
+  outboundProvider: "cloudflare" | "resend";
   signatureHtml: string | null;
   forwardTo: string | null;
 }> {

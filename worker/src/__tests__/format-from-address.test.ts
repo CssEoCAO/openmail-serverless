@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { encodeDisplayName } from "../lib/format-from-address";
+import {
+  encodeDisplayName,
+  sanitizeHeaderValue,
+} from "../lib/format-from-address";
 
 describe("encodeDisplayName", () => {
   it("leaves a plain display name as a bare atom sequence", () => {
@@ -25,5 +28,12 @@ describe("encodeDisplayName", () => {
       '"Bob \\"The Builder\\""',
     );
     expect(encodeDisplayName("back\\slash, inc")).toBe('"back\\\\slash, inc"');
+  });
+
+  it("collapses header controls in display names", () => {
+    expect(encodeDisplayName("Support\r\nBcc: attacker@example.com")).toBe(
+      '"Support Bcc: attacker@example.com"',
+    );
+    expect(sanitizeHeaderValue("hello\0\nworld")).toBe("hello world");
   });
 });

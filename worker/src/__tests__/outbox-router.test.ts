@@ -107,6 +107,29 @@ describe("outbox router", () => {
     expect(await res.json()).toEqual({ pending: 1 });
   });
 
+  it("hides sent crash markers and never retries or cancels them", async () => {
+    await seedRow("ob-sent", { status: "sent", createdAtOffset: -3600 });
+
+    const listed = await authFetch("/api/outbox", { apiKey });
+    expect((await listed.json()).items).toHaveLength(0);
+
+    const retry = await authFetch("/api/outbox/ob-sent/retry", {
+      apiKey,
+      method: "POST",
+    });
+    expect(retry.status).toBe(200);
+    expect(await retry.json()).toEqual({ outcome: "sent" });
+
+    const cancel = await authFetch("/api/outbox/ob-sent", {
+      apiKey,
+      method: "DELETE",
+    });
+    expect(cancel.status).toBe(409);
+    const rows = await getDb().select().from(outboxEmails);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("sent");
+  });
+
   it("cancels a row: deletes it and fails the sent email", async () => {
     await seedRow("ob-1");
     const res = await authFetch("/api/outbox/ob-1", {

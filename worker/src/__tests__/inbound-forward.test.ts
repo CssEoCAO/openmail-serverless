@@ -135,6 +135,23 @@ describe("buildForwardMessage — envelope rewriting", () => {
     expect(message.subject).toBe("(no subject)");
   });
 
+  it("collapses untrusted header controls from the inbound message", () => {
+    const { message } = ok({
+      subject: "Help\r\nBcc: attacker@example.com",
+      messageId: "<abc@example.com>\r\nX-Injected: yes",
+      from: {
+        address: "jane@example.com\r\nX-Injected: yes",
+        name: "Jane\r\nBcc: attacker@example.com",
+      },
+    });
+
+    expect(message.subject).toBe("Help Bcc: attacker@example.com");
+    expect(message.from).not.toMatch(/[\r\n]/);
+    for (const value of Object.values(message.headers ?? {})) {
+      expect(value).not.toMatch(/[\r\n]/);
+    }
+  });
+
   it("stamps the loop trip-wire header with the inbox", () => {
     const { message } = ok();
     expect(message.headers?.[FORWARD_LOOP_HEADER]).toBe("support@acme.com");

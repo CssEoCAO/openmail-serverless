@@ -192,6 +192,32 @@ describe("sendWithSuppressionCheck", () => {
     expect(sent[0].headers?.["List-Unsubscribe"]).toBeUndefined();
   });
 
+  it("collapses header injection characters before transport", async () => {
+    await sendWithSuppressionCheck({
+      db: getDb(),
+      env: fakeEnv,
+      sender: fakeSender,
+      from: "test@host",
+      to: "alice@example.com",
+      cc: [
+        {
+          email: "carol@example.com",
+          name: "Carol\r\nBcc: attacker@example.com",
+        },
+      ],
+      subject: "Receipt\r\nBcc: attacker@example.com",
+      html: "<p>token</p>",
+      headers: { "X-Audit": "ok\r\nX-Injected: yes" },
+      transactional: true,
+    });
+
+    expect(sent[0].subject).toBe("Receipt Bcc: attacker@example.com");
+    expect(sent[0].cc).toEqual([
+      '"Carol Bcc: attacker@example.com" <carol@example.com>',
+    ]);
+    expect(sent[0].headers?.["X-Audit"]).toBe("ok X-Injected: yes");
+  });
+
   it("with transactional=true, bypasses suppression entirely", async () => {
     await suppress("alice@example.com");
     const result = await sendWithSuppressionCheck({

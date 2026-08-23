@@ -3,8 +3,10 @@ import { z } from "@hono/zod-openapi";
 import type { ZodType } from "zod";
 import type { Context } from "hono";
 import { sanitizeFilename } from "./sanitize-filename";
+import { sanitizeContentType } from "./sanitize-content-type";
 
 export const MAX_ATTACHMENTS = 50;
+export const MAX_SEND_PAYLOAD_BYTES = 2 * 1024 * 1024;
 
 export interface ParsedSendBody<T> {
   payload: T;
@@ -25,6 +27,7 @@ export type SendParseError =
     }
   | { kind: "too-many-files"; limit: number; provided: number }
   | { kind: "too-large"; limitBytes: number; providedBytes: number }
+  | { kind: "payload-too-large"; limitBytes: number; providedBytes: number }
   | { kind: "missing-payload" };
 
 /**
@@ -49,6 +52,18 @@ export async function parseSendBody<T>(
   const payloadRaw = form.get("payload");
   if (typeof payloadRaw !== "string") {
     return { ok: false, err: { kind: "missing-payload" } };
+  }
+
+  const payloadBytes = new TextEncoder().encode(payloadRaw).byteLength;
+  if (payloadBytes > MAX_SEND_PAYLOAD_BYTES) {
+    return {
+      ok: false,
+      err: {
+        kind: "payload-too-large",
+        limitBytes: MAX_SEND_PAYLOAD_BYTES,
+        providedBytes: payloadBytes,
+      },
+    };
   }
 
   let parsedJson: unknown;
@@ -108,7 +123,7 @@ export async function parseSendBody<T>(
     const buf = new Uint8Array(await f.arrayBuffer());
     files.push({
       filename: sanitizeFilename(f.name || "unnamed"),
-      contentType: f.type || "application/octet-stream",
+      contentType: sanitizeContentType(f.type),
       bytes: buf,
       size: buf.byteLength,
     });
@@ -144,6 +159,15 @@ export function sendParseErrorResponse(err: SendParseError): {
         status: 413,
         body: {
           error: "Attachments exceed size limit",
+          limitBytes: err.limitBytes,
+          providedBytes: err.providedBytes,
+        },
+      };
+    case "payload-too-large":
+      return {
+        status: 413,
+        body: {
+          error: "Email payload exceeds size limit",
           limitBytes: err.limitBytes,
           providedBytes: err.providedBytes,
         },

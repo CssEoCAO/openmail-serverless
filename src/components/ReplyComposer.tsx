@@ -456,7 +456,9 @@ export default function ReplyComposer({
                             <div
                               className="prose prose-sm max-h-48 max-w-none overflow-auto text-sm text-text-secondary"
                               dangerouslySetInnerHTML={{
-                                __html: selectedTemplate.bodyHtml,
+                                __html: sanitizeEmailHtml(
+                                  selectedTemplate.bodyHtml,
+                                ),
                               }}
                             />
                           </div>

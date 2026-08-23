@@ -1,4 +1,9 @@
 const encoder = new TextEncoder();
+export const MAX_UNSUBSCRIBE_TOKEN_LENGTH = 2048;
+
+function hasSigningSecret(secret: string | undefined): secret is string {
+  return typeof secret === "string" && secret.length > 0;
+}
 
 function b64urlEncode(bytes: Uint8Array): string {
   let bin = "";
@@ -38,8 +43,11 @@ function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
 
 export async function signToken(
   email: string,
-  secret: string,
+  secret: string | undefined,
 ): Promise<string> {
+  if (!hasSigningSecret(secret)) {
+    throw new Error("UNSUBSCRIBE_SECRET is not configured");
+  }
   const payload = JSON.stringify({ e: email.toLowerCase(), v: 1 });
   const payloadBytes = encoder.encode(payload);
   const key = await hmacKey(secret);
@@ -51,9 +59,16 @@ export async function signToken(
 
 export async function verifyToken(
   token: string,
-  secret: string,
+  secret: string | undefined,
 ): Promise<{ email: string } | null> {
-  if (!token || typeof token !== "string") return null;
+  if (
+    !token ||
+    typeof token !== "string" ||
+    token.length > MAX_UNSUBSCRIBE_TOKEN_LENGTH ||
+    !hasSigningSecret(secret)
+  ) {
+    return null;
+  }
   const parts = token.split(".");
   if (parts.length !== 2) return null;
   const [payloadEnc, sigEnc] = parts;

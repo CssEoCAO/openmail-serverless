@@ -1,5 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { assertInboxAllowed, isInboxAllowed } from "../lib/inbox-permissions";
 import { emailTemplates } from "../db/email-templates.schema";
@@ -14,6 +14,12 @@ import {
   SendPathErrorSchema,
 } from "../lib/openapi-send-errors";
 import { templateVariablesSchema } from "../lib/template-variables-schema";
+import { canModifyTemplate, canReadTemplate } from "../lib/template-access";
+import {
+  EMAIL_CONTENT_TOO_LARGE_MESSAGE,
+  fitsD1EmailTextBudget,
+  MAX_D1_EMAIL_TEXT_BYTES,
+} from "../lib/email-limits";
 
 export const emailTemplatesRouter = new OpenAPIHono<{
   Bindings: CloudflareBindings;
@@ -56,6 +62,28 @@ const EmailTemplateSchema = z.object({
   updatedAt: z.number(),
 });
 
+const MAX_TEMPLATE_NAME_CHARS = 200;
+const MAX_TEMPLATE_SUBJECT_CHARS = 998;
+const MAX_TEMPLATE_SLUG_CHARS = 200;
+
+function templateFitsStorage(params: {
+  id?: string;
+  slug: string;
+  name: string;
+  subject: string;
+  bodyHtml: string;
+  fromAddress?: string | null;
+}): boolean {
+  return fitsD1EmailTextBudget(
+    params.id,
+    params.slug,
+    params.name,
+    params.subject,
+    params.bodyHtml,
+    params.fromAddress,
+  );
+}
+
 const createTemplateRoute = createRoute({
   method: "post",
   path: "/",
@@ -66,10 +94,13 @@ const createTemplateRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            slug: z.string().regex(/^[a-z0-9-]+$/),
-            name: z.string(),
-            subject: z.string(),
-            bodyHtml: z.string(),
+            slug: z
+              .string()
+              .max(MAX_TEMPLATE_SLUG_CHARS)
+              .regex(/^[a-z0-9-]+$/),
+            name: z.string().max(MAX_TEMPLATE_NAME_CHARS),
+            subject: z.string().max(MAX_TEMPLATE_SUBJECT_CHARS),
+            bodyHtml: z.string().max(MAX_D1_EMAIL_TEXT_BYTES),
             fromAddress: z.string().email().nullable().optional(),
           }),
         },
@@ -89,6 +120,8 @@ const createTemplateRoute = createRoute({
 emailTemplatesRouter.openapi(createTemplateRoute, async (c) => {
   const db = c.get("db");
   const { slug, name, subject, bodyHtml, fromAddress } = c.req.valid("json");
+  const canonicalFromAddress =
+    fromAddress == null ? null : fromAddress.trim().toLowerCase();
 
   const parseError = templateParseError(subject, bodyHtml);
   if (parseError) {
@@ -96,8 +129,8 @@ emailTemplatesRouter.openapi(createTemplateRoute, async (c) => {
   }
 
   const allowed = c.get("allowedInboxes")!;
-  if (fromAddress != null) {
-    assertInboxAllowed(allowed, fromAddress);
+  if (canonicalFromAddress != null) {
+    assertInboxAllowed(allowed, canonicalFromAddress);
   } else if (!allowed.isAdmin) {
     // Members cannot create global (null) templates.
     return c.json({ error: "from_address is required for members" }, 403);
@@ -110,10 +143,13 @@ emailTemplatesRouter.openapi(createTemplateRoute, async (c) => {
     name,
     subject,
     bodyHtml,
-    fromAddress: fromAddress ?? null,
+    fromAddress: canonicalFromAddress,
     createdAt: now,
     updatedAt: now,
   };
+  if (!templateFitsStorage(template)) {
+    return c.json({ error: EMAIL_CONTENT_TOO_LARGE_MESSAGE }, 400);
+  }
   await db.insert(emailTemplates).values(template);
   return c.json(template, 201);
 });
@@ -180,10 +216,8 @@ emailTemplatesRouter.openapi(getTemplateRoute, async (c) => {
     return c.json({ error: "Template not found" }, 404);
   }
   const allowed = c.get("allowedInboxes")!;
-  if (!allowed.isAdmin && rows[0].fromAddress !== null) {
-    if (!isInboxAllowed(allowed, rows[0].fromAddress)) {
-      return c.json({ error: "Template not found" }, 404);
-    }
+  if (!canReadTemplate(allowed, rows[0].fromAddress)) {
+    return c.json({ error: "Template not found" }, 404);
   }
   return c.json(rows[0], 200);
 });
@@ -201,9 +235,9 @@ const updateTemplateRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            name: z.string().optional(),
-            subject: z.string().optional(),
-            bodyHtml: z.string().optional(),
+            name: z.string().max(MAX_TEMPLATE_NAME_CHARS).optional(),
+            subject: z.string().max(MAX_TEMPLATE_SUBJECT_CHARS).optional(),
+            bodyHtml: z.string().max(MAX_D1_EMAIL_TEXT_BYTES).optional(),
             fromAddress: z.string().email().nullable().optional(),
           }),
         },
@@ -224,6 +258,17 @@ emailTemplatesRouter.openapi(updateTemplateRoute, async (c) => {
   const db = c.get("db");
   const { slug } = c.req.valid("param");
   const updates = c.req.valid("json");
+  const canonicalUpdates = {
+    ...updates,
+    ...(updates.fromAddress === undefined
+      ? {}
+      : {
+          fromAddress:
+            updates.fromAddress === null
+              ? null
+              : updates.fromAddress.trim().toLowerCase(),
+        }),
+  };
   const now = Math.floor(Date.now() / 1000);
 
   const existing = await db
@@ -236,31 +281,61 @@ emailTemplatesRouter.openapi(updateTemplateRoute, async (c) => {
   }
 
   const allowed = c.get("allowedInboxes")!;
-  if (updates.fromAddress !== undefined && updates.fromAddress !== null) {
-    assertInboxAllowed(allowed, updates.fromAddress);
+  if (!canReadTemplate(allowed, existing[0].fromAddress)) {
+    return c.json({ error: "Template not found" }, 404);
+  }
+  if (!canModifyTemplate(allowed, existing[0].fromAddress)) {
+    return c.json({ error: "Global templates are admin-managed" }, 403);
+  }
+  if (!allowed.isAdmin && canonicalUpdates.fromAddress === null) {
+    return c.json({ error: "Members cannot create global templates" }, 403);
+  }
+  if (
+    canonicalUpdates.fromAddress !== undefined &&
+    canonicalUpdates.fromAddress !== null
+  ) {
+    assertInboxAllowed(allowed, canonicalUpdates.fromAddress);
   }
 
   // Both fields are optional on this route, so validate the template as it
   // will exist AFTER the merge — editing only the subject can still leave a
   // section unbalanced across the pair.
   const parseError = templateParseError(
-    updates.subject ?? existing[0].subject,
-    updates.bodyHtml ?? existing[0].bodyHtml,
+    canonicalUpdates.subject ?? existing[0].subject,
+    canonicalUpdates.bodyHtml ?? existing[0].bodyHtml,
   );
   if (parseError) {
     return c.json({ error: parseError }, 400);
   }
 
-  await db
-    .update(emailTemplates)
-    .set({ ...updates, updatedAt: now })
-    .where(eq(emailTemplates.slug, slug));
+  if (
+    !templateFitsStorage({
+      id: existing[0].id,
+      slug,
+      name: canonicalUpdates.name ?? existing[0].name,
+      subject: canonicalUpdates.subject ?? existing[0].subject,
+      bodyHtml: canonicalUpdates.bodyHtml ?? existing[0].bodyHtml,
+      fromAddress:
+        canonicalUpdates.fromAddress === undefined
+          ? existing[0].fromAddress
+          : canonicalUpdates.fromAddress,
+    })
+  ) {
+    return c.json({ error: EMAIL_CONTENT_TOO_LARGE_MESSAGE }, 400);
+  }
 
+  const ownerFence =
+    existing[0].fromAddress === null
+      ? isNull(emailTemplates.fromAddress)
+      : eq(emailTemplates.fromAddress, existing[0].fromAddress);
   const updated = await db
-    .select()
-    .from(emailTemplates)
-    .where(eq(emailTemplates.slug, slug))
-    .limit(1);
+    .update(emailTemplates)
+    .set({ ...canonicalUpdates, updatedAt: now })
+    .where(and(eq(emailTemplates.slug, slug), ownerFence))
+    .returning();
+  if (updated.length === 0) {
+    return c.json({ error: "Template ownership changed" }, 404);
+  }
   return c.json(updated[0], 200);
 });
 
@@ -292,7 +367,25 @@ emailTemplatesRouter.openapi(deleteTemplateRoute, async (c) => {
     return c.json({ error: "Template not found" }, 404);
   }
 
-  await db.delete(emailTemplates).where(eq(emailTemplates.slug, slug));
+  const allowed = c.get("allowedInboxes")!;
+  if (!canReadTemplate(allowed, existing[0].fromAddress)) {
+    return c.json({ error: "Template not found" }, 404);
+  }
+  if (!canModifyTemplate(allowed, existing[0].fromAddress)) {
+    return c.json({ error: "Global templates are admin-managed" }, 403);
+  }
+
+  const ownerFence =
+    existing[0].fromAddress === null
+      ? isNull(emailTemplates.fromAddress)
+      : eq(emailTemplates.fromAddress, existing[0].fromAddress);
+  const deleted = await db
+    .delete(emailTemplates)
+    .where(and(eq(emailTemplates.slug, slug), ownerFence))
+    .returning({ id: emailTemplates.id });
+  if (deleted.length === 0) {
+    return c.json({ error: "Template ownership changed" }, 404);
+  }
   return c.json({ success: true }, 200);
 });
 
@@ -348,6 +441,10 @@ emailTemplatesRouter.openapi(getTemplateVariablesRoute, async (c) => {
     .limit(1);
 
   if (rows.length === 0) {
+    return c.json({ error: "Template not found" }, 404);
+  }
+
+  if (!canReadTemplate(c.get("allowedInboxes")!, rows[0].fromAddress)) {
     return c.json({ error: "Template not found" }, 404);
   }
 
@@ -441,7 +538,10 @@ emailTemplatesRouter.openapi(sendTemplateRoute, async (c) => {
     if (result.code === "TEMPLATE_NOT_FOUND") {
       return c.json({ error: result.message }, 404);
     }
-    if (result.code === "TEMPLATE_PARSE_ERROR") {
+    if (
+      result.code === "TEMPLATE_PARSE_ERROR" ||
+      result.code === "CONTENT_TOO_LARGE"
+    ) {
       return c.json({ error: result.message }, 400);
     }
     return c.json(

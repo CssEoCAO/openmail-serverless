@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { nanoid } from "nanoid";
 import { attachments } from "../db/attachments.schema";
@@ -7,18 +7,45 @@ import { emails } from "../db/emails.schema";
 import { people } from "../db/people.schema";
 import { senderIdentities } from "../db/sender-identities.schema";
 import { sentEmails } from "../db/sent-emails.schema";
+import { outboxEmails } from "../db/outbox-emails.schema";
 import { cancelSequencesForPerson } from "./cancel-sequence";
 import { computeConversationId, externalsOnly } from "./conversation-id";
 import { createEmailSender } from "./email-sender";
-import { formatFromAddress } from "./format-from-address";
+import {
+  EMAIL_CONTENT_TOO_LARGE_MESSAGE,
+  fitsD1EmailTextBudget,
+} from "./email-limits";
+import { formatFromAddress, sanitizeHeaderValue } from "./format-from-address";
 import { assertInboxAllowed, type AllowedInboxes } from "./inbox-permissions";
 import { renderTemplate, type TemplateVariables } from "./interpolate";
 import { generateMessageId } from "./message-id";
 import type { ParsedFile } from "./multipart-send";
-import { sendViaOutbox, type OutboxOutcome } from "./outbox";
+import {
+  finalizeSuccessfulOutbox,
+  sendViaOutbox,
+  type OutboxOutcome,
+} from "./outbox";
+import { canReadTemplate } from "./template-access";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = DrizzleD1Database<any>;
+
+async function cancelSequencesForEmails(
+  db: Db,
+  addresses: readonly string[],
+): Promise<void> {
+  const canonical = Array.from(
+    new Set(addresses.map((address) => address.trim().toLowerCase())),
+  ).filter(Boolean);
+  if (canonical.length === 0) return;
+  const recipients = await db
+    .select({ id: people.id })
+    .from(people)
+    .where(inArray(people.email, canonical));
+  for (const recipient of recipients) {
+    await cancelSequencesForPerson(db, recipient.id);
+  }
+}
 
 export type SendCcEntry = {
   email: string;
@@ -58,7 +85,13 @@ export type SendEmailSuccess = {
 // parse errors are handled before this runs, and a disallowed inbox throws
 // (HTTPException). Kept as a discriminated union so callers branch on `ok`
 // the same way they do for replies.
-export type SendEmailResult = SendEmailSuccess;
+export type SendEmailResult =
+  | SendEmailSuccess
+  | {
+      ok: false;
+      code: "CONTENT_TOO_LARGE";
+      message: string;
+    };
 
 export type ReplyEmailPayload = {
   fromAddress: string;
@@ -96,7 +129,8 @@ export type ReplyEmailFailure =
         | "EMAIL_HAS_NO_PERSON"
         | "TEMPLATE_NOT_FOUND"
         | "MISSING_BODY"
-        | "TEMPLATE_PARSE_ERROR";
+        | "TEMPLATE_PARSE_ERROR"
+        | "CONTENT_TOO_LARGE";
       message: string;
     }
   | {
@@ -143,27 +177,106 @@ async function persistSentAttachments(
     const r2Key = `attachments/sent/${sentEmailId}/${attachmentId}/${f.filename}`;
     return { attachmentId, r2Key, file: f };
   });
-  await Promise.all(
-    rows.map((r) =>
-      env.R2.put(r.r2Key, r.file.bytes, {
-        httpMetadata: { contentType: r.file.contentType },
-      }),
-    ),
-  );
-  await db.insert(attachments).values(
-    rows.map((r) => ({
-      id: r.attachmentId,
-      emailId: sentEmailId,
-      kind: "sent" as const,
-      filename: r.file.filename,
-      contentType: r.file.contentType,
-      size: r.file.size,
-      r2Key: r.r2Key,
-      contentId: null,
-      createdAt: now,
-    })),
-  );
+  const uploadedKeys: string[] = [];
+  try {
+    for (const row of rows) {
+      await env.R2.put(row.r2Key, row.file.bytes, {
+        httpMetadata: { contentType: row.file.contentType },
+      });
+      uploadedKeys.push(row.r2Key);
+    }
+  } catch (err) {
+    await Promise.allSettled(uploadedKeys.map((key) => env.R2.delete(key)));
+    throw err;
+  }
+
+  const values = rows.map((r) => ({
+    id: r.attachmentId,
+    emailId: sentEmailId,
+    kind: "sent" as const,
+    filename: r.file.filename,
+    contentType: r.file.contentType,
+    size: r.file.size,
+    r2Key: r.r2Key,
+    contentId: null,
+    createdAt: now,
+  }));
+  try {
+    // D1 allows only 100 bound parameters per statement. A single 50-row
+    // insert binds roughly 450 values, so keep each row as its own statement
+    // inside one transactional batch.
+    await db.batch(
+      values.map((value) => db.insert(attachments).values(value)) as any,
+    );
+  } catch (err) {
+    // A lost D1 response can look like a failed insert even though the single
+    // multi-row statement committed. Preserve R2 when all generated ids are
+    // present; otherwise clean up this attempt's immutable objects.
+    const committed = await db
+      .select({ id: attachments.id })
+      .from(attachments)
+      .where(
+        inArray(
+          attachments.id,
+          rows.map((row) => row.attachmentId),
+        ),
+      );
+    if (committed.length !== rows.length) {
+      await Promise.allSettled(uploadedKeys.map((key) => env.R2.delete(key)));
+      await db.delete(attachments).where(
+        inArray(
+          attachments.id,
+          rows.map((row) => row.attachmentId),
+        ),
+      );
+      throw err;
+    }
+  }
   return rows.map((r) => r.attachmentId);
+}
+
+/**
+ * A thrown provider call can be an ambiguous acceptance. Preserve retry
+ * material whenever its write-ahead row exists; deleting R2 in that case
+ * would make the retry send a materially different message.
+ */
+async function deleteSentAttachmentsIfUnqueued(
+  db: Db,
+  env: CloudflareBindings,
+  sentEmailId: string,
+): Promise<void> {
+  try {
+    const queued = await db
+      .select({ id: outboxEmails.id })
+      .from(outboxEmails)
+      .where(eq(outboxEmails.sentEmailId, sentEmailId))
+      .limit(1);
+    if (queued.length > 0) return;
+  } catch {
+    // On an ambiguous D1 read, preserving immutable objects is safer than
+    // corrupting a possibly committed outbox row.
+    return;
+  }
+  await deleteSentAttachments(db, env, sentEmailId);
+}
+
+async function deleteSentAttachments(
+  db: Db,
+  env: CloudflareBindings,
+  sentEmailId: string,
+): Promise<void> {
+  const rows = await db
+    .select({ id: attachments.id, r2Key: attachments.r2Key })
+    .from(attachments)
+    .where(
+      and(eq(attachments.emailId, sentEmailId), eq(attachments.kind, "sent")),
+    );
+  await Promise.allSettled(rows.map((row) => env.R2.delete(row.r2Key)));
+  await db
+    .delete(attachments)
+    .where(
+      and(eq(attachments.emailId, sentEmailId), eq(attachments.kind, "sent")),
+    );
 }
 
 /**
@@ -186,13 +299,46 @@ export async function sendEmail(
     email: c.email.trim().toLowerCase(),
     name: c.name ?? null,
   }));
-  const { subject, bodyHtml, bodyText, transactional } = raw;
+  const subject = sanitizeHeaderValue(raw.subject);
+  const { bodyHtml, bodyText, transactional } = raw;
   const replyTo = raw.replyTo?.trim().toLowerCase();
   assertInboxAllowed(allowed, fromAddress);
   const now = Math.floor(Date.now() / 1000);
 
   const messageId = generateMessageId(fromAddress);
+  const headers = {
+    "Message-ID": messageId,
+    ...(replyTo ? { "Reply-To": replyTo } : {}),
+  };
+  if (
+    !fitsD1EmailTextBudget(
+      fromAddress,
+      to,
+      cc && cc.length > 0 ? JSON.stringify(cc) : null,
+      subject,
+      bodyHtml,
+      bodyText,
+      JSON.stringify(headers),
+    )
+  ) {
+    return {
+      ok: false,
+      code: "CONTENT_TOO_LARGE",
+      message: EMAIL_CONTENT_TOO_LARGE_MESSAGE,
+    };
+  }
   const formattedFrom = await formatFromAddress(db, fromAddress);
+  const internalDomains = await fetchInternalDomains(db);
+  // A direct/manual attempt supersedes an active drip. Cancel before the
+  // durable outbox/provider boundary so a Worker crash after acceptance can
+  // never leave the automated sequence running alongside the manual message.
+  await cancelSequencesForEmails(
+    db,
+    externalsOnly(
+      [to, ...(cc ?? []).map((recipient) => recipient.email)],
+      internalDomains,
+    ),
+  );
 
   const attachmentList =
     files.length > 0
@@ -204,38 +350,38 @@ export async function sendEmail(
       : undefined;
 
   const id = nanoid();
-  const { outcome, send: sendResult } = await sendViaOutbox({
-    db,
-    env,
-    sender,
-    sentEmailId: id,
-    fromAddress,
-    from: formattedFrom,
-    to,
-    cc,
-    subject,
-    html: bodyHtml,
-    text: bodyText,
-    headers: {
-      "Message-ID": messageId,
-      ...(replyTo ? { "Reply-To": replyTo } : {}),
-    },
-    attachments: attachmentList,
-    transactional,
-  });
+  // Persist retry material before the first provider attempt. If the inline
+  // call is transient, the outbox processor can immediately reload every
+  // attachment instead of retrying a stripped-down message.
+  const attachmentIds = await persistSentAttachments(db, env, id, files, now);
+  let outboxResult: Awaited<ReturnType<typeof sendViaOutbox>>;
+  try {
+    outboxResult = await sendViaOutbox({
+      db,
+      env,
+      sender,
+      sentEmailId: id,
+      fromAddress,
+      from: formattedFrom,
+      to,
+      cc,
+      subject,
+      html: bodyHtml,
+      text: bodyText,
+      headers,
+      attachments: attachmentList,
+      transactional,
+    });
+  } catch (err) {
+    await deleteSentAttachmentsIfUnqueued(db, env, id);
+    throw err;
+  }
+  const { outcome, send: sendResult } = outboxResult;
 
-  // Every recipient was suppressed — no send happened. Skip sent_emails write,
-  // but still cancel any pending sequence enrollments for the recipient so we
-  // stop scheduling steps that will all individually re-suppress at dispatch.
-  if (sendResult.delivered.length === 0) {
-    const existingPerson = await db
-      .select({ id: people.id })
-      .from(people)
-      .where(eq(people.email, to))
-      .limit(1);
-    if (existingPerson[0]) {
-      await cancelSequencesForPerson(db, existingPerson[0].id);
-    }
+  // Every recipient was suppressed — no send happened. The matching drips
+  // were already cancelled before the outbox/provider boundary above.
+  if (outcome === "suppressed") {
+    await deleteSentAttachments(db, env, id);
 
     console.log(
       "[send] all recipients suppressed",
@@ -256,7 +402,7 @@ export async function sendEmail(
   // When the primary `to` was suppressed, the helper promoted a surviving cc
   // to be the actual primary recipient. Use that for audit + person lookup so
   // the row reflects who actually got the email.
-  const recordedTo = sendResult.delivered[0];
+  const recordedTo = sendResult.delivered[0] ?? sendResult.attempted?.[0] ?? to;
 
   // Find or create the person row for the actual recipient.
   const existingPerson = await db
@@ -291,7 +437,6 @@ export async function sendEmail(
     personId = refetched[0]!.id;
   }
 
-  const internalDomains = await fetchInternalDomains(db);
   const externals = externalsOnly(
     [recordedTo, ...(cc ?? []).map((c) => c.email)],
     internalDomains,
@@ -315,11 +460,9 @@ export async function sendEmail(
     createdAt: now,
   });
 
-  // Persist attachments even on failure: a retrying/failed send must be able
-  // to reload its attachment bytes from R2 on a later attempt.
-  const attachmentIds = await persistSentAttachments(db, env, id, files, now);
-
-  await cancelSequencesForPerson(db, personId);
+  if (outcome === "sent" || outcome === "failed") {
+    await finalizeSuccessfulOutbox(db, id);
+  }
 
   return {
     ok: true,
@@ -441,6 +584,14 @@ export async function replyToEmail(
       };
     }
 
+    if (!canReadTemplate(allowed, templateRows[0].fromAddress)) {
+      return {
+        ok: false,
+        code: "TEMPLATE_NOT_FOUND",
+        message: "Template not found",
+      };
+    }
+
     const rendered = renderTemplate(templateRows[0], variables ?? {});
     if (!rendered.ok) {
       if (rendered.parseError) {
@@ -459,13 +610,15 @@ export async function replyToEmail(
       };
     }
 
-    finalSubject = rendered.subject;
+    finalSubject = sanitizeHeaderValue(rendered.subject);
     finalBodyHtml = rendered.bodyHtml;
   } else if (bodyHtml) {
     // Freeform reply
-    finalSubject = origSubject?.startsWith("Re: ")
-      ? origSubject
-      : `Re: ${origSubject || ""}`;
+    finalSubject = sanitizeHeaderValue(
+      origSubject?.startsWith("Re: ")
+        ? origSubject
+        : `Re: ${origSubject || ""}`,
+    );
     finalBodyHtml = bodyHtml;
   } else {
     return {
@@ -476,54 +629,82 @@ export async function replyToEmail(
   }
 
   const messageId = generateMessageId(fromAddress);
-  const formattedFrom = await formatFromAddress(db, fromAddress);
-  // Replies are 1:1 conversational responses to an inbound — the recipient
-  // initiated by emailing first, so route through sendViaOutbox
-  // with transactional: true. That bypasses the suppression list AND skips
-  // the unsubscribe footer / List-Unsubscribe header (this is a reply, not
-  // a bulk send).
-  const id = nanoid();
-  const { outcome, send: sendResult } = await sendViaOutbox({
-    db,
-    env,
-    sender,
-    sentEmailId: id,
-    fromAddress,
-    from: formattedFrom,
-    to: toAddress,
-    cc,
-    subject: finalSubject,
-    html: finalBodyHtml,
-    ...(bodyText !== undefined ? { text: bodyText } : {}),
-    headers: {
-      "Message-ID": messageId,
-      ...(origInReplyToMessageId
-        ? { "In-Reply-To": origInReplyToMessageId }
-        : {}),
-      ...(replyTo ? { "Reply-To": replyTo } : {}),
-    },
-    ...(files.length > 0
-      ? {
-          attachments: files.map((f) => ({
-            filename: f.filename,
-            contentType: f.contentType,
-            content: f.bytes,
-          })),
-        }
+  const headers = {
+    "Message-ID": messageId,
+    ...(origInReplyToMessageId
+      ? { "In-Reply-To": origInReplyToMessageId }
       : {}),
-    transactional: true,
-  });
-
-  // Compute conversation_id for this reply.
+    ...(replyTo ? { "Reply-To": replyTo } : {}),
+  };
+  if (
+    !fitsD1EmailTextBudget(
+      fromAddress,
+      toAddress,
+      cc && cc.length > 0 ? JSON.stringify(cc) : null,
+      finalSubject,
+      finalBodyHtml,
+      bodyText,
+      JSON.stringify(headers),
+    )
+  ) {
+    return {
+      ok: false,
+      code: "CONTENT_TOO_LARGE",
+      message: EMAIL_CONTENT_TOO_LARGE_MESSAGE,
+    };
+  }
+  const formattedFrom = await formatFromAddress(db, fromAddress);
   const internalDomainsReply = await fetchInternalDomains(db);
   const externalsReply = externalsOnly(
-    [toAddress, ...(cc ?? []).map((c) => c.email)],
+    [toAddress, ...(cc ?? []).map((recipient) => recipient.email)],
     internalDomainsReply,
   );
   const conversationIdReply = await computeConversationId(
     fromAddress,
     externalsReply,
   );
+  // Fail closed before transport: a manual reply supersedes an existing drip
+  // even if the provider later rejects or queues the attempt for retry.
+  await cancelSequencesForEmails(db, externalsReply);
+  await cancelSequencesForPerson(db, origPersonId);
+  // Replies are 1:1 conversational responses to an inbound — the recipient
+  // initiated by emailing first, so route through sendViaOutbox
+  // with transactional: true. That bypasses the suppression list AND skips
+  // the unsubscribe footer / List-Unsubscribe header (this is a reply, not
+  // a bulk send).
+  const id = nanoid();
+  const attachmentIds = await persistSentAttachments(db, env, id, files, now);
+  let outboxResult: Awaited<ReturnType<typeof sendViaOutbox>>;
+  try {
+    outboxResult = await sendViaOutbox({
+      db,
+      env,
+      sender,
+      sentEmailId: id,
+      fromAddress,
+      from: formattedFrom,
+      to: toAddress,
+      cc,
+      subject: finalSubject,
+      html: finalBodyHtml,
+      ...(bodyText !== undefined ? { text: bodyText } : {}),
+      headers,
+      ...(files.length > 0
+        ? {
+            attachments: files.map((f) => ({
+              filename: f.filename,
+              contentType: f.contentType,
+              content: f.bytes,
+            })),
+          }
+        : {}),
+      transactional: true,
+    });
+  } catch (err) {
+    await deleteSentAttachmentsIfUnqueued(db, env, id);
+    throw err;
+  }
+  const { outcome, send: sendResult } = outboxResult;
 
   // Store sent email
   await db.insert(sentEmails).values({
@@ -544,12 +725,9 @@ export async function replyToEmail(
     createdAt: now,
   });
 
-  // Persist attachments even on failure: a retrying/failed send must be able
-  // to reload its attachment bytes from R2 on a later attempt.
-  const attachmentIds = await persistSentAttachments(db, env, id, files, now);
-
-  // Cancel any active sequences for this person
-  await cancelSequencesForPerson(db, origPersonId);
+  if (outcome === "sent" || outcome === "failed") {
+    await finalizeSuccessfulOutbox(db, id);
+  }
 
   return {
     ok: true,

@@ -78,6 +78,30 @@ describe("sequences router", () => {
       });
       expect(res.status).toBe(400);
     });
+
+    it("rejects duplicate step orders and unsafe delay horizons", async () => {
+      await createTestTemplate({ slug: "welcome" });
+      for (const steps of [
+        [
+          { order: 1, templateSlug: "welcome", delayHours: 0 },
+          { order: 1, templateSlug: "welcome", delayHours: 1 },
+        ],
+        [
+          {
+            order: 1,
+            templateSlug: "welcome",
+            delayHours: Number.MAX_SAFE_INTEGER,
+          },
+        ],
+      ]) {
+        const res = await authFetch("/api/sequences", {
+          apiKey,
+          method: "POST",
+          body: JSON.stringify({ name: "Invalid schedule", steps }),
+        });
+        expect(res.status).toBe(400);
+      }
+    });
   });
 
   describe("GET /api/sequences", () => {
@@ -191,6 +215,38 @@ describe("sequences router", () => {
       expect(data.scheduledEmails[0].status).toBe("queued");
     });
 
+    it("schedules stored steps by order even when the input array is unsorted", async () => {
+      await createTestTemplate({ slug: "welcome" });
+      await createTestTemplate({ slug: "follow-up" });
+      const create = await authFetch("/api/sequences", {
+        apiKey,
+        method: "POST",
+        body: JSON.stringify({
+          name: "Unsorted",
+          steps: [
+            { order: 2, templateSlug: "follow-up", delayHours: 24 },
+            { order: 1, templateSlug: "welcome", delayHours: 0 },
+          ],
+        }),
+      });
+      expect(create.status).toBe(201);
+      const sequence = await create.json();
+      await createTestPerson({ id: "sorted-person", email: "sorted@test.com" });
+      const enrolled = await authFetch(`/api/sequences/${sequence.id}/enroll`, {
+        apiKey,
+        method: "POST",
+        body: JSON.stringify({
+          personId: "sorted-person",
+          fromAddress: "me@saasmail.test",
+        }),
+      });
+      expect(enrolled.status).toBe(201);
+      const data = await enrolled.json();
+      expect(data.scheduledEmails.map((email: any) => email.stepOrder)).toEqual(
+        [1, 2],
+      );
+    });
+
     it("rejects enrollment for nonexistent person", async () => {
       const seq = await createSequenceWithTemplates();
       const res = await authFetch(`/api/sequences/${seq.id}/enroll`, {
@@ -226,6 +282,26 @@ describe("sequences router", () => {
         }),
       });
       expect(res.status).toBe(400);
+    });
+
+    it("allows only one concurrent active enrollment per person", async () => {
+      const seq = await createSequenceWithTemplates();
+      await createTestPerson({ id: "s1", email: "a@test.com" });
+      const enroll = () =>
+        authFetch(`/api/sequences/${seq.id}/enroll`, {
+          apiKey,
+          method: "POST",
+          body: JSON.stringify({
+            personId: "s1",
+            fromAddress: "me@saasmail.test",
+          }),
+        });
+
+      const responses = await Promise.all([enroll(), enroll()]);
+      expect(responses.map((res) => res.status).sort()).toEqual([201, 400]);
+      const db = getDb();
+      expect(await db.select().from(sequenceEnrollments)).toHaveLength(1);
+      expect(await db.select().from(sequenceEmails)).toHaveLength(2);
     });
 
     it("supports skipSteps", async () => {
@@ -305,6 +381,31 @@ describe("sequences router", () => {
         .where(eq(people.email, "new-person@test.com"));
       expect(rows).toHaveLength(1);
       expect(rows[0].id).toBe(data.enrollment.personId);
+    });
+
+    it("canonicalizes person and sender casing before enrollment", async () => {
+      const seq = await createSequenceWithTemplates();
+      const first = await authFetch(`/api/sequences/${seq.id}/enroll`, {
+        apiKey,
+        method: "POST",
+        body: JSON.stringify({
+          personEmail: "Case@Example.COM",
+          fromAddress: "ME@SAASMAIL.TEST",
+        }),
+      });
+      expect(first.status).toBe(201);
+      const firstBody = await first.json();
+      expect(firstBody.enrollment.fromAddress).toBe("me@saasmail.test");
+
+      const second = await authFetch(`/api/sequences/${seq.id}/enroll`, {
+        apiKey,
+        method: "POST",
+        body: JSON.stringify({
+          personEmail: "case@example.com",
+          fromAddress: "me@saasmail.test",
+        }),
+      });
+      expect(second.status).toBe(400);
     });
 
     it("rejects when neither personId nor personEmail provided", async () => {

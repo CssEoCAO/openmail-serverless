@@ -57,7 +57,10 @@ describe("requirePasskey middleware", () => {
     const { userId } = await createTestUser();
     const db = getDb();
     const c = makeContext({
-      env: { DISABLE_PASSKEY_GATE: "true" },
+      env: {
+        DISABLE_PASSKEY_GATE: "true",
+        BASE_URL: "http://localhost:8788",
+      },
       user: { id: userId },
       authMethod: "session",
       db,
@@ -67,6 +70,26 @@ describe("requirePasskey middleware", () => {
       nextCalled = true;
     });
     expect(nextCalled).toBe(true);
+  });
+
+  it("does not honor the development bypass on a hosted URL", async () => {
+    const { userId } = await createTestUser();
+    const db = getDb();
+    const c = makeContext({
+      env: {
+        DISABLE_PASSKEY_GATE: "true",
+        BASE_URL: "https://mail.example.com",
+      },
+      user: { id: userId },
+      authMethod: "session",
+      db,
+    });
+    let nextCalled = false;
+    await requirePasskey(c, async () => {
+      nextCalled = true;
+    });
+    expect(nextCalled).toBe(false);
+    expect((c as any)._captured().body.code).toBe("PASSKEY_REQUIRED");
   });
 
   it("blocks session users who have no passkey when the gate is on", async () => {

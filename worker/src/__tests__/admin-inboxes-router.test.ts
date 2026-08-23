@@ -98,7 +98,7 @@ describe("admin inboxes router", () => {
     expect(rows).toHaveLength(0);
   });
 
-  it("GET returns displayMode (defaulting to 'chat' when no row)", async () => {
+  it("GET returns display and provider defaults when no identity row exists", async () => {
     const { apiKey } = await createTestUser({ role: "admin" });
     await createTestPerson();
     await createTestEmail({ recipient: "a@x.com" });
@@ -116,12 +116,41 @@ describe("admin inboxes router", () => {
       email: string;
       displayName: string | null;
       displayMode: "thread" | "chat";
+      outboundProvider: "cloudflare" | "resend";
     }>;
     const byEmail = Object.fromEntries(body.map((b) => [b.email, b]));
     // a@x.com has no sender_identities row → falls back to default (chat).
     expect(byEmail["a@x.com"].displayMode).toBe("chat");
+    expect(byEmail["a@x.com"].outboundProvider).toBe("cloudflare");
     // b@x.com has an explicit thread row → preserved.
     expect(byEmail["b@x.com"].displayMode).toBe("thread");
+    expect(byEmail["b@x.com"].outboundProvider).toBe("cloudflare");
+  });
+
+  it("PATCH persists the outbound provider independently per identity", async () => {
+    const { apiKey } = await createTestUser({ role: "admin" });
+    await createTestPerson();
+    await createTestEmail({ recipient: "support@example.com" });
+
+    const res = await authFetch(
+      `/api/admin/inboxes/${encodeURIComponent("support@example.com")}`,
+      {
+        apiKey,
+        method: "PATCH",
+        body: JSON.stringify({ outboundProvider: "resend" }),
+      },
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      outboundProvider: "cloudflare" | "resend";
+    };
+    expect(body.outboundProvider).toBe("resend");
+    const rows = await getDb()
+      .select()
+      .from(senderIdentities)
+      .where(eq(senderIdentities.email, "support@example.com"));
+    expect(rows[0]?.outboundProvider).toBe("resend");
   });
 
   it("PATCH persists displayMode independently of displayName", async () => {
@@ -208,7 +237,7 @@ describe("admin inboxes router", () => {
     expect(rows).toHaveLength(0);
   });
 
-  it("PATCH returns 400 when neither field is provided", async () => {
+  it("PATCH returns 400 when no field is provided", async () => {
     const { apiKey } = await createTestUser({ role: "admin" });
     const res = await authFetch(
       `/api/admin/inboxes/${encodeURIComponent("a@x.com")}`,

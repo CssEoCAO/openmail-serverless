@@ -33,6 +33,9 @@ export default function AdminInboxTable() {
   const [loading, setLoading] = useState(true);
   const [newEmail, setNewEmail] = useState("");
   const [newDisplayName, setNewDisplayName] = useState("");
+  const [newOutboundProvider, setNewOutboundProvider] = useState<
+    "cloudflare" | "resend"
+  >("cloudflare");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -90,6 +93,7 @@ export default function AdminInboxTable() {
       const created = await createInbox({
         email,
         displayName: newDisplayName.trim() || null,
+        outboundProvider: newOutboundProvider,
       });
       setInboxes((prev) =>
         prev.some((r) => r.email === created.email)
@@ -99,6 +103,7 @@ export default function AdminInboxTable() {
                     ...r,
                     displayName: created.displayName,
                     displayMode: created.displayMode,
+                    outboundProvider: created.outboundProvider,
                   }
                 : r,
             )
@@ -106,6 +111,7 @@ export default function AdminInboxTable() {
       );
       setNewEmail("");
       setNewDisplayName("");
+      setNewOutboundProvider("cloudflare");
     } catch (err) {
       setCreateError(
         err instanceof Error ? err.message : "Failed to create inbox",
@@ -128,6 +134,7 @@ export default function AdminInboxTable() {
               displayMode: res.displayMode,
               signatureHtml: res.signatureHtml,
               forwardTo: res.forwardTo,
+              outboundProvider: res.outboundProvider,
             }
           : r,
       ),
@@ -218,6 +225,40 @@ export default function AdminInboxTable() {
     }
   }
 
+  async function handleSetOutboundProvider(
+    inbox: AdminInbox,
+    next: "cloudflare" | "resend",
+  ) {
+    if (inbox.outboundProvider === next) return;
+    const before = inbox.outboundProvider;
+    setInboxes((all) =>
+      all.map((row) =>
+        row.email === inbox.email ? { ...row, outboundProvider: next } : row,
+      ),
+    );
+    try {
+      const result = await updateInboxSettings(inbox.email, {
+        outboundProvider: next,
+      });
+      setInboxes((all) =>
+        all.map((row) =>
+          row.email === inbox.email
+            ? { ...row, outboundProvider: result.outboundProvider }
+            : row,
+        ),
+      );
+    } catch (error) {
+      setInboxes((all) =>
+        all.map((row) =>
+          row.email === inbox.email
+            ? { ...row, outboundProvider: before }
+            : row,
+        ),
+      );
+      console.error("Failed to update outbound provider", error);
+    }
+  }
+
   async function handleToggleAssignment(inbox: AdminInbox, userId: string) {
     const has = inbox.assignedUserIds.includes(userId);
     const nextIds = has
@@ -295,6 +336,20 @@ export default function AdminInboxTable() {
             data-testid="inbox-create-email"
             className="h-9 flex-1 rounded-[6px] border border-border bg-card px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-text-primary/15"
           />
+          <select
+            value={newOutboundProvider}
+            onChange={(event) =>
+              setNewOutboundProvider(
+                event.currentTarget.value as "cloudflare" | "resend",
+              )
+            }
+            aria-label="Outbound provider"
+            data-testid="inbox-create-outbound-provider"
+            className="h-9 rounded-[6px] border border-border bg-card px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-text-primary/15"
+          >
+            <option value="cloudflare">Cloudflare</option>
+            <option value="resend">Resend</option>
+          </select>
           <input
             type="text"
             value={newDisplayName}
@@ -415,6 +470,7 @@ export default function AdminInboxTable() {
                   <th className="px-3 py-2.5 font-semibold">Display name</th>
                   <th className="px-3 py-2.5 font-semibold">Signature</th>
                   <th className="px-3 py-2.5 font-semibold">Mode</th>
+                  <th className="px-3 py-2.5 font-semibold">Provider</th>
                   <th className="px-3 py-2.5 font-semibold">Forward to</th>
                   <th className="px-3 py-2.5 font-semibold">Members</th>
                   <th className="w-16 px-3 py-2.5 text-right font-semibold">
@@ -525,6 +581,28 @@ export default function AdminInboxTable() {
                         </div>
                       </td>
 
+                      {/* Outbound provider — explicit per identity so one
+                          global secret never changes every domain's transport. */}
+                      <td className="px-3 py-2.5">
+                        <select
+                          value={inbox.outboundProvider}
+                          onChange={(event) =>
+                            handleSetOutboundProvider(
+                              inbox,
+                              event.currentTarget.value as
+                                | "cloudflare"
+                                | "resend",
+                            )
+                          }
+                          aria-label={`Outbound provider for ${inbox.email}`}
+                          data-testid="inbox-outbound-provider"
+                          className="h-8 rounded-[6px] border border-border bg-card px-2 text-xs font-medium text-text-primary focus:outline-none focus:ring-2 focus:ring-text-primary/15"
+                        >
+                          <option value="cloudflare">Cloudflare</option>
+                          <option value="resend">Resend</option>
+                        </select>
+                      </td>
+
                       {/* Forward to (inline editable, blur to save) */}
                       <td className="px-3 py-2.5">
                         <ForwardToInput
@@ -608,6 +686,11 @@ export default function AdminInboxTable() {
           Copies are sent from this inbox's address with the original sender in{" "}
           <span className="font-mono">Reply-To</span>, so they authenticate on
           your own domain.
+          <br />
+          <span className="font-medium text-text-secondary">Provider</span>{" "}
+          controls each sender independently. Use Cloudflare for identities
+          already onboarded in Email Sending and Resend only where that is the
+          product's established transport and API key.
         </p>
       )}
     </div>

@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/d1";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { schema } from "./db/schema";
 import { people } from "./db/people.schema";
@@ -14,20 +14,31 @@ import { computeConversationId, externalsOnly } from "./lib/conversation-id";
 import { cancelSequencesForPerson } from "./lib/cancel-sequence";
 import {
   MAX_ADMIN_FANOUT,
+  MAX_TOTAL_FANOUT,
   computeFanoutTargets,
 } from "./lib/notification-fanout";
 import { sanitizeFilename } from "./lib/sanitize-filename";
 import { buildWebhookPayload, deliverWebhook } from "./lib/webhook-delivery";
 import { forwardInbound } from "./lib/inbound-forward";
+import { fitsD1EmailTextBudget } from "./lib/email-limits";
 
 const MAX_ATTACHMENTS = 50;
 const MAX_TOTAL_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25 MB
+export const MAX_RAW_EMAIL_BYTES = 25 * 1024 * 1024;
 
 export async function handleEmail(
   message: ForwardableEmailMessage,
   env: CloudflareBindings,
   ctx: ExecutionContext,
 ): Promise<void> {
+  // PostalMime needs the complete RFC 822 message in memory. Check the
+  // platform-provided byte count before buffering so an oversized delivery
+  // cannot exhaust the Worker's 128 MiB isolate.
+  if (message.rawSize > MAX_RAW_EMAIL_BYTES) {
+    message.setReject("Message too large");
+    return;
+  }
+
   const db = drizzle(env.DB, { schema, logger: true });
   const parsed = await parseEmail(message);
   const now = Math.floor(Date.now() / 1000);
@@ -39,32 +50,73 @@ export async function handleEmail(
   // need the stored column to match).
   const recipientCanonical = parsed.to.trim().toLowerCase();
   const fromAddressCanonical = parsed.from.address.trim().toLowerCase();
+  // Only an aligned DMARC verdict from Cloudflare's authentication service is
+  // strong enough for sender-identity mutations. SPF/DKIM can pass for an
+  // unrelated envelope/signing domain while the visible From is forged.
+  const senderAuthenticated = parsed.auth.dmarc === "pass";
 
-  // Drop mail from blocked senders/domains before any storage or side effects.
-  if (await isBlocked(db, fromAddressCanonical)) {
-    console.log(`Dropped blocked email from ${fromAddressCanonical}`);
-    return;
-  }
-
-  // Deduplicate by Message-ID
+  // Deduplicate by Message-ID within this inbox. The same RFC message can be
+  // routed to two owned inboxes and both deliveries must remain visible.
+  // Cancellation is replayed before returning: the original ingest may have
+  // committed and then crashed while cancelling the sender's sequence.
   if (parsed.messageId) {
     const existing = await db
-      .select({ id: emails.id })
+      .select({
+        id: emails.id,
+        personId: emails.personId,
+        recipient: emails.recipient,
+        personEmail: people.email,
+      })
       .from(emails)
-      .where(eq(emails.messageId, parsed.messageId))
+      .innerJoin(people, eq(people.id, emails.personId))
+      .where(
+        and(
+          eq(emails.messageId, parsed.messageId),
+          eq(emails.recipient, recipientCanonical),
+        ),
+      )
       .limit(1);
     if (existing.length > 0) {
+      if (
+        senderAuthenticated &&
+        existing[0].recipient.trim().toLowerCase() === recipientCanonical &&
+        existing[0].personEmail.trim().toLowerCase() === fromAddressCanonical
+      ) {
+        await cancelSequencesForPerson(db, existing[0].personId);
+      }
       console.log(`Duplicate email with Message-ID: ${parsed.messageId}`);
       return;
     }
   }
 
-  const senderAuthenticated =
-    parsed.auth.spf === "pass" ||
-    parsed.auth.dkim === "pass" ||
-    parsed.auth.dmarc === "pass";
+  // Drop new mail from blocked senders/domains before storage or side effects.
+  if (await isBlocked(db, fromAddressCanonical)) {
+    console.log(`Dropped blocked email from ${fromAddressCanonical}`);
+    return;
+  }
 
-  // Upsert person — only update name if sender passes authentication
+  const rawHeadersJson = JSON.stringify(parsed.headers);
+  const ccJson = parsed.cc.length > 0 ? JSON.stringify(parsed.cc) : null;
+  if (
+    !fitsD1EmailTextBudget(
+      parsed.subject,
+      parsed.bodyHtml,
+      parsed.bodyText,
+      rawHeadersJson,
+      parsed.messageId,
+      ccJson,
+      recipientCanonical,
+      fromAddressCanonical,
+    )
+  ) {
+    message.setReject("Message content too large");
+    return;
+  }
+
+  // Ensure the sender row exists without incrementing counters yet. The email
+  // insert is the idempotency claim; counters and attachment metadata join it
+  // in one D1 batch below so concurrent delivery of the same Message-ID cannot
+  // increment twice or leave orphan D1 rows.
   const personId = nanoid();
   await db
     .insert(people)
@@ -73,23 +125,12 @@ export async function handleEmail(
       email: fromAddressCanonical,
       name: parsed.from.name || null,
       lastEmailAt: now,
-      unreadCount: 1,
-      totalCount: 1,
+      unreadCount: 0,
+      totalCount: 0,
       createdAt: now,
       updatedAt: now,
     })
-    .onConflictDoUpdate({
-      target: people.email,
-      set: {
-        ...(senderAuthenticated
-          ? { name: sql`COALESCE(${parsed.from.name || null}, ${people.name})` }
-          : {}),
-        lastEmailAt: now,
-        unreadCount: sql`${people.unreadCount} + 1`,
-        totalCount: sql`${people.totalCount} + 1`,
-        updatedAt: now,
-      },
-    });
+    .onConflictDoNothing({ target: people.email });
 
   // Get the actual person ID (could be existing). Lookup by the
   // canonical (lowercased) email so legacy mixed-case rows still
@@ -101,13 +142,26 @@ export async function handleEmail(
     .limit(1);
   const actualPersonId = personRow[0]!.id;
 
-  // Process attachments first (need IDs for CID rewriting)
+  // Prepare attachment ids first (needed for CID rewriting), but don't write
+  // D1 metadata until the email's unique Message-ID claim succeeds.
   const cidMap: Record<string, string> = {};
   const emailId = nanoid();
 
   // Enforce attachment limits
   const cappedAttachments = parsed.attachments.slice(0, MAX_ATTACHMENTS);
   let totalAttachmentBytes = 0;
+  const storedAttachments: Array<{
+    id: string;
+    emailId: string;
+    kind: string;
+    filename: string;
+    contentType: string;
+    size: number;
+    r2Key: string;
+    contentId: string | null;
+    createdAt: number;
+    content: ArrayBuffer;
+  }> = [];
 
   for (const att of cappedAttachments) {
     totalAttachmentBytes += att.content.byteLength;
@@ -122,13 +176,8 @@ export async function handleEmail(
     const attachmentId = nanoid();
     const r2Key = `attachments/${emailId}/${attachmentId}/${safeFilename}`;
 
-    await env.R2.put(r2Key, att.content, {
-      httpMetadata: { contentType: att.contentType },
-    });
-
     const isInline = att.disposition === "inline" && !!att.contentId;
-
-    await db.insert(attachments).values({
+    storedAttachments.push({
       id: attachmentId,
       emailId,
       kind: "inbound",
@@ -138,6 +187,7 @@ export async function handleEmail(
       r2Key,
       contentId: isInline ? att.contentId : null,
       createdAt: now,
+      content: att.content,
     });
 
     if (isInline && att.contentId) {
@@ -155,6 +205,26 @@ export async function handleEmail(
         `/api/attachments/${attachmentId}/inline`,
       );
     }
+  }
+
+  // A short cid: token may occur thousands of times and expand to the much
+  // longer authenticated attachment URL. Re-check the exact post-rewrite body
+  // before any R2/D1 side effect so expansion cannot overflow a D1 row or turn
+  // delivery retries into a resource-exhaustion loop.
+  if (
+    !fitsD1EmailTextBudget(
+      parsed.subject,
+      bodyHtml,
+      parsed.bodyText,
+      rawHeadersJson,
+      parsed.messageId,
+      ccJson,
+      recipientCanonical,
+      fromAddressCanonical,
+    )
+  ) {
+    message.setReject("Message content too large");
+    return;
   }
 
   // Compute the conversation_id, if this is a multi-participant thread.
@@ -193,28 +263,109 @@ export async function handleEmail(
     externals,
   );
 
-  // Insert email (with rewritten HTML and auth results). Store the
-  // canonical (lowercased) recipient so it matches the conversation
-  // group key.
-  await db.insert(emails).values({
+  // R2 isn't part of a D1 transaction. Upload the immutable objects first,
+  // then atomically claim the Message-ID + insert metadata + increment the
+  // sender counters. A losing concurrent delivery deletes only its own
+  // randomly-keyed objects. A committed batch never points at a half-written
+  // attachment set.
+  const uploadedKeys: string[] = [];
+  try {
+    for (const att of storedAttachments) {
+      await env.R2.put(att.r2Key, att.content, {
+        httpMetadata: { contentType: att.contentType },
+      });
+      uploadedKeys.push(att.r2Key);
+    }
+  } catch (err) {
+    await Promise.allSettled(uploadedKeys.map((key) => env.R2.delete(key)));
+    throw err;
+  }
+
+  const emailInsert = db.insert(emails).values({
     id: emailId,
     personId: actualPersonId,
     recipient: recipientCanonical,
     subject: parsed.subject,
     bodyHtml,
     bodyText: parsed.bodyText,
-    rawHeaders: JSON.stringify(parsed.headers),
+    rawHeaders: rawHeadersJson,
     messageId: parsed.messageId,
     spf: parsed.auth.spf,
     dkim: parsed.auth.dkim,
     dmarc: parsed.auth.dmarc,
     spamScore: parsed.spamScore,
     isRead: 0,
-    cc: parsed.cc.length > 0 ? JSON.stringify(parsed.cc) : null,
+    cc: ccJson,
     conversationId,
     receivedAt: now,
     createdAt: now,
   });
+  const attachmentInserts = storedAttachments.map(({ content: _, ...att }) =>
+    db.insert(attachments).values(att),
+  );
+  const personUpdate = db
+    .update(people)
+    .set({
+      ...(senderAuthenticated
+        ? { name: sql`COALESCE(${parsed.from.name || null}, ${people.name})` }
+        : {}),
+      lastEmailAt: now,
+      unreadCount: sql`${people.unreadCount} + 1`,
+      totalCount: sql`${people.totalCount} + 1`,
+      updatedAt: now,
+    })
+    .where(eq(people.id, actualPersonId));
+
+  try {
+    await db.batch([emailInsert, ...attachmentInserts, personUpdate] as any);
+  } catch (err) {
+    // First detect an ambiguous-success response by this batch's primary key.
+    // This works even for messages without a Message-ID. If our id is present,
+    // deleting R2 would corrupt a transaction that actually committed.
+    const ownRow = await db
+      .select({ id: emails.id })
+      .from(emails)
+      .where(eq(emails.id, emailId))
+      .limit(1);
+    if (ownRow.length > 0) {
+      // The batch committed; only the response was lost.
+    } else if (parsed.messageId) {
+      // Otherwise distinguish a concurrent Message-ID winner from an
+      // unrelated D1 error.
+      const winner = await db
+        .select({
+          id: emails.id,
+          personId: emails.personId,
+          recipient: emails.recipient,
+          personEmail: people.email,
+        })
+        .from(emails)
+        .innerJoin(people, eq(people.id, emails.personId))
+        .where(
+          and(
+            eq(emails.messageId, parsed.messageId),
+            eq(emails.recipient, recipientCanonical),
+          ),
+        )
+        .limit(1);
+      await Promise.allSettled(uploadedKeys.map((key) => env.R2.delete(key)));
+      if (winner.length > 0) {
+        if (
+          senderAuthenticated &&
+          winner[0].recipient.trim().toLowerCase() === recipientCanonical &&
+          winner[0].personEmail.trim().toLowerCase() === fromAddressCanonical
+        ) {
+          await cancelSequencesForPerson(db, winner[0].personId);
+        }
+        console.log(`Duplicate email with Message-ID: ${parsed.messageId}`);
+        return;
+      }
+      throw err;
+    } else {
+      await Promise.allSettled(uploadedKeys.map((key) => env.R2.delete(key)));
+      throw err;
+    }
+  }
 
   // Notify connected WebSocket clients about the new email (per-user DOs).
   // Fan out to users with explicit permission for this inbox, plus admins
@@ -223,24 +374,43 @@ export async function handleEmail(
   ctx.waitUntil(
     (async () => {
       try {
+        const activeUser = or(
+          isNull(users.banned),
+          eq(users.banned, false),
+          and(
+            eq(users.banned, true),
+            isNotNull(users.banExpires),
+            lte(users.banExpires, new Date()),
+          ),
+        );
         const [permRows, adminRows] = await Promise.all([
           db
             .select({ userId: inboxPermissions.userId })
             .from(inboxPermissions)
-            .where(eq(inboxPermissions.email, recipientCanonical)),
+            .innerJoin(users, eq(users.id, inboxPermissions.userId))
+            .where(
+              and(eq(inboxPermissions.email, recipientCanonical), activeUser),
+            )
+            .limit(MAX_TOTAL_FANOUT + 1),
           db
             .select({ id: users.id })
             .from(users)
-            .where(eq(users.role, "admin"))
-            .limit(MAX_ADMIN_FANOUT + 1),
+            .where(and(eq(users.role, "admin"), activeUser))
+            .limit(MAX_TOTAL_FANOUT + 1),
         ]);
-        const { userIds, adminTruncated } = computeFanoutTargets({
-          permissionUserIds: permRows.map((r) => r.userId),
-          adminUserIds: adminRows.map((r) => r.id),
-        });
+        const { userIds, adminTruncated, permissionTruncated } =
+          computeFanoutTargets({
+            permissionUserIds: permRows.map((r) => r.userId),
+            adminUserIds: adminRows.map((r) => r.id),
+          });
         if (adminTruncated) {
           console.warn(
             `Admin count exceeds notification fanout cap (${MAX_ADMIN_FANOUT}); truncating.`,
+          );
+        }
+        if (permissionTruncated) {
+          console.warn(
+            `Inbox permission count exceeds total notification fanout cap (${MAX_TOTAL_FANOUT}); truncating.`,
           );
         }
         const deliverPayload = JSON.stringify({
@@ -294,10 +464,10 @@ export async function handleEmail(
       subject: parsed.subject,
       bodyText: parsed.bodyText,
       conversationId,
-      attachments: cappedAttachments.map((a) => ({
-        filename: sanitizeFilename(a.filename),
+      attachments: storedAttachments.map((a) => ({
+        filename: a.filename,
         contentType: a.contentType,
-        size: a.content.byteLength,
+        size: a.size,
       })),
       auth: parsed.auth,
       baseUrl: env.BASE_URL,
@@ -331,8 +501,11 @@ export async function handleEmail(
     knownInboxes: identityRows.map((r) => r.email),
   });
 
-  // Cancel any active sequences for this person
-  await cancelSequencesForPerson(db, actualPersonId);
+  // Receiving/storing untrusted mail is safe; mutating the sender's automation
+  // is not. A forged visible From must never cancel another contact's drip.
+  if (senderAuthenticated) {
+    await cancelSequencesForPerson(db, actualPersonId);
+  }
 
   console.log(
     `Processed email from ${fromAddressCanonical} to ${recipientCanonical} (${parsed.attachments.length} attachments)`,

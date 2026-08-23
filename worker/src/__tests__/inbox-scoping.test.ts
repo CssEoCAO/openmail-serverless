@@ -11,7 +11,11 @@ import {
   getDb,
 } from "./helpers";
 import { emails } from "../db/emails.schema";
+import { emailTemplates } from "../db/email-templates.schema";
 import { inboxPermissions } from "../db/inbox-permissions.schema";
+import { people } from "../db/people.schema";
+import { sequenceEmails } from "../db/sequence-emails.schema";
+import { sequenceEnrollments } from "../db/sequence-enrollments.schema";
 import { senderIdentities } from "../db/sender-identities.schema";
 
 async function grantInbox(userId: string, email: string) {
@@ -330,6 +334,133 @@ describe("sequences scoping", () => {
     });
     expect(res.status).toBe(403);
   });
+
+  it("member cannot enroll through another inbox's template or create side effects", async () => {
+    const { apiKey, userId } = await createTestUser({
+      id: "u-mem",
+      role: "member",
+      email: "m@x.com",
+    });
+    await grantInbox(userId, "a@x.com");
+    const db = getDb();
+    const now = Math.floor(Date.now() / 1000);
+    await db.run(sql`
+      INSERT INTO email_templates (id, slug, name, subject, body_html, from_address, created_at, updated_at)
+      VALUES ('t-b', 'b-only', 'B', 'Hi', '<p>private</p>', 'b@x.com', ${now}, ${now})
+    `);
+    await db.run(sql`
+      INSERT INTO sequences (id, name, steps, created_at, updated_at)
+      VALUES (
+        's-private',
+        'private sequence',
+        '[{"order":1,"templateSlug":"b-only","delayHours":0}]',
+        ${now},
+        ${now}
+      )
+    `);
+
+    const res = await authFetch("/api/sequences/s-private/enroll", {
+      apiKey,
+      method: "POST",
+      body: JSON.stringify({
+        personEmail: "new-person@example.com",
+        fromAddress: "a@x.com",
+      }),
+    });
+
+    // Mask the inaccessible template rather than confirming its slug exists.
+    expect(res.status).toBe(404);
+    expect(
+      await db
+        .select()
+        .from(people)
+        .where(eq(people.email, "new-person@example.com")),
+    ).toHaveLength(0);
+    expect(await db.select().from(sequenceEnrollments)).toHaveLength(0);
+    expect(await db.select().from(sequenceEmails)).toHaveLength(0);
+  });
+
+  it("member cannot cancel another inbox's enrollment", async () => {
+    const { apiKey, userId } = await createTestUser({
+      id: "u-mem",
+      role: "member",
+      email: "m@x.com",
+    });
+    await grantInbox(userId, "a@x.com");
+    await createTestPerson({ id: "p-private" });
+    const db = getDb();
+    const now = Math.floor(Date.now() / 1000);
+    await db.run(sql`
+      INSERT INTO sequences (id, name, steps, created_at, updated_at)
+      VALUES ('s-private', 'private sequence', '[]', ${now}, ${now})
+    `);
+    await db.insert(sequenceEnrollments).values({
+      id: "enrollment-private",
+      sequenceId: "s-private",
+      personId: "p-private",
+      status: "active",
+      variables: "{}",
+      fromAddress: "b@x.com",
+      enrolledAt: now,
+    });
+
+    const res = await authFetch(
+      "/api/sequences/enrollments/enrollment-private",
+      { apiKey, method: "DELETE" },
+    );
+
+    expect(res.status).toBe(404);
+    const rows = await db
+      .select()
+      .from(sequenceEnrollments)
+      .where(eq(sequenceEnrollments.id, "enrollment-private"));
+    expect(rows[0].status).toBe("active");
+    expect(rows[0].cancelledAt).toBeNull();
+  });
+
+  it("member cannot enroll a person visible only in another inbox by id", async () => {
+    const { apiKey, userId } = await createTestUser({
+      id: "u-mem",
+      role: "member",
+      email: "m@x.com",
+    });
+    await grantInbox(userId, "a@x.com");
+    await createTestPerson({ id: "p-private", email: "private@example.com" });
+    await createTestEmail({
+      id: "e-private",
+      personId: "p-private",
+      recipient: "b@x.com",
+    });
+    const db = getDb();
+    const now = Math.floor(Date.now() / 1000);
+    await db.run(sql`
+      INSERT INTO email_templates (id, slug, name, subject, body_html, from_address, created_at, updated_at)
+      VALUES ('t-a', 'a-only', 'A', 'Hi', '<p>Hello</p>', 'a@x.com', ${now}, ${now})
+    `);
+    await db.run(sql`
+      INSERT INTO sequences (id, name, steps, created_at, updated_at)
+      VALUES (
+        's-a',
+        'allowed template',
+        '[{"order":1,"templateSlug":"a-only","delayHours":0}]',
+        ${now},
+        ${now}
+      )
+    `);
+
+    const res = await authFetch("/api/sequences/s-a/enroll", {
+      apiKey,
+      method: "POST",
+      body: JSON.stringify({
+        personId: "p-private",
+        fromAddress: "a@x.com",
+      }),
+    });
+
+    expect(res.status).toBe(404);
+    expect(await db.select().from(sequenceEnrollments)).toHaveLength(0);
+    expect(await db.select().from(sequenceEmails)).toHaveLength(0);
+  });
 });
 
 describe("templates scoping", () => {
@@ -399,5 +530,146 @@ describe("templates scoping", () => {
       }),
     });
     expect(res.status).toBe(403);
+  });
+
+  it("member cannot read or mutate another inbox's template by known slug", async () => {
+    const { apiKey, userId } = await createTestUser({
+      id: "u-mem",
+      role: "member",
+      email: "m@x.com",
+    });
+    await grantInbox(userId, "a@x.com");
+    const db = getDb();
+    const now = Math.floor(Date.now() / 1000);
+    await db.run(sql`
+      INSERT INTO email_templates (id, slug, name, subject, body_html, from_address, created_at, updated_at)
+      VALUES ('t-b', 'b-only', 'B', 'Private subject', '<p>private body</p>', 'b@x.com', ${now}, ${now})
+    `);
+
+    const get = await authFetch("/api/email-templates/b-only", { apiKey });
+    const variables = await authFetch("/api/email-templates/b-only/variables", {
+      apiKey,
+    });
+    const update = await authFetch("/api/email-templates/b-only", {
+      apiKey,
+      method: "PUT",
+      body: JSON.stringify({ subject: "stolen" }),
+    });
+    const remove = await authFetch("/api/email-templates/b-only", {
+      apiKey,
+      method: "DELETE",
+    });
+    const send = await authFetch("/api/email-templates/b-only/send", {
+      apiKey,
+      method: "POST",
+      body: JSON.stringify({
+        to: "target@external.com",
+        fromAddress: "a@x.com",
+        variables: {},
+      }),
+    });
+
+    expect([
+      get.status,
+      variables.status,
+      update.status,
+      remove.status,
+    ]).toEqual([404, 404, 404, 404]);
+    expect(send.status).toBe(404);
+    const rows = await db
+      .select()
+      .from(emailTemplates)
+      .where(eq(emailTemplates.slug, "b-only"));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].subject).toBe("Private subject");
+  });
+
+  it("member cannot mutate global templates or promote an owned template", async () => {
+    const { apiKey, userId } = await createTestUser({
+      id: "u-mem",
+      role: "member",
+      email: "m@x.com",
+    });
+    await grantInbox(userId, "a@x.com");
+    const db = getDb();
+    const now = Math.floor(Date.now() / 1000);
+    await db.run(sql`
+      INSERT INTO email_templates (id, slug, name, subject, body_html, from_address, created_at, updated_at)
+      VALUES
+        ('t-g', 'global', 'Global', 'Global subject', '<p/>', NULL, ${now}, ${now}),
+        ('t-a', 'a-only', 'A', 'Owned subject', '<p/>', 'a@x.com', ${now}, ${now})
+    `);
+
+    expect(
+      (
+        await authFetch("/api/email-templates/global", {
+          apiKey,
+          method: "PUT",
+          body: JSON.stringify({ subject: "changed" }),
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await authFetch("/api/email-templates/global", {
+          apiKey,
+          method: "DELETE",
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await authFetch("/api/email-templates/a-only", {
+          apiKey,
+          method: "PUT",
+          body: JSON.stringify({ fromAddress: null }),
+        })
+      ).status,
+    ).toBe(403);
+
+    const rows = await db
+      .select()
+      .from(emailTemplates)
+      .where(inArray(emailTemplates.slug, ["global", "a-only"]));
+    expect(rows).toHaveLength(2);
+    expect(rows.find((row) => row.slug === "global")?.subject).toBe(
+      "Global subject",
+    );
+    expect(rows.find((row) => row.slug === "a-only")?.fromAddress).toBe(
+      "a@x.com",
+    );
+  });
+
+  it("member cannot render another inbox's template in a reply", async () => {
+    const { apiKey, userId } = await createTestUser({
+      id: "u-mem",
+      role: "member",
+      email: "m@x.com",
+    });
+    await grantInbox(userId, "a@x.com");
+    await createTestPerson({ id: "p-reply", email: "target@external.com" });
+    await createTestEmail({
+      id: "e-reply",
+      personId: "p-reply",
+      recipient: "a@x.com",
+    });
+    const db = getDb();
+    const now = Math.floor(Date.now() / 1000);
+    await db.run(sql`
+      INSERT INTO email_templates (id, slug, name, subject, body_html, from_address, created_at, updated_at)
+      VALUES ('t-b', 'b-only', 'B', 'Private subject', '<p>private body</p>', 'b@x.com', ${now}, ${now})
+    `);
+
+    const res = await authFetch("/api/send/reply/e-reply", {
+      apiKey,
+      method: "POST",
+      body: buildSendForm({
+        fromAddress: "a@x.com",
+        templateSlug: "b-only",
+        variables: {},
+      }),
+    });
+
+    expect(res.status).toBe(404);
   });
 });

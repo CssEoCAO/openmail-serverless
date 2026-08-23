@@ -12,23 +12,28 @@ export class ResendSender implements EmailSender {
   }
 
   async send(params: SendEmailParams): Promise<SendEmailResult> {
-    const result = await this.client.emails.send({
-      from: params.from,
-      to: params.to,
-      ...(params.cc && params.cc.length > 0 ? { cc: params.cc } : {}),
-      subject: params.subject,
-      html: params.html,
-      text: params.text,
-      headers: params.headers,
-      ...(params.attachments && params.attachments.length > 0
-        ? {
-            attachments: params.attachments.map((a) => ({
-              filename: a.filename,
-              content: toBase64(a.content),
-            })),
-          }
-        : {}),
-    });
+    const result = await this.client.emails.send(
+      {
+        from: params.from,
+        to: params.to,
+        ...(params.cc && params.cc.length > 0 ? { cc: params.cc } : {}),
+        subject: params.subject,
+        html: params.html,
+        text: params.text,
+        headers: params.headers,
+        ...(params.attachments && params.attachments.length > 0
+          ? {
+              attachments: params.attachments.map((a) => ({
+                filename: a.filename,
+                content: toBase64(a.content),
+              })),
+            }
+          : {}),
+      },
+      params.idempotencyKey
+        ? { idempotencyKey: params.idempotencyKey }
+        : undefined,
+    );
     if (result.error) {
       const message = result.error.message ?? "Resend send failed";
       return {

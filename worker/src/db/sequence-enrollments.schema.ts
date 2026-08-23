@@ -1,4 +1,11 @@
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import {
+  sqliteTable,
+  text,
+  integer,
+  index,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
 
 export const sequenceEnrollments = sqliteTable(
   "sequence_enrollments",
@@ -14,6 +21,9 @@ export const sequenceEnrollments = sqliteTable(
   },
   (table) => [
     index("enrollments_person_status_idx").on(table.personId, table.status),
+    uniqueIndex("enrollments_one_active_person_idx")
+      .on(table.personId)
+      .where(sql`${table.status} = 'active'`),
     index("enrollments_sequence_status_idx").on(table.sequenceId, table.status),
   ],
 );

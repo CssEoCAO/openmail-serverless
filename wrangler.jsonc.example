@@ -26,10 +26,11 @@
       "bucket_name": "saasmail-attachments"
     }
   ],
-  // Optional: enable Cloudflare Email Sending as the outbound provider.
-  // If Bavimail (BAVIMAIL_API_KEY + BAVIMAIL_ALIAS_ID), POSTMARK_API_KEY, or
-  // RESEND_API_KEY is set, those win instead. Requires onboarding your domain
-  // at Email Service → https://dash.cloudflare.com/?to=/:account/email-service
+  // Optional: enable Cloudflare Email Sending. In the default single-provider mode,
+  // Bavimail, Postmark, or Resend secrets take precedence. In identity routing mode,
+  // this binding can coexist with RESEND_API_KEY and each sender chooses one.
+  // Requires onboarding your domain at Email Service:
+  // https://dash.cloudflare.com/?to=/:account/email-service
   // "send_email": [
   //   { "name": "EMAIL" }
   // ],
@@ -77,7 +78,7 @@
   "triggers": {
     "crons": ["0 * * * *"]
   },
-  // Outbound email provider selection (runtime, no explicit toggle):
+  // Single-provider outbound selection (default, no explicit toggle):
   //   - Set BOTH BAVIMAIL_API_KEY and BAVIMAIL_ALIAS_ID (via `wrangler secret put`)
   //     to use Bavimail. Takes precedence over Postmark, Resend, and the EMAIL binding.
   //   - Set POSTMARK_API_KEY (via `wrangler secret put POSTMARK_API_KEY`) to use Postmark.
@@ -85,9 +86,15 @@
   //   - Set RESEND_API_KEY (via `wrangler secret put RESEND_API_KEY`) to use Resend.
   //   - Or uncomment the `send_email` binding above to use Cloudflare Email Sending.
   //   - If none are configured, send attempts return a "No email provider configured" error.
+  // Mixed Cloudflare + Resend:
+  //   - Configure both the EMAIL binding and RESEND_API_KEY.
+  //   - Set EMAIL_PROVIDER_ROUTING to "identity" below.
+  //   - Select Cloudflare or Resend per sender on the Inboxes admin page.
+  //   - Missing selected credentials fail closed; the app never changes provider silently.
   "vars": {
     "BASE_URL": "<your-deployed-url>",
     "TRUSTED_ORIGINS": "http://localhost:8080,http://localhost:8788,<your-deployed-url>",
+    // "EMAIL_PROVIDER_ROUTING": "identity",
 
     // Prefix for better-auth session cookies. Drop a replacement logo into
     // public/saasmail-logo.png to rebrand the favicon and in-app logo.

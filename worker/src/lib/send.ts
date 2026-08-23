@@ -5,6 +5,8 @@ import type {
   SendEmailParams,
   SendEmailResult,
 } from "./email-sender";
+import { encodeDisplayName, sanitizeHeaderValue } from "./format-from-address";
+import { assertFitsD1EmailTextBudget } from "./email-limits";
 
 /**
  * A CC entry the caller hands us. We need the bare `email` for suppression
@@ -22,6 +24,8 @@ export interface SendInput {
   sender: EmailSender;
   from: SendEmailParams["from"];
   to: string;
+  /** Single durable SMTP envelope recipient; visible To/Cc stay unchanged. */
+  envelopeTo?: string;
   cc?: CcRecipient[];
   subject: string;
   html?: string;
@@ -29,10 +33,25 @@ export interface SendInput {
   headers?: Record<string, string>;
   attachments?: SendEmailParams["attachments"];
   transactional?: boolean;
+  /** Stable provider de-duplication key for a single transport unit. */
+  idempotencyKey?: string;
+  /** Display name when a CC recipient is promoted to an individual send. */
+  toName?: string | null;
+  /** Persist the exact canonical wire payload before the provider side effect. */
+  onPrepared?: (params: SendEmailParams) => Promise<void>;
+  /** Last-moment fencing hook, invoked immediately before sender.send. */
+  beforeSend?: () => Promise<void>;
 }
 
 export interface SendOutput {
+  /** Recipients whose provider accepted the message in this invocation. */
   delivered: string[];
+  /**
+   * Non-suppressed recipients for which transport was attempted, including
+   * transient/permanent/ambiguous results. Outbox callers use this for audit
+   * ownership without falsely exposing a pending recipient as delivered.
+   */
+  attempted?: string[];
   suppressed: string[];
   result?: SendEmailResult;
   /**
@@ -46,6 +65,14 @@ export interface SendOutput {
 }
 
 const UNSUB_PLACEHOLDER = /\{\{unsubscribe_url\}\}/g;
+
+/** A fencing guard proved the durable send was cancelled before transport. */
+export class SendAbortedError extends Error {
+  constructor(message = "Send was cancelled before transport") {
+    super(message);
+    this.name = "SendAbortedError";
+  }
+}
 
 function buildUnsubscribeUrl(baseUrl: string, token: string): string {
   return `${baseUrl.replace(/\/+$/, "")}/unsubscribe?token=${encodeURIComponent(
@@ -66,7 +93,21 @@ function appendTextFooter(text: string, url: string): string {
 
 /** Format a CcRecipient as a header-friendly `"Name <addr>"` string. */
 function formatCcForTransport(c: CcRecipient): string {
-  return c.name ? `${c.name} <${c.email}>` : c.email;
+  if (!c.name) return c.email;
+  const name = encodeDisplayName(c.name);
+  return name ? `${name} <${c.email}>` : c.email;
+}
+
+function sanitizeHeaders(
+  headers: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!headers) return undefined;
+  return Object.fromEntries(
+    Object.entries(headers).map(([key, value]) => [
+      key,
+      sanitizeHeaderValue(value),
+    ]),
+  );
 }
 
 export async function sendWithSuppressionCheck(
@@ -78,6 +119,7 @@ export async function sendWithSuppressionCheck(
     sender,
     from,
     to,
+    envelopeTo,
     cc,
     subject,
     html,
@@ -85,7 +127,13 @@ export async function sendWithSuppressionCheck(
     headers,
     attachments,
     transactional,
+    idempotencyKey,
+    toName,
+    onPrepared,
+    beforeSend,
   } = input;
+  const wireSubject = sanitizeHeaderValue(subject);
+  const wireHeaders = sanitizeHeaders(headers);
 
   // Partition recipients into delivered vs suppressed. Transactional sends
   // bypass the suppression list entirely.
@@ -128,16 +176,33 @@ export async function sendWithSuppressionCheck(
         ? deliveredCc.map(formatCcForTransport)
         : undefined;
 
-    lastResult = await sender.send({
+    assertFitsD1EmailTextBudget(
       from,
-      to: primaryTo,
+      primaryTo,
+      ccArg ? JSON.stringify(ccArg) : null,
+      wireSubject,
+      html,
+      text,
+      wireHeaders ? JSON.stringify(wireHeaders) : null,
+    );
+
+    const wireParams: SendEmailParams = {
+      from,
+      to: toName
+        ? formatCcForTransport({ email: primaryTo, name: toName })
+        : primaryTo,
+      ...(envelopeTo ? { envelopeTo } : {}),
       ...(ccArg ? { cc: ccArg } : {}),
-      subject,
+      subject: wireSubject,
       html: html ?? "",
       ...(text !== undefined ? { text } : {}),
-      ...(headers ? { headers } : {}),
+      ...(wireHeaders ? { headers: wireHeaders } : {}),
       ...(attachments ? { attachments } : {}),
-    });
+      ...(idempotencyKey ? { idempotencyKey } : {}),
+    };
+    await onPrepared?.(wireParams);
+    await beforeSend?.();
+    lastResult = await sender.send(wireParams);
 
     renderedHtml = html;
     renderedText = text;
@@ -172,7 +237,7 @@ export async function sendWithSuppressionCheck(
         }
 
         const recipientHeaders: Record<string, string> = {
-          ...(headers ?? {}),
+          ...(wireHeaders ?? {}),
           "List-Unsubscribe": `<${url}>`,
           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
         };
@@ -182,17 +247,32 @@ export async function sendWithSuppressionCheck(
         // string by signature.
         const toForTransport = recipient.cc
           ? formatCcForTransport(recipient.cc)
-          : recipient.email;
+          : toName
+            ? formatCcForTransport({ email: recipient.email, name: toName })
+            : recipient.email;
 
-        const result = await sender.send({
+        assertFitsD1EmailTextBudget(
+          from,
+          toForTransport,
+          wireSubject,
+          recipientHtml,
+          recipientText,
+          JSON.stringify(recipientHeaders),
+        );
+
+        const wireParams: SendEmailParams = {
           from,
           to: toForTransport,
-          subject,
+          subject: wireSubject,
           html: recipientHtml ?? "",
           ...(recipientText !== undefined ? { text: recipientText } : {}),
           headers: recipientHeaders,
           ...(attachments ? { attachments } : {}),
-        });
+          ...(idempotencyKey ? { idempotencyKey } : {}),
+        };
+        await onPrepared?.(wireParams);
+        await beforeSend?.();
+        const result = await sender.send(wireParams);
 
         return { result, recipientHtml, recipientText };
       }),
@@ -204,7 +284,10 @@ export async function sendWithSuppressionCheck(
   }
 
   return {
-    delivered: [primaryTo, ...deliveredCc.map((c) => c.email)],
+    delivered:
+      transactional === true && envelopeTo
+        ? [envelopeTo]
+        : [primaryTo, ...deliveredCc.map((c) => c.email)],
     suppressed,
     result: lastResult,
     ...(renderedHtml !== undefined ? { renderedHtml } : {}),

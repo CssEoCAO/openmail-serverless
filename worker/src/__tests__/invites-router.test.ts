@@ -162,5 +162,64 @@ describe("invites router", () => {
       });
       expect(res.status).toBe(200);
     });
+
+    it("matches an invitation email case-insensitively", async () => {
+      const invite = await createInvite({ email: "Specific@Example.com" });
+      const res = await authFetch("/api/invites/accept", {
+        method: "POST",
+        body: JSON.stringify({
+          token: invite.token,
+          name: "User",
+          email: "specific@example.com",
+          password: "securepassword123",
+        }),
+      });
+      expect(res.status).toBe(200);
+    });
+
+    it("allows only one concurrent acceptance of the same token", async () => {
+      const invite = await createInvite();
+      const accept = (email: string) =>
+        authFetch("/api/invites/accept", {
+          method: "POST",
+          body: JSON.stringify({
+            token: invite.token,
+            name: "Concurrent User",
+            email,
+            password: "securepassword123",
+          }),
+        });
+
+      const responses = await Promise.all([
+        accept("first@example.com"),
+        accept("second@example.com"),
+      ]);
+      expect(responses.map((res) => res.status).sort()).toEqual([200, 400]);
+    });
+
+    it("does not reopen an old in-progress claim", async () => {
+      const db = getDb();
+      const invite = await createInvite();
+      await db
+        .update(invitations)
+        .set({ usedAt: new Date(Date.now() - 24 * 60 * 60 * 1000) })
+        .where(
+          (await import("drizzle-orm")).eq(invitations.token, invite.token),
+        );
+
+      const status = await authFetch(`/api/invites/${invite.token}`);
+      expect((await status.json()).valid).toBe(false);
+
+      const accepted = await authFetch("/api/invites/accept", {
+        method: "POST",
+        body: JSON.stringify({
+          token: invite.token,
+          name: "Late User",
+          email: "late@example.com",
+          password: "securepassword123",
+        }),
+      });
+      expect(accepted.status).toBe(400);
+    });
   });
 });

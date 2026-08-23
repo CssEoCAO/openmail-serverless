@@ -1,6 +1,7 @@
-# Outbound provider precedence: Bavimail (BAVIMAIL_API_KEY + BAVIMAIL_ALIAS_ID)
+# Single-provider precedence: Bavimail (BAVIMAIL_API_KEY + BAVIMAIL_ALIAS_ID)
 # > Postmark (POSTMARK_API_KEY) > Resend (RESEND_API_KEY) > Cloudflare Email
-# Sending (EMAIL binding). Set only the one you use.
+# Sending (EMAIL binding). With EMAIL_PROVIDER_ROUTING="identity" in wrangler.jsonc,
+# RESEND_API_KEY may coexist with the EMAIL binding for per-sender routing.
 BAVIMAIL_API_KEY=
 BAVIMAIL_ALIAS_ID=
 

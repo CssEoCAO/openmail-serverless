@@ -1,9 +1,17 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import type { Variables } from "../variables";
 import { pushSubscriptions } from "../db/push-subscriptions.schema";
 import { bearerSecurity } from "../lib/openapi-auth";
 import { json200Response } from "../lib/helpers";
+import {
+  isSafePushEndpoint,
+  isValidP256dh,
+  isValidPushAuth,
+  MAX_PUSH_ENDPOINT_LENGTH,
+  MAX_PUSH_KEY_LENGTH,
+  MAX_PUSH_SUBSCRIPTIONS_PER_USER,
+} from "../lib/web-push";
 
 const ErrorSchema = z.object({
   error: z.string(),
@@ -114,17 +122,29 @@ notificationsRouter.openapi(streamRoute, async (c) => {
 });
 
 export const PushSubscribeSchema = z.object({
-  endpoint: z.string().url().openapi({
-    description: "Push service endpoint URL returned by the browser.",
-    example: "https://fcm.googleapis.com/fcm/send/…",
-  }),
+  endpoint: z
+    .string()
+    .max(MAX_PUSH_ENDPOINT_LENGTH)
+    .refine(isSafePushEndpoint, "invalid push endpoint")
+    .openapi({
+      description: "Push service endpoint URL returned by the browser.",
+      example: "https://fcm.googleapis.com/fcm/send/…",
+    }),
   keys: z.object({
-    p256dh: z.string().min(1).openapi({
-      description: "P-256 ECDH public key from the browser PushSubscription.",
-    }),
-    auth: z.string().min(1).openapi({
-      description: "Authentication secret from the browser PushSubscription.",
-    }),
+    p256dh: z
+      .string()
+      .max(MAX_PUSH_KEY_LENGTH)
+      .refine(isValidP256dh, "invalid P-256 public key")
+      .openapi({
+        description: "P-256 ECDH public key from the browser PushSubscription.",
+      }),
+    auth: z
+      .string()
+      .max(MAX_PUSH_KEY_LENGTH)
+      .refine(isValidPushAuth, "invalid push authentication secret")
+      .openapi({
+        description: "Authentication secret from the browser PushSubscription.",
+      }),
   }),
   userAgent: z.string().max(512).optional().openapi({
     description: "Optional browser user-agent string for debugging.",
@@ -157,6 +177,11 @@ const subscribeRoute = createRoute({
       description: "Unauthorized",
       content: { "application/json": { schema: ErrorSchema } },
     },
+    409: {
+      description:
+        "Endpoint belongs to another account or device limit reached",
+      content: { "application/json": { schema: ErrorSchema } },
+    },
     503: {
       description: "VAPID keys are not configured on this instance",
       content: {
@@ -183,27 +208,66 @@ notificationsRouter.openapi(
     const db = c.get("db");
     const now = Math.floor(Date.now() / 1000);
 
-    await db
-      .insert(pushSubscriptions)
-      .values({
-        id: crypto.randomUUID(),
-        userId: user.id,
-        endpoint: body.endpoint,
+    const updated = await db
+      .update(pushSubscriptions)
+      .set({
         p256dh: body.keys.p256dh,
         auth: body.keys.auth,
         userAgent: body.userAgent ?? null,
-        createdAt: now,
-        lastUsedAt: null,
       })
-      .onConflictDoUpdate({
-        target: pushSubscriptions.endpoint,
-        set: {
+      .where(
+        and(
+          eq(pushSubscriptions.endpoint, body.endpoint),
+          eq(pushSubscriptions.userId, user.id),
+        ),
+      )
+      .returning({ id: pushSubscriptions.id });
+    if (updated.length > 0) return c.body(null, 201);
+
+    const endpointOwner = await db
+      .select({ id: pushSubscriptions.id })
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.endpoint, body.endpoint))
+      .limit(1);
+    if (endpointOwner.length > 0) {
+      return c.json({ error: "Subscription cannot be registered" }, 409);
+    }
+
+    const countRows = await db
+      .select({ value: sql<number>`count(*)` })
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.userId, user.id));
+    if ((countRows[0]?.value ?? 0) >= MAX_PUSH_SUBSCRIPTIONS_PER_USER) {
+      return c.json({ error: "Subscription device limit reached" }, 409);
+    }
+
+    try {
+      const inserted = await db
+        .insert(pushSubscriptions)
+        .values({
+          id: crypto.randomUUID(),
           userId: user.id,
+          endpoint: body.endpoint,
           p256dh: body.keys.p256dh,
           auth: body.keys.auth,
           userAgent: body.userAgent ?? null,
-        },
-      });
+          createdAt: now,
+          lastUsedAt: null,
+        })
+        .onConflictDoNothing()
+        .returning({ id: pushSubscriptions.id });
+      if (inserted.length === 0) {
+        return c.json({ error: "Subscription cannot be registered" }, 409);
+      }
+    } catch (err) {
+      if (
+        err instanceof Error &&
+        err.message.includes("push subscription limit")
+      ) {
+        return c.json({ error: "Subscription device limit reached" }, 409);
+      }
+      throw err;
+    }
 
     return c.body(null, 201);
   },
@@ -211,7 +275,7 @@ notificationsRouter.openapi(
 );
 
 const UnsubscribeBodySchema = z.object({
-  endpoint: z.string().url().openapi({
+  endpoint: z.string().url().max(MAX_PUSH_ENDPOINT_LENGTH).openapi({
     description: "Push subscription endpoint URL to remove.",
   }),
 });

@@ -4,6 +4,7 @@ import {
   templateValueSchema,
   templateVariablesSchema,
   MAX_VARIABLE_DEPTH,
+  MAX_VARIABLE_NODES,
 } from "../lib/template-variables-schema";
 
 /**
@@ -35,6 +36,13 @@ describe("template variables depth guard", () => {
 
   it("accepts a payload within the limit", () => {
     expect(templateVariablesSchema.safeParse(nested(5)).success).toBe(true);
+  });
+
+  it("rejects a shallow payload with excessive width before recursive Zod traversal", () => {
+    const result = templateVariablesSchema.safeParse({
+      items: Array.from({ length: MAX_VARIABLE_NODES + 1 }, () => null),
+    });
+    expect(result.success).toBe(false);
   });
 
   it("demonstrates why the bare value schema must not be used alone", () => {

@@ -1,15 +1,24 @@
 import { defineConfig } from "vitest/config";
-import { cloudflarePool } from "@cloudflare/vitest-pool-workers";
+import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
 
 export default defineConfig({
-  test: {
-    globals: true,
-    include: ["worker/src/__tests__/**/*.test.ts"],
-    pool: cloudflarePool({
+  plugins: [
+    cloudflareTest({
+      main: "./worker/src/index.ts",
       wrangler: {
-        configPath: "./wrangler.jsonc",
+        // Keep unit tests isolated from the production bindings and custom
+        // domain in wrangler.jsonc. This is the repository's CI fixture.
+        configPath: "./wrangler.jsonc.ci",
       },
       miniflare: {
+        d1Databases: ["DB"],
+        durableObjects: {
+          NOTIFICATIONS_HUB: "NotificationsHub",
+        },
+        queueProducers: {
+          EMAIL_QUEUE: "saasmail-sequence-emails",
+        },
+        r2Buckets: ["R2"],
         bindings: {
           // `wrangler.jsonc` ships a `<your-deployed-url>` placeholder so new
           // clones don't accidentally send tests to a real deployment. Override
@@ -36,5 +45,11 @@ export default defineConfig({
         },
       },
     }),
+  ],
+  test: {
+    globals: true,
+    testTimeout: 15_000,
+    hookTimeout: 15_000,
+    include: ["worker/src/__tests__/**/*.test.ts"],
   },
 });

@@ -84,6 +84,10 @@ export async function sendWebhook(
       headers,
       body,
       signal: controller.signal,
+      // A configured automation endpoint may legitimately be private HTTP,
+      // but it must not silently redirect the signed body (and its signature)
+      // to a different origin.
+      redirect: "error",
     });
     return { ok: res.ok, status: res.status };
   } catch (err) {

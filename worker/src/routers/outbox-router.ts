@@ -1,9 +1,13 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { and, desc, eq, lt, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, lte, or, sql } from "drizzle-orm";
 import { outboxEmails } from "../db/outbox-emails.schema";
 import { sentEmails } from "../db/sent-emails.schema";
 import { createEmailSender } from "../lib/email-sender";
-import { attemptOutboxRow, resolveSequenceStep } from "../lib/outbox";
+import {
+  attemptOutboxRow,
+  ensureSentHistoryFromOutbox,
+  resolveSequenceStep,
+} from "../lib/outbox";
 import { assertInboxAllowed, inboxFilter } from "../lib/inbox-permissions";
 import { json200Response } from "../lib/helpers";
 import type { Variables } from "../variables";
@@ -92,7 +96,7 @@ outboxRouter.openapi(listRoute, async (c) => {
       limit = Math.min(parsed, MAX_LIMIT);
   }
 
-  const clauses = [];
+  const clauses = [inArray(outboxEmails.status, ["pending", "failed"])];
   const scope = inboxFilter(allowed, outboxEmails.fromAddress);
   if (scope) clauses.push(scope);
   if (cursor) {
@@ -175,6 +179,10 @@ const retryRoute = createRoute({
       description: "Not found",
       content: { "application/json": { schema: ErrorSchema } },
     },
+    409: {
+      description: "Sequence-owned send cannot be manually revived",
+      content: { "application/json": { schema: ErrorSchema } },
+    },
   },
 });
 
@@ -191,6 +199,20 @@ outboxRouter.openapi(retryRoute, async (c) => {
   if (rows.length === 0) return c.json({ error: "Not found" }, 404);
   const row = rows[0];
   assertInboxAllowed(allowed, row.fromAddress);
+  // `sent` is a crash-recovery marker after provider acceptance, never a job
+  // that may be retried. Re-sending it would duplicate a delivered message.
+  if (row.status === "sent") {
+    return c.json({ outcome: "sent" as const }, 200);
+  }
+  if (row.status === "failed" && row.sequenceEmailId) {
+    return c.json(
+      {
+        error:
+          "Failed sequence sends cannot be retried safely; review the contact and send a new manual message if appropriate",
+      },
+      409,
+    );
+  }
 
   const now = Math.floor(Date.now() / 1000);
   // Make the row claimable now; a failed row gets a fresh attempt budget.
@@ -203,15 +225,22 @@ outboxRouter.openapi(retryRoute, async (c) => {
     .set({
       status: "pending",
       nextRetryAt: now,
-      ...(row.status === "failed" ? { attempts: 0 } : {}),
+      ...(row.status === "failed"
+        ? {
+            attempts: 0,
+          }
+        : {}),
       updatedAt: now,
     })
     .where(
       and(
         eq(outboxEmails.id, id),
         row.status === "failed"
-          ? undefined
-          : lte(outboxEmails.nextRetryAt, now),
+          ? eq(outboxEmails.status, "failed")
+          : and(
+              eq(outboxEmails.status, "pending"),
+              lte(outboxEmails.nextRetryAt, now),
+            ),
       ),
     )
     .returning({ id: outboxEmails.id });
@@ -259,18 +288,28 @@ outboxRouter.openapi(cancelRoute, async (c) => {
   if (rows.length === 0) return c.json({ error: "Not found" }, 404);
   const row = rows[0];
   assertInboxAllowed(allowed, row.fromAddress);
+  if (row.status === "sent") {
+    return c.json({ error: "Email has already been sent" }, 409);
+  }
 
   const now = Math.floor(Date.now() / 1000);
   // Guard against cancelling while a send is in flight: the processor holds a
   // claim by pushing next_retry_at an hour into the future. Deleting mid-claim
   // would let the processor complete the send and flip sent_emails back to "sent"
   // after the caller already saw { deleted: true }.
+  // Materialize history before deleting the only durable pointer. If this CAS
+  // loses to a retry, `retrying` is also the correct state for that winner.
+  await ensureSentHistoryFromOutbox(db, row, "retrying", row.createdAt);
   const deleted = await db
     .delete(outboxEmails)
     .where(
       row.status === "failed"
-        ? eq(outboxEmails.id, id)
-        : and(eq(outboxEmails.id, id), lte(outboxEmails.nextRetryAt, now)),
+        ? and(eq(outboxEmails.id, id), eq(outboxEmails.status, "failed"))
+        : and(
+            eq(outboxEmails.id, id),
+            eq(outboxEmails.status, "pending"),
+            lte(outboxEmails.nextRetryAt, now),
+          ),
     )
     .returning({ id: outboxEmails.id });
   if (deleted.length === 0) {

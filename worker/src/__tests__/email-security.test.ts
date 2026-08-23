@@ -1,65 +1,75 @@
 import { describe, it, expect } from "vitest";
+import { parseTrustedAuthResults } from "../lib/email-parser";
 
-// We need to test parseAuthResults indirectly since it's not exported.
-// Instead, test the exported parseEmail's auth field via the email-parser module,
-// and test sanitizeFilename logic directly.
-
-describe("parseAuthResults (via email-parser)", () => {
-  // parseAuthResults is a private function inside email-parser.
-  // We'll import and test the extraction logic by re-implementing the regex here,
-  // since the function is called internally by parseEmail which requires a full email message.
-  // Instead, let's extract and test the logic directly.
-
-  function parseAuthResults(raw: string) {
-    const extract = (key: string): string | null => {
-      const match = raw.match(new RegExp(`${key}=([a-zA-Z]+)`));
-      return match ? match[1].toLowerCase() : null;
-    };
-    return {
-      spf: extract("spf"),
-      dkim: extract("dkim"),
-      dmarc: extract("dmarc"),
-    };
-  }
-
-  it("extracts pass results from Authentication-Results header", () => {
-    const header =
-      "mx.google.com; dkim=pass header.i=@example.com; spf=pass smtp.mailfrom=example.com; dmarc=pass";
-    const result = parseAuthResults(header);
+describe("trusted inbound authentication results", () => {
+  it("accepts Cloudflare's aligned DMARC pass", () => {
+    const result = parseTrustedAuthResults(
+      [
+        {
+          key: "Authentication-Results",
+          value:
+            "mx.cloudflare.net; dkim=pass header.d=example.com; spf=pass smtp.mailfrom=example.com; dmarc=pass header.from=example.com",
+        },
+      ],
+      "sender@example.com",
+    );
     expect(result.spf).toBe("pass");
     expect(result.dkim).toBe("pass");
     expect(result.dmarc).toBe("pass");
   });
 
-  it("extracts fail results", () => {
-    const header = "mx.google.com; dkim=fail; spf=softfail; dmarc=fail";
-    const result = parseAuthResults(header);
-    expect(result.spf).toBe("softfail");
-    expect(result.dkim).toBe("fail");
-    expect(result.dmarc).toBe("fail");
-  });
-
-  it("returns null for missing fields", () => {
-    const header = "mx.google.com; spf=pass";
-    const result = parseAuthResults(header);
-    expect(result.spf).toBe("pass");
-    expect(result.dkim).toBeNull();
-    expect(result.dmarc).toBeNull();
-  });
-
-  it("returns all null for empty header", () => {
-    const result = parseAuthResults("");
+  it("ignores a sender-supplied authserv-id", () => {
+    const result = parseTrustedAuthResults(
+      [
+        {
+          key: "Authentication-Results",
+          value:
+            "attacker.example; spf=pass; dkim=pass; dmarc=pass header.from=victim.example",
+        },
+      ],
+      "victim@victim.example",
+    );
     expect(result.spf).toBeNull();
     expect(result.dkim).toBeNull();
     expect(result.dmarc).toBeNull();
   });
 
-  it("handles mixed case verdicts", () => {
-    const header = "spf=Pass; dkim=FAIL; dmarc=None";
-    const result = parseAuthResults(header);
-    expect(result.spf).toBe("pass");
-    expect(result.dkim).toBe("fail");
-    expect(result.dmarc).toBe("none");
+  it("rejects an unaligned pass", () => {
+    const result = parseTrustedAuthResults(
+      [
+        {
+          key: "Authentication-Results",
+          value:
+            "mx.cloudflare.net; spf=pass; dkim=pass; dmarc=pass header.from=attacker.example",
+        },
+      ],
+      "victim@victim.example",
+    );
+    expect(result.dmarc).not.toBe("pass");
+  });
+
+  it("does not let a duplicate spoofed pass override Cloudflare's failure", () => {
+    const result = parseTrustedAuthResults(
+      [
+        {
+          key: "Authentication-Results",
+          value: "mx.cloudflare.net; dmarc=pass header.from=victim.example",
+        },
+        {
+          key: "Authentication-Results",
+          value: "mx.cloudflare.net; dmarc=fail header.from=victim.example",
+        },
+      ],
+      "victim@victim.example",
+    );
+    expect(result.dmarc).not.toBe("pass");
+  });
+
+  it("returns null when Cloudflare supplied no authentication result", () => {
+    const result = parseTrustedAuthResults([], "sender@example.com");
+    expect(result.spf).toBeNull();
+    expect(result.dkim).toBeNull();
+    expect(result.dmarc).toBeNull();
   });
 });
 

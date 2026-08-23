@@ -1,4 +1,6 @@
 import PostalMime from "postal-mime";
+import { sanitizeHeaderValue } from "./format-from-address";
+import { sanitizeContentType } from "./sanitize-content-type";
 
 export interface AuthResults {
   spf: string | null;
@@ -109,26 +111,70 @@ export function trimQuotedHtml(html: string): string {
   return trimmed.trimEnd();
 }
 
+type ParsedHeader = { key: string; value: string };
+
+function authVerdict(raw: string, key: string): string | null {
+  const match = raw.match(new RegExp(`(?:^|[;\\s])${key}=([a-zA-Z]+)`, "i"));
+  return match ? match[1].toLowerCase() : null;
+}
+
 /**
- * Parse Authentication-Results header for SPF, DKIM, and DMARC verdicts.
- * Returns the verdict string (e.g. "pass", "fail", "none") or null if absent.
+ * Parse only Cloudflare's authentication verdict and require DMARC alignment
+ * with the visible RFC5322 From domain. A sender can include arbitrary
+ * Authentication-Results headers in the MIME input; treating any such header
+ * (or an unaligned SPF/DKIM pass) as identity proof lets a forged From mutate
+ * another contact and cancel their sequence.
+ *
+ * Multiple Cloudflare-shaped headers are evaluated conservatively: every one
+ * must report an aligned DMARC pass. That prevents a prepended spoofed "pass"
+ * from overriding the receiver's real failure result when headers repeat.
  */
-function parseAuthResults(headers: Record<string, string>): AuthResults {
-  const raw =
-    headers["authentication-results"] ||
-    headers["Authentication-Results"] ||
-    "";
-  if (!raw) return { spf: null, dkim: null, dmarc: null };
+export function parseTrustedAuthResults(
+  headers: readonly ParsedHeader[],
+  fromAddress: string,
+): AuthResults {
+  const trusted = headers
+    .filter((header) => {
+      const key = header.key.toLowerCase();
+      if (
+        key !== "authentication-results" &&
+        key !== "arc-authentication-results"
+      ) {
+        return false;
+      }
+      return /^\s*(?:i\s*=\s*\d+\s*;\s*)?mx\.cloudflare\.net\s*;/i.test(
+        header.value,
+      );
+    })
+    .map((header) => header.value);
 
-  const extract = (key: string): string | null => {
-    const match = raw.match(new RegExp(`${key}=([a-zA-Z]+)`));
-    return match ? match[1].toLowerCase() : null;
-  };
+  if (trusted.length === 0) {
+    return { spf: null, dkim: null, dmarc: null };
+  }
 
+  const fromDomain = fromAddress
+    .slice(fromAddress.lastIndexOf("@") + 1)
+    .trim()
+    .toLowerCase()
+    .replace(/\.$/, "");
+  const alignedDmarcPass = trusted.every((raw) => {
+    const headerFrom = raw
+      .match(/(?:^|[;\s])header\.from=("[^"]+"|[^;\s]+)/i)?.[1]
+      ?.replace(/^"|"$/g, "")
+      .toLowerCase()
+      .replace(/\.$/, "");
+    return authVerdict(raw, "dmarc") === "pass" && headerFrom === fromDomain;
+  });
+
+  const first = trusted[0];
   return {
-    spf: extract("spf"),
-    dkim: extract("dkim"),
-    dmarc: extract("dmarc"),
+    spf: authVerdict(first, "spf"),
+    dkim: authVerdict(first, "dkim"),
+    dmarc: alignedDmarcPass
+      ? "pass"
+      : (trusted
+          .map((raw) => authVerdict(raw, "dmarc"))
+          .find((verdict) => verdict !== null && verdict !== "pass") ?? "fail"),
   };
 }
 
@@ -155,6 +201,7 @@ export async function parseEmail(
 
   const bodyText = parsed.text || null;
   const bodyHtml = parsed.html || null;
+  const fromAddress = parsed.from?.address || message.from;
 
   // Extract CC list from the parsed MIME structure. postal-mime exposes
   // `parsed.cc` as an array of `{ address, name }` (or undefined). We
@@ -182,26 +229,34 @@ export async function parseEmail(
 
   return {
     from: {
-      address: parsed.from?.address || message.from,
-      name: parsed.from?.name || "",
+      address: fromAddress,
+      name: sanitizeHeaderValue(parsed.from?.name || "", 200),
     },
     to: message.to,
     cc,
-    subject: parsed.subject || "",
+    subject: sanitizeHeaderValue(parsed.subject || ""),
     bodyHtml: bodyHtml ? trimQuotedHtml(bodyHtml) : null,
     bodyText: bodyText ? trimQuotedText(bodyText) : null,
     fullBodyHtml: bodyHtml,
     fullBodyText: bodyText,
-    messageId: parsed.messageId || null,
+    messageId: parsed.messageId
+      ? sanitizeHeaderValue(parsed.messageId, 998) || null
+      : null,
     headers,
     attachments: (parsed.attachments || []).map((att) => ({
       filename: att.filename || "unnamed",
-      contentType: att.mimeType || "application/octet-stream",
+      contentType: sanitizeContentType(att.mimeType),
       content: att.content,
-      contentId: att.contentId || null,
+      // Content-ID becomes both a RegExp input and a D1 field downstream.
+      // RFC header lines are bounded to 998 octets; cap the parsed value too
+      // because PostalMime does not include part headers in our top-level
+      // rawHeaders budget.
+      contentId: att.contentId
+        ? sanitizeHeaderValue(att.contentId, 998) || null
+        : null,
       disposition: att.disposition || null,
     })),
-    auth: parseAuthResults(headers),
+    auth: parseTrustedAuthResults(parsed.headers ?? [], fromAddress),
     spamScore: parseSpamScore(headers),
   };
 }

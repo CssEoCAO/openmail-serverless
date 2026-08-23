@@ -15,10 +15,13 @@ export const adminInboxesRouter = new OpenAPIHono<{
   Variables: Variables;
 }>();
 
+const OutboundProviderSchema = z.enum(["cloudflare", "resend"]);
+
 const InboxRowSchema = z.object({
   email: z.string(),
   displayName: z.string().nullable(),
   displayMode: z.enum(["thread", "chat"]),
+  outboundProvider: OutboundProviderSchema,
   signatureHtml: z.string().nullable(),
   forwardTo: z.string().nullable(),
   assignedUserIds: z.array(z.string()),
@@ -41,6 +44,7 @@ adminInboxesRouter.openapi(listInboxesRoute, async (c) => {
     email: string;
     displayName: string | null;
     displayMode: "thread" | "chat" | null;
+    outboundProvider: "cloudflare" | "resend" | null;
     signatureHtml: string | null;
     forwardTo: string | null;
     assignedUserIds: string | null;
@@ -55,6 +59,7 @@ adminInboxesRouter.openapi(listInboxesRoute, async (c) => {
       u.email AS email,
       s.display_name AS displayName,
       s.display_mode AS displayMode,
+      s.outbound_provider AS outboundProvider,
       s.signature_html AS signatureHtml,
       s.forward_to AS forwardTo,
       (
@@ -75,6 +80,7 @@ adminInboxesRouter.openapi(listInboxesRoute, async (c) => {
       email: r.email,
       displayName: r.displayName,
       displayMode: r.displayMode ?? "chat",
+      outboundProvider: r.outboundProvider ?? "cloudflare",
       signatureHtml: r.signatureHtml,
       forwardTo: r.forwardTo,
       assignedUserIds: r.assignedUserIds ? JSON.parse(r.assignedUserIds) : [],
@@ -97,6 +103,7 @@ const createInboxRoute = createRoute({
             email: z.string().email(),
             displayName: z.string().min(1).nullable().optional(),
             displayMode: z.enum(["thread", "chat"]).optional(),
+            outboundProvider: OutboundProviderSchema.optional(),
           }),
         },
       },
@@ -108,6 +115,7 @@ const createInboxRoute = createRoute({
         email: z.string(),
         displayName: z.string().nullable(),
         displayMode: z.enum(["thread", "chat"]),
+        outboundProvider: OutboundProviderSchema,
         signatureHtml: z.string().nullable(),
         forwardTo: z.string().nullable(),
         assignedUserIds: z.array(z.string()),
@@ -131,6 +139,7 @@ adminInboxesRouter.openapi(createInboxRoute, async (c) => {
   const email = body.email.trim().toLowerCase();
   const displayName = body.displayName ?? null;
   const displayMode = body.displayMode ?? "chat";
+  const outboundProvider = body.outboundProvider ?? "cloudflare";
   const now = Math.floor(Date.now() / 1000);
 
   const existing = await db
@@ -146,6 +155,7 @@ adminInboxesRouter.openapi(createInboxRoute, async (c) => {
     email,
     displayName,
     displayMode,
+    outboundProvider,
     createdAt: now,
     updatedAt: now,
   });
@@ -155,6 +165,7 @@ adminInboxesRouter.openapi(createInboxRoute, async (c) => {
       email,
       displayName,
       displayMode,
+      outboundProvider,
       signatureHtml: null,
       forwardTo: null,
       assignedUserIds: [],
@@ -167,6 +178,7 @@ const PatchInboxBodySchema = z
   .object({
     displayName: z.string().nullable().optional(),
     displayMode: z.enum(["thread", "chat"]).optional(),
+    outboundProvider: OutboundProviderSchema.optional(),
     // Length cap prevents a single admin from blowing up storage and
     // the outbound-email payload. Real content is sanitized further
     // by `sanitizeSignatureHtml` in the handler.
@@ -185,6 +197,7 @@ const PatchInboxBodySchema = z
     (b) =>
       b.displayName !== undefined ||
       b.displayMode !== undefined ||
+      b.outboundProvider !== undefined ||
       b.signatureHtml !== undefined ||
       b.forwardTo !== undefined,
     "must update at least one field",
@@ -195,7 +208,7 @@ const patchInboxRoute = createRoute({
   path: "/{email}",
   tags: ["Admin Inboxes"],
   description:
-    "Update display name, display mode, signature HTML, and/or forward destination for an inbox. Row is deleted only when all four fields are at defaults (null + 'chat' + null + null).",
+    "Update display name, display mode, outbound provider, signature HTML, and/or forward destination for an inbox. Row is deleted only when every field is at its default.",
   request: {
     params: z.object({ email: z.string() }),
     body: {
@@ -212,6 +225,7 @@ const patchInboxRoute = createRoute({
         email: z.string(),
         displayName: z.string().nullable(),
         displayMode: z.enum(["thread", "chat"]),
+        outboundProvider: OutboundProviderSchema,
         signatureHtml: z.string().nullable(),
         forwardTo: z.string().nullable(),
       }),
@@ -253,6 +267,10 @@ adminInboxesRouter.openapi(patchInboxRoute, async (c) => {
     body.displayMode !== undefined
       ? body.displayMode
       : (currentRow?.displayMode ?? "chat");
+  const nextOutboundProvider =
+    body.outboundProvider !== undefined
+      ? body.outboundProvider
+      : (currentRow?.outboundProvider ?? "cloudflare");
   // Sanitize at write time. Strips scripts / event handlers /
   // javascript: URLs before storage so a compromised admin token
   // can't turn this field into a stored-XSS vector for the rest of
@@ -285,6 +303,7 @@ adminInboxesRouter.openapi(patchInboxRoute, async (c) => {
   if (
     nextDisplayName === null &&
     nextDisplayMode === "chat" &&
+    nextOutboundProvider === "cloudflare" &&
     nextSignatureHtml === null &&
     nextForwardTo === null
   ) {
@@ -294,6 +313,7 @@ adminInboxesRouter.openapi(patchInboxRoute, async (c) => {
         email,
         displayName: null,
         displayMode: "chat",
+        outboundProvider: "cloudflare",
         signatureHtml: null,
         forwardTo: null,
       },
@@ -307,6 +327,7 @@ adminInboxesRouter.openapi(patchInboxRoute, async (c) => {
       email,
       displayName: nextDisplayName,
       displayMode: nextDisplayMode,
+      outboundProvider: nextOutboundProvider,
       signatureHtml: nextSignatureHtml,
       forwardTo: nextForwardTo,
       createdAt: now,
@@ -317,6 +338,7 @@ adminInboxesRouter.openapi(patchInboxRoute, async (c) => {
       set: {
         displayName: nextDisplayName,
         displayMode: nextDisplayMode,
+        outboundProvider: nextOutboundProvider,
         signatureHtml: nextSignatureHtml,
         forwardTo: nextForwardTo,
         updatedAt: now,
@@ -328,6 +350,7 @@ adminInboxesRouter.openapi(patchInboxRoute, async (c) => {
       email,
       displayName: nextDisplayName,
       displayMode: nextDisplayMode,
+      outboundProvider: nextOutboundProvider,
       signatureHtml: nextSignatureHtml,
       forwardTo: nextForwardTo,
     },

@@ -5,12 +5,18 @@ import { drizzle } from "drizzle-orm/d1";
 import { schema } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { pushSubscriptions } from "../db/push-subscriptions.schema";
+import { b64urlEncode } from "../lib/web-push";
+
+const TEST_P256DH = b64urlEncode(
+  Uint8Array.from({ length: 65 }, (_, index) => (index === 0 ? 4 : index)),
+);
+const TEST_AUTH = b64urlEncode(new Uint8Array(16).fill(7));
 
 const SUB_BODY = {
   endpoint: "https://fcm.googleapis.com/fcm/send/test-endpoint-1",
   keys: {
-    p256dh: "BPqc0jv9h6cJmQmC2WQqIn-example-public-key-32-bytes==",
-    auth: "dGVzdC1hdXRoLXNlY3JldA",
+    p256dh: TEST_P256DH,
+    auth: TEST_AUTH,
   },
   userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120",
 };
@@ -57,7 +63,25 @@ describe("push subscription routes", () => {
     expect(rows[0].endpoint).toBe(SUB_BODY.endpoint);
   });
 
-  it("POST /subscribe upserts by endpoint and reassigns userId", async () => {
+  it("rejects non-HTTPS, local, and malformed push subscriptions", async () => {
+    const { apiKey } = await createTestUser({ role: "member" });
+    for (const body of [
+      { ...SUB_BODY, endpoint: "http://push.example.com/send/1" },
+      { ...SUB_BODY, endpoint: "https://127.0.0.1/send/1" },
+      { ...SUB_BODY, endpoint: "https://attacker.example/send/1" },
+      { ...SUB_BODY, keys: { ...SUB_BODY.keys, p256dh: "not-a-key" } },
+      { ...SUB_BODY, keys: { ...SUB_BODY.keys, auth: "not-a-secret" } },
+    ]) {
+      const res = await authFetch("/api/notifications/subscribe", {
+        apiKey,
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      expect(res.status).toBe(400);
+    }
+  });
+
+  it("does not let another user take ownership of an endpoint", async () => {
     const a = await createTestUser({
       id: "user-a",
       role: "member",
@@ -78,14 +102,45 @@ describe("push subscription routes", () => {
       method: "POST",
       body: JSON.stringify(SUB_BODY),
     });
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(409);
     const db = drizzle(env.DB, { schema });
     const rows = await db
       .select()
       .from(pushSubscriptions)
       .where(eq(pushSubscriptions.endpoint, SUB_BODY.endpoint));
     expect(rows).toHaveLength(1);
-    expect(rows[0].userId).toBe(b.userId);
+    expect(rows[0].userId).toBe(a.userId);
+  });
+
+  it("caps subscriptions per user", async () => {
+    const { apiKey, userId } = await createTestUser({ role: "member" });
+    for (let index = 0; index < 10; index++) {
+      const res = await authFetch("/api/notifications/subscribe", {
+        apiKey,
+        method: "POST",
+        body: JSON.stringify({
+          ...SUB_BODY,
+          endpoint: `${SUB_BODY.endpoint}-${index}`,
+        }),
+      });
+      expect(res.status).toBe(201);
+    }
+
+    const overflow = await authFetch("/api/notifications/subscribe", {
+      apiKey,
+      method: "POST",
+      body: JSON.stringify({
+        ...SUB_BODY,
+        endpoint: `${SUB_BODY.endpoint}-overflow`,
+      }),
+    });
+    expect(overflow.status).toBe(409);
+    const db = drizzle(env.DB, { schema });
+    const rows = await db
+      .select()
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.userId, userId));
+    expect(rows).toHaveLength(10);
   });
 
   it("GET /subscriptions returns only current user's rows", async () => {

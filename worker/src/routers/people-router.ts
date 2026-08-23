@@ -709,7 +709,7 @@ const bulkMarkReadRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            personIds: z.array(z.string()).min(1),
+            personIds: z.array(z.string().max(128)).min(1).max(100),
             recipient: z.string().optional().openapi({
               description:
                 "Optional: scope the mark-read to one inbox address.",

@@ -10,6 +10,8 @@ import {
 } from "./helpers";
 import { sequenceEnrollments } from "../db/sequence-enrollments.schema";
 import { sequenceEmails } from "../db/sequence-emails.schema";
+import { outboxEmails } from "../db/outbox-emails.schema";
+import { sentEmails } from "../db/sent-emails.schema";
 import { eq } from "drizzle-orm";
 import { cancelSequencesForPerson } from "../lib/cancel-sequence";
 
@@ -68,7 +70,47 @@ describe("cancelSequencesForPerson", () => {
         scheduledAt: now + 7200,
         status: "queued",
       },
+      {
+        id: "se-3",
+        enrollmentId: "enr-1",
+        stepOrder: 3,
+        templateSlug: "welcome",
+        scheduledAt: now,
+        status: `processing:${now}:worker-a`,
+      },
+      {
+        id: "se-4",
+        enrollmentId: "enr-1",
+        stepOrder: 4,
+        templateSlug: "welcome",
+        scheduledAt: now,
+        status: "retrying",
+      },
     ]);
+
+    await db.insert(sentEmails).values({
+      id: "sent-retrying",
+      personId: "s1",
+      fromAddress: "test@test.com",
+      toAddress: "a@test.com",
+      subject: "Retrying",
+      status: "retrying",
+      sentAt: now,
+      createdAt: now,
+    });
+    await db.insert(outboxEmails).values({
+      id: "outbox-retrying",
+      sentEmailId: "sent-retrying",
+      sequenceEmailId: "se-4",
+      fromAddress: "test@test.com",
+      toAddress: "a@test.com",
+      subject: "Retrying",
+      status: "pending",
+      attempts: 1,
+      nextRetryAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
 
     await cancelSequencesForPerson(db, "s1");
 
@@ -87,6 +129,8 @@ describe("cancelSequencesForPerson", () => {
     for (const row of emailRows) {
       expect(row.status).toBe("cancelled");
     }
+    expect((await db.select().from(outboxEmails))[0].status).toBe("failed");
+    expect((await db.select().from(sentEmails))[0].status).toBe("failed");
   });
 
   it("does nothing when no active enrollments", async () => {

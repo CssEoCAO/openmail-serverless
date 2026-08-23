@@ -5,11 +5,21 @@ import { emailTemplates } from "../db/email-templates.schema";
 import { people } from "../db/people.schema";
 import { sentEmails } from "../db/sent-emails.schema";
 import { createEmailSender } from "./email-sender";
-import { formatFromAddress } from "./format-from-address";
+import {
+  EMAIL_CONTENT_TOO_LARGE_MESSAGE,
+  fitsD1EmailTextBudget,
+} from "./email-limits";
+import { formatFromAddress, sanitizeHeaderValue } from "./format-from-address";
 import { assertInboxAllowed, type AllowedInboxes } from "./inbox-permissions";
 import { renderTemplate, type TemplateVariables } from "./interpolate";
 import { generateMessageId } from "./message-id";
-import { sendViaOutbox, type OutboxOutcome } from "./outbox";
+import {
+  finalizeSuccessfulOutbox,
+  sendViaOutbox,
+  type OutboxOutcome,
+} from "./outbox";
+import { canReadTemplate, templateCanSendFrom } from "./template-access";
+import { cancelSequencesForPerson } from "./cancel-sequence";
 
 export type SendTemplateParams = {
   db: DrizzleD1Database<any>;
@@ -33,6 +43,7 @@ export type SendTemplateSuccess = {
 export type SendTemplateFailure =
   | { ok: false; code: "TEMPLATE_NOT_FOUND"; message: string }
   | { ok: false; code: "TEMPLATE_PARSE_ERROR"; message: string }
+  | { ok: false; code: "CONTENT_TOO_LARGE"; message: string }
   | {
       ok: false;
       code: "MISSING_VARIABLES";
@@ -79,6 +90,17 @@ export async function sendTemplate(
     };
   }
 
+  if (
+    !canReadTemplate(allowed, rows[0].fromAddress) ||
+    !templateCanSendFrom(rows[0].fromAddress, fromAddress)
+  ) {
+    return {
+      ok: false,
+      code: "TEMPLATE_NOT_FOUND",
+      message: "Template not found",
+    };
+  }
+
   const rendered = renderTemplate(rows[0], variables);
   if (!rendered.ok) {
     if (rendered.parseError) {
@@ -97,13 +119,41 @@ export async function sendTemplate(
     };
   }
 
-  const renderedSubject = rendered.subject;
+  const renderedSubject = sanitizeHeaderValue(rendered.subject);
   const renderedHtml = rendered.bodyHtml;
 
   const sender = createEmailSender(env);
   const id = nanoid();
   const messageId = generateMessageId(fromAddress);
+  const headers = { "Message-ID": messageId };
+  if (
+    !fitsD1EmailTextBudget(
+      fromAddress,
+      to,
+      renderedSubject,
+      renderedHtml,
+      JSON.stringify(headers),
+    )
+  ) {
+    return {
+      ok: false,
+      code: "CONTENT_TOO_LARGE",
+      message: EMAIL_CONTENT_TOO_LARGE_MESSAGE,
+    };
+  }
   const formattedFrom = await formatFromAddress(db, fromAddress);
+  // Resolve/cancel before the provider boundary. A direct template send
+  // supersedes an active drip even when the recipient is suppressed or the
+  // transport later returns a terminal/transient failure.
+  const existingPerson = await db
+    .select({ id: people.id })
+    .from(people)
+    .where(eq(people.email, to))
+    .limit(1);
+  const personId = existingPerson[0]?.id ?? null;
+  if (personId) {
+    await cancelSequencesForPerson(db, personId);
+  }
   const { outcome, send: sendResult } = await sendViaOutbox({
     db,
     env,
@@ -114,7 +164,7 @@ export async function sendTemplate(
     to,
     subject: renderedSubject,
     html: renderedHtml,
-    headers: { "Message-ID": messageId },
+    headers,
   });
 
   // Recipient is on the suppression list — no transport call, no sent_emails
@@ -136,15 +186,6 @@ export async function sendTemplate(
 
   const result = sendResult.result!;
 
-  // Find person if they exist
-  const existingPerson = await db
-    .select({ id: people.id })
-    .from(people)
-    .where(eq(people.email, to))
-    .limit(1);
-
-  const personId = existingPerson[0]?.id ?? null;
-
   // Store sent email
   const now = Math.floor(Date.now() / 1000);
   await db.insert(sentEmails).values({
@@ -164,6 +205,9 @@ export async function sendTemplate(
     sentAt: now,
     createdAt: now,
   });
+  if (outcome === "sent" || outcome === "failed") {
+    await finalizeSuccessfulOutbox(db, id);
+  }
 
   return {
     ok: true,

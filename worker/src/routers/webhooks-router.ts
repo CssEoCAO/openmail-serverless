@@ -30,8 +30,8 @@ webhooksRouter.openapi(getRoute, async (c) => {
 
 // PUT /api/webhook — set/replace/clear config
 const PutBody = z.object({
-  url: z.string(),
-  secret: z.string().nullable().optional(),
+  url: z.string().max(2048),
+  secret: z.string().max(1024).nullable().optional(),
 });
 const putRoute = createRoute({
   method: "put",
@@ -60,6 +60,15 @@ webhooksRouter.openapi(putRoute, async (c) => {
   if (!url) {
     await setWebhookConfig(db, null, user?.id ?? null);
     return c.json({ url: "", hasSecret: false }, 200);
+  }
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return c.json({ error: "Webhook URL must use http or https" }, 400);
+    }
+  } catch {
+    return c.json({ error: "Invalid webhook URL" }, 400);
   }
 
   // secret omitted → keep existing; null/'' → clear; else → set

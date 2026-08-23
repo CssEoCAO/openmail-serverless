@@ -27,6 +27,7 @@ export class PostmarkSender implements EmailSender {
   }
 
   async send(params: SendEmailParams): Promise<SendEmailResult> {
+    let transportStarted = false;
     try {
       const payload: Record<string, unknown> = {
         From: params.from,
@@ -61,6 +62,7 @@ export class PostmarkSender implements EmailSender {
         }));
       }
 
+      transportStarted = true;
       const res = await this.fetchFn("https://api.postmarkapp.com/email", {
         method: "POST",
         headers: {
@@ -102,7 +104,14 @@ export class PostmarkSender implements EmailSender {
         message,
         e instanceof Error ? e.stack : "",
       );
-      return { id: null, error: { message, transient: true } };
+      return {
+        id: null,
+        error: {
+          message,
+          transient: true,
+          ...(transportStarted ? { ambiguous: true } : {}),
+        },
+      };
     }
   }
 

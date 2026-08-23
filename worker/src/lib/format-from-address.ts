@@ -14,12 +14,28 @@ import type { DrizzleD1Database } from "drizzle-orm/d1";
 const RFC5322_SPECIALS = /[()<>[\]:;@\\,."]/;
 
 /**
+ * Collapse characters that can terminate or fold an RFC 5322 header value.
+ *
+ * Subjects and display names ultimately reach different provider SDKs (and,
+ * for Cloudflare Email Sending, a raw MIME message). Keeping the guard in one
+ * place prevents a stored display name or rendered template variable from
+ * becoming a second header.
+ */
+export function sanitizeHeaderValue(value: string, maxLength = 998): string {
+  return value
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+/**
  * Encodes a display-name for use in a From header, quoting and escaping it
  * when it contains characters that can't appear in a bare atom.
  */
 export function encodeDisplayName(name: string): string {
-  if (!RFC5322_SPECIALS.test(name)) return name;
-  return `"${name.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  const safeName = sanitizeHeaderValue(name, 200);
+  if (!RFC5322_SPECIALS.test(safeName)) return safeName;
+  return `"${safeName.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
 /**
@@ -40,7 +56,8 @@ export async function formatFromAddress(
     .limit(1);
 
   if (rows.length > 0 && rows[0].displayName) {
-    return `${encodeDisplayName(rows[0].displayName)} <${email}>`;
+    const displayName = encodeDisplayName(rows[0].displayName);
+    if (displayName) return `${displayName} <${email}>`;
   }
   return email;
 }

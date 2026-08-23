@@ -2,7 +2,11 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { createEmailSender } from "../lib/email-sender";
 import { json201Response } from "../lib/helpers";
 import type { Variables } from "../variables";
-import { parseSendBody, sendParseErrorResponse } from "../lib/multipart-send";
+import {
+  MAX_SEND_PAYLOAD_BYTES,
+  parseSendBody,
+  sendParseErrorResponse,
+} from "../lib/multipart-send";
 import { replyToEmail, sendEmail } from "../lib/send-email";
 import { bearerSecurity } from "../lib/openapi-auth";
 import {
@@ -36,6 +40,8 @@ type CcEntry = z.infer<typeof CcEntrySchema>;
 // blocks address-list spam payloads (stored as JSON in `cc`, then
 // concatenated into outbound headers).
 const MAX_CC_ENTRIES = 50;
+const MAX_SUBJECT_CHARS = 998;
+const MAX_BODY_CHARS = MAX_SEND_PAYLOAD_BYTES;
 
 /** Format a CC entry as a header-friendly "Name <addr>" string. */
 function formatCc(c: CcEntry): string {
@@ -62,16 +68,17 @@ export const SendEmailSchema = z
       }),
     subject: z
       .string()
+      .max(MAX_SUBJECT_CHARS)
       .openapi({
         description: "Email subject line. Newlines are collapsed to spaces.",
         example: "Welcome to our service",
       })
       .transform((s) => s.replace(/[\r\n]+/g, " ")),
-    bodyHtml: z.string().openapi({
+    bodyHtml: z.string().max(MAX_BODY_CHARS).openapi({
       description: "HTML body of the email.",
       example: "<p>Hello, world!</p>",
     }),
-    bodyText: z.string().optional().openapi({
+    bodyText: z.string().max(MAX_BODY_CHARS).optional().openapi({
       description:
         "Plain-text fallback body. Recommended for accessibility and deliverability.",
       example: "Hello, world!",
@@ -115,6 +122,8 @@ const sendEmailRoute = createRoute({
       content: {
         "multipart/form-data": {
           schema: z.object({
+            // Byte length is enforced by parseSendBody so oversized payloads
+            // receive 413 rather than being reported as malformed JSON.
             payload: z.string().openapi({
               description:
                 "JSON-encoded SendEmailSchema. Required fields: `to`, `fromAddress`, `subject`, `bodyHtml`. See the SendEmailSchema component for the full field reference.",
@@ -170,6 +179,10 @@ sendRouter.openapi(sendEmailRoute, async (c) => {
     allowed: c.get("allowedInboxes")!,
   });
 
+  if (!result.ok) {
+    return c.json({ error: result.message }, 400);
+  }
+
   return c.json(
     {
       id: result.id,
@@ -190,11 +203,11 @@ export const ReplyEmailSchema = z
         "Sending identity for the reply. Must be one of your configured inboxes.",
       example: "support@yourdomain.com",
     }),
-    bodyHtml: z.string().optional().openapi({
+    bodyHtml: z.string().max(MAX_BODY_CHARS).optional().openapi({
       description:
         "HTML reply body. Provide bodyHtml and/or bodyText unless templateSlug is set.",
     }),
-    bodyText: z.string().optional().openapi({
+    bodyText: z.string().max(MAX_BODY_CHARS).optional().openapi({
       description: "Plain-text reply body.",
     }),
     cc: z
@@ -204,7 +217,7 @@ export const ReplyEmailSchema = z
       .openapi({
         description: `CC recipients. Maximum ${MAX_CC_ENTRIES} entries.`,
       }),
-    templateSlug: z.string().optional().openapi({
+    templateSlug: z.string().max(200).optional().openapi({
       description:
         "Optional template slug to render as the reply body instead of bodyHtml/bodyText.",
     }),
@@ -298,7 +311,8 @@ sendRouter.openapi(replyEmailRoute, async (c) => {
     }
     if (
       result.code === "MISSING_BODY" ||
-      result.code === "TEMPLATE_PARSE_ERROR"
+      result.code === "TEMPLATE_PARSE_ERROR" ||
+      result.code === "CONTENT_TOO_LARGE"
     ) {
       return c.json({ error: result.message }, 400);
     }

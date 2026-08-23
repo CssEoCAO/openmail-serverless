@@ -2,7 +2,12 @@ import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
 import { schema } from "../db/schema";
 import { pushSubscriptions } from "../db/push-subscriptions.schema";
-import { sendPush, type PushPayload, type VapidConfig } from "../lib/web-push";
+import {
+  MAX_PUSH_SUBSCRIPTIONS_PER_USER,
+  sendPush,
+  type PushPayload,
+  type VapidConfig,
+} from "../lib/web-push";
 
 export class NotificationsHub implements DurableObject {
   ctx: DurableObjectState;
@@ -104,7 +109,8 @@ export class NotificationsHub implements DurableObject {
     const subs = await db
       .select()
       .from(pushSubscriptions)
-      .where(eq(pushSubscriptions.userId, userId));
+      .where(eq(pushSubscriptions.userId, userId))
+      .limit(MAX_PUSH_SUBSCRIPTIONS_PER_USER);
 
     if (subs.length === 0) {
       console.log(

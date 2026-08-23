@@ -110,7 +110,12 @@ describe("attachments router", () => {
       });
       expect(res.status).toBe(200);
       expect(res.headers.get("Content-Disposition")).toBe("inline");
-      expect(res.headers.get("Cache-Control")).toContain("immutable");
+      expect(res.headers.get("Cache-Control")).toContain("no-store");
+      expect(res.headers.get("Content-Security-Policy")).toContain("sandbox");
+      expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+      expect(res.headers.get("Cross-Origin-Resource-Policy")).toBe(
+        "same-origin",
+      );
     });
 
     it("returns 404 for missing attachment", async () => {
@@ -126,6 +131,7 @@ describe("attachments router", () => {
       const res = await authFetch("/api/attachments/att-1/inline", { apiKey });
       const cacheControl = res.headers.get("Cache-Control") ?? "";
       expect(cacheControl).toContain("private");
+      expect(cacheControl).toContain("no-store");
       expect(cacheControl).not.toContain("public");
     });
   });

@@ -64,14 +64,16 @@ https://github.com/user-attachments/assets/fe3a3811-1902-4b0b-8b94-f8c72f1afab4
 | **Sending**   | ✅         | ✅     | ✅       | ✅       |
 | **Receiving** | ✅         | ❌     | ❌       | ❌       |
 
-Pick one outbound provider at deploy time:
+For a single-provider deployment, configure one outbound provider:
 
 - **Cloudflare Email Sending** — add a `send_email` binding (`EMAIL`) in `wrangler.jsonc` and onboard your domain at [Email Service](https://dash.cloudflare.com/?to=/:account/email-service).
 - **Resend** — set `RESEND_API_KEY` as a secret.
 - **Bavimail** — set `BAVIMAIL_API_KEY` and `BAVIMAIL_ALIAS_ID` as secrets. The alias ID identifies the sending alias configured in your Bavimail dashboard.
 - **Postmark** — set `POSTMARK_API_KEY` as a secret (your Postmark server's API token). Verify each send-from domain in the Postmark dashboard.
 
-Selection precedence at runtime: **Bavimail** (when both env vars are set) > **Postmark** (when `POSTMARK_API_KEY` is set) > **Resend** (when `RESEND_API_KEY` is set) > **Cloudflare Email Sending** (when the `EMAIL` binding exists). If none are configured, send attempts return a "No email provider configured" error.
+Selection precedence in single-provider mode is **Bavimail** (when both env vars are set) > **Postmark** (when `POSTMARK_API_KEY` is set) > **Resend** (when `RESEND_API_KEY` is set) > **Cloudflare Email Sending** (when the `EMAIL` binding exists). If none are configured, send attempts return a "No email provider configured" error.
+
+To mix **Cloudflare Email Sending** and **Resend** in one deployment, configure both the `EMAIL` binding and `RESEND_API_KEY`, then set `vars.EMAIL_PROVIDER_ROUTING` to `"identity"`. Admins can select the provider for each sender on the **Inboxes** page; new senders default to Cloudflare. The selected provider is authoritative: if its binding or secret is missing, the send fails instead of falling back to another provider.
 
 ## How much does it cost?
 
@@ -517,6 +519,7 @@ Edit `wrangler.jsonc`:
 - Set `BASE_URL` to your deployed URL
 - Set `TRUSTED_ORIGINS` to include your deployed URL
 - If using Cloudflare Email Sending, uncomment the `send_email` binding
+- If mixing Cloudflare and Resend, set `EMAIL_PROVIDER_ROUTING` to `"identity"`
 
 ### 5. Configure secrets
 
@@ -530,7 +533,7 @@ Edit `.dev.vars`:
 
 - `BAVIMAIL_API_KEY` and `BAVIMAIL_ALIAS_ID` — your Bavimail bearer token and alias UUID (only if using Bavimail; both must be set)
 - `POSTMARK_API_KEY` — your Postmark server API token (only if using Postmark)
-- `RESEND_API_KEY` — your Resend API key (omit if using Cloudflare Email Sending, Bavimail, or Postmark)
+- `RESEND_API_KEY` — your Resend API key (also allowed alongside Cloudflare Email Sending when identity routing is enabled)
 - `BETTER_AUTH_SECRET` — **required**; generate a random string (`openssl rand -hex 32`). Signs sessions and protects the OAuth signing keys used by the MCP endpoint. Set this before deploying: without it the auth library silently falls back to a publicly known default value.
 - `UNSUBSCRIBE_SECRET` — generate a random string (`openssl rand -hex 32`); used to sign one-click unsubscribe tokens
 
@@ -649,6 +652,7 @@ Your Cloudflare Workers configuration. Created from `wrangler.jsonc.example`. Th
 - `send_email` (optional) — Binding for Cloudflare Email Sending
 - `vars.BASE_URL` — Your deployed URL (used for OAuth redirects and BetterAuth)
 - `vars.TRUSTED_ORIGINS` — CORS allowed origins
+- `vars.EMAIL_PROVIDER_ROUTING` (optional) — Set to `"identity"` to choose Cloudflare or Resend per sender identity; requires the providers used by those identities to be configured
 - `vars.COOKIE_PREFIX` — Prefix for better-auth session cookies
 - `vars.VAPID_PUBLIC_KEY` / `vars.VAPID_SUBJECT` — public VAPID config for
   browser push notifications. Generate with `yarn vapid:generate` and store
@@ -664,7 +668,7 @@ Local development secrets. Created from `.dev.vars.example`. This file is gitign
 - `BAVIMAIL_API_KEY` — Bavimail API bearer token (required for Bavimail, must be paired with `BAVIMAIL_ALIAS_ID`)
 - `BAVIMAIL_ALIAS_ID` — Bavimail alias UUID identifying the sending alias (required for Bavimail)
 - `POSTMARK_API_KEY` — Postmark server API token (if using Postmark)
-- `RESEND_API_KEY` — Resend API key (if using Resend)
+- `RESEND_API_KEY` — Resend API key (if using Resend, including mixed identity routing)
 - `BETTER_AUTH_SECRET` — Secret for session signing
 - `UNSUBSCRIBE_SECRET` — Secret used to HMAC-sign one-click unsubscribe tokens. Generate with `openssl rand -hex 32`. Set in prod via `wrangler secret put UNSUBSCRIBE_SECRET`. Required for the suppressions/unsubscribe feature.
 - `DISABLE_PASSKEY_GATE` — Local-only: set to `"true"` to skip the server-side passkey requirement so you can sign in with email+password during development. **Never set this in production.**

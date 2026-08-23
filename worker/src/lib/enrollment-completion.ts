@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, like, or } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { sequenceEmails } from "../db/sequence-emails.schema";
 import { sequenceEnrollments } from "../db/sequence-enrollments.schema";
@@ -22,7 +22,10 @@ export async function completeEnrollmentIfDone(
     .where(
       and(
         eq(sequenceEmails.enrollmentId, enrollmentId),
-        inArray(sequenceEmails.status, OUTSTANDING_STATUSES),
+        or(
+          inArray(sequenceEmails.status, OUTSTANDING_STATUSES),
+          like(sequenceEmails.status, "processing:%"),
+        ),
       ),
     )
     .limit(1);
@@ -31,6 +34,11 @@ export async function completeEnrollmentIfDone(
     await db
       .update(sequenceEnrollments)
       .set({ status: "completed" })
-      .where(eq(sequenceEnrollments.id, enrollmentId));
+      .where(
+        and(
+          eq(sequenceEnrollments.id, enrollmentId),
+          eq(sequenceEnrollments.status, "active"),
+        ),
+      );
   }
 }

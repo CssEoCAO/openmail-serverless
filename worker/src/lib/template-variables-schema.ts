@@ -48,19 +48,28 @@ export const templateValueSchema: z.ZodType<unknown> = z
  * handful of section/object levels at most.
  */
 export const MAX_VARIABLE_DEPTH = 32;
+/** Bounds Zod/render traversal even for a very wide but shallow JSON value. */
+export const MAX_VARIABLE_NODES = 10_000;
 
 /**
  * Iteratively finds the first depth (if any) that exceeds `maxDepth` in
  * `root`. Depth 0 is `root` itself; each array item or object property adds
  * one level. Returns `null` when every value is within bounds.
  */
-function findExcessiveDepth(root: unknown, maxDepth: number): number | null {
+function findVariableLimitViolation(
+  root: unknown,
+  maxDepth: number,
+  maxNodes: number,
+): { kind: "depth"; value: number } | { kind: "nodes" } | null {
   const stack: Array<{ value: unknown; depth: number }> = [
     { value: root, depth: 0 },
   ];
+  let visited = 0;
   while (stack.length > 0) {
     const { value, depth } = stack.pop()!;
-    if (depth > maxDepth) return depth;
+    visited++;
+    if (visited > maxNodes) return { kind: "nodes" };
+    if (depth > maxDepth) return { kind: "depth", value: depth };
     if (Array.isArray(value)) {
       for (const item of value) stack.push({ value: item, depth: depth + 1 });
     } else if (value !== null && typeof value === "object") {
@@ -99,11 +108,22 @@ function findExcessiveDepth(root: unknown, maxDepth: number): number | null {
  */
 export const templateVariablesSchema = z.preprocess(
   (raw, ctx) => {
-    const excess = findExcessiveDepth(raw, MAX_VARIABLE_DEPTH);
-    if (excess !== null) {
+    const violation = findVariableLimitViolation(
+      raw,
+      MAX_VARIABLE_DEPTH,
+      MAX_VARIABLE_NODES,
+    );
+    if (violation?.kind === "depth") {
       ctx.addIssue({
         code: "custom",
         message: `Template variables are nested too deeply — the limit is ${MAX_VARIABLE_DEPTH} levels.`,
+      });
+      return z.NEVER;
+    }
+    if (violation?.kind === "nodes") {
+      ctx.addIssue({
+        code: "custom",
+        message: `Template variables contain too many values — the limit is ${MAX_VARIABLE_NODES} nodes.`,
       });
       return z.NEVER;
     }

@@ -17,6 +17,10 @@ import { sentEmails } from "../db/sent-emails.schema";
 import { attachments } from "../db/attachments.schema";
 import { suppressions } from "../db/suppressions.schema";
 import { outboxEmails } from "../db/outbox-emails.schema";
+import { sequences } from "../db/sequences.schema";
+import { sequenceEnrollments } from "../db/sequence-enrollments.schema";
+import { MAX_SEND_PAYLOAD_BYTES } from "../lib/multipart-send";
+import { MAX_D1_EMAIL_TEXT_BYTES } from "../lib/email-limits";
 
 describe("send router", () => {
   let apiKey: string;
@@ -116,6 +120,58 @@ describe("send router", () => {
         .from(sentEmails)
         .where(eq(sentEmails.id, body.id));
       expect(sentRows[0].personId).toBe("existing-1");
+    });
+
+    it("cancels active sequences for every delivered marketing recipient", async () => {
+      const db = getDb();
+      const now = Math.floor(Date.now() / 1000);
+      await createTestPerson({ id: "to-person", email: "to@example.com" });
+      await createTestPerson({ id: "cc-person", email: "cc@example.com" });
+      await db.insert(sequences).values({
+        id: "seq-direct-send",
+        name: "Direct send cancellation",
+        steps: "[]",
+        createdAt: now,
+        updatedAt: now,
+      });
+      await db.insert(sequenceEnrollments).values([
+        {
+          id: "enroll-to",
+          sequenceId: "seq-direct-send",
+          personId: "to-person",
+          status: "active",
+          variables: "{}",
+          fromAddress: "me@saasmail.test",
+          enrolledAt: now,
+        },
+        {
+          id: "enroll-cc",
+          sequenceId: "seq-direct-send",
+          personId: "cc-person",
+          status: "active",
+          variables: "{}",
+          fromAddress: "me@saasmail.test",
+          enrolledAt: now,
+        },
+      ]);
+
+      const res = await authFetch("/api/send", {
+        apiKey,
+        method: "POST",
+        body: buildSendForm({
+          to: "to@example.com",
+          cc: [{ email: "cc@example.com" }],
+          fromAddress: "me@saasmail.test",
+          subject: "Hello both",
+          bodyHtml: "<p>Hi</p>",
+        }),
+      });
+      expect(res.status).toBe(201);
+      const enrollments = await db.select().from(sequenceEnrollments);
+      expect(enrollments.map((row) => row.status)).toEqual([
+        "cancelled",
+        "cancelled",
+      ]);
     });
 
     it("stores a single sent attachment in R2 and the attachments table", async () => {
@@ -219,9 +275,72 @@ describe("send router", () => {
       });
       expect(res.status).toBe(413);
     });
+
+    it("rejects an oversized JSON payload before parsing it", async () => {
+      const res = await authFetch("/api/send", {
+        apiKey,
+        method: "POST",
+        body: buildSendForm({
+          to: "a@example.com",
+          fromAddress: "me@saasmail.test",
+          subject: "huge payload",
+          bodyHtml: "x".repeat(MAX_SEND_PAYLOAD_BYTES + 1),
+        }),
+      });
+      expect(res.status).toBe(413);
+      expect((await res.json()).error).toMatch(/payload/i);
+    });
+
+    it("rejects content that cannot fit the D1 outbox before sending", async () => {
+      const res = await authFetch("/api/send", {
+        apiKey,
+        method: "POST",
+        body: buildSendForm({
+          to: "a@example.com",
+          fromAddress: "me@saasmail.test",
+          subject: "D1 limit",
+          // The field itself remains below the 2 MiB request cap, but the
+          // complete outbox row (addresses + subject + headers) cannot fit.
+          bodyHtml: "x".repeat(MAX_D1_EMAIL_TEXT_BYTES),
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/storage limit/i);
+      expect(await getDb().select().from(outboxEmails)).toHaveLength(0);
+      expect(await getDb().select().from(sentEmails)).toHaveLength(0);
+    });
   });
 
   describe("POST /api/send/reply/:emailId", () => {
+    it("rejects a reply that cannot fit in the D1 outbox", async () => {
+      const person = await createTestPerson({
+        id: "p-limit",
+        email: "submitter@example.com",
+      });
+      await createTestEmail({
+        id: "rcv-limit",
+        personId: person.id,
+        recipient: "me@saasmail.test",
+        subject: "Contact form submission",
+        messageId: "contact-limit@example.com",
+      });
+
+      const res = await authFetch("/api/send/reply/rcv-limit", {
+        apiKey,
+        method: "POST",
+        body: buildSendForm({
+          fromAddress: "me@saasmail.test",
+          bodyHtml: "x".repeat(MAX_D1_EMAIL_TEXT_BYTES),
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/storage limit/i);
+      expect(await getDb().select().from(outboxEmails)).toHaveLength(0);
+      expect(await getDb().select().from(sentEmails)).toHaveLength(0);
+    });
+
     it("accepts an optional replyTo address", async () => {
       const person = await createTestPerson({
         id: "p-rt",
@@ -498,6 +617,28 @@ describe("send router", () => {
         .from(sentEmails)
         .where(eq(sentEmails.toAddress, "alice@example.com"));
       expect(sent).toHaveLength(0);
+    });
+
+    it("removes pre-staged attachments when every recipient is suppressed", async () => {
+      await insertSuppression("suppressed-file@example.com");
+      const res = await authFetch("/api/send", {
+        apiKey,
+        method: "POST",
+        body: buildSendForm(
+          {
+            to: "suppressed-file@example.com",
+            fromAddress: "me@saasmail.test",
+            subject: "Suppressed",
+            bodyHtml: "<p>Hi</p>",
+          },
+          [{ name: "unused.txt", bytes: new Uint8Array([4, 5, 6]) }],
+        ),
+      });
+
+      expect(res.status).toBe(201);
+      expect((await res.json()).status).toBe("suppressed");
+      expect(await getDb().select().from(attachments)).toHaveLength(0);
+      expect(await getDb().select().from(outboxEmails)).toHaveLength(0);
     });
 
     it("transactional=true bypasses suppression", async () => {

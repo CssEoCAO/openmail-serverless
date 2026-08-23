@@ -6,6 +6,16 @@ export const senderIdentities = sqliteTable("sender_identities", {
   displayMode: text("display_mode", { enum: ["thread", "chat"] })
     .notNull()
     .default("thread"),
+  /**
+   * Transport used when this identity sends, replies, or forwards mail.
+   * Cloudflare is the safe default for existing installations; identities
+   * whose established provider is Resend opt in explicitly.
+   */
+  outboundProvider: text("outbound_provider", {
+    enum: ["cloudflare", "resend"],
+  })
+    .notNull()
+    .default("cloudflare"),
   signatureHtml: text("signature_html"),
   /**
    * Optional destination address. When set, every inbound message to this

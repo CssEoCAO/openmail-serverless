@@ -130,6 +130,81 @@ describe("sequence processor - handleScheduled", () => {
     // Should not throw
     await handleScheduled(env as unknown as CloudflareBindings);
   });
+
+  it("retries a queued row after a producer-side Queue failure", async () => {
+    const db = getDb();
+    const now = Math.floor(Date.now() / 1000);
+    await db.insert(sequenceEmails).values({
+      id: "se-recover",
+      enrollmentId: "enr-recover",
+      stepOrder: 1,
+      templateSlug: "welcome",
+      scheduledAt: now - 100,
+      status: "pending",
+    });
+
+    const send = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("temporary queue failure"))
+      .mockResolvedValueOnce(undefined);
+    const testEnv = {
+      DB: env.DB,
+      EMAIL_QUEUE: { send },
+      DEMO_MODE: "0",
+    } as unknown as CloudflareBindings;
+
+    await handleScheduled(testEnv);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(
+      (
+        await db
+          .select({ status: sequenceEmails.status })
+          .from(sequenceEmails)
+          .where(eq(sequenceEmails.id, "se-recover"))
+      )[0].status,
+    ).toBe("queued");
+
+    await handleScheduled(testEnv);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it("recovers an expired processing claim but leaves a live claim alone", async () => {
+    const db = getDb();
+    const now = Math.floor(Date.now() / 1000);
+    await db.insert(sequenceEmails).values([
+      {
+        id: "se-stale",
+        enrollmentId: "enr-stale",
+        stepOrder: 1,
+        templateSlug: "welcome",
+        scheduledAt: now - 100,
+        status: `processing:${now - 1801}:old-worker`,
+      },
+      {
+        id: "se-live",
+        enrollmentId: "enr-live",
+        stepOrder: 1,
+        templateSlug: "welcome",
+        scheduledAt: now - 100,
+        status: `processing:${now}:live-worker`,
+      },
+    ]);
+
+    const send = vi.fn().mockResolvedValue(undefined);
+    await handleScheduled({
+      DB: env.DB,
+      EMAIL_QUEUE: { send },
+      DEMO_MODE: "0",
+    } as unknown as CloudflareBindings);
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith({ sequenceEmailId: "se-stale" });
+    const rows = await db.select().from(sequenceEmails);
+    expect(rows.find((row) => row.id === "se-stale")?.status).toBe("queued");
+    expect(rows.find((row) => row.id === "se-live")?.status).toContain(
+      "processing:",
+    );
+  });
 });
 
 describe("sequence processor - processSequenceEmail suppression", () => {
@@ -555,6 +630,154 @@ describe("sequence processor - crash-redelivery idempotency", () => {
     const outbox = await db.select().from(outboxEmails);
     expect(outbox).toHaveLength(1);
   });
+
+  it("repairs a post-provider crash marker as sent without re-delivery", async () => {
+    const db = getDb();
+    const now = Math.floor(Date.now() / 1000);
+    await createTestPerson({ id: "p1", email: "a@test.com" });
+    await createTestTemplate({ slug: "welcome" });
+    await db.insert(sequences).values({
+      id: "seq-1",
+      name: "Test",
+      steps: JSON.stringify([
+        { order: 1, templateSlug: "welcome", delayHours: 0 },
+      ]),
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(sequenceEnrollments).values({
+      id: "enr-1",
+      sequenceId: "seq-1",
+      personId: "p1",
+      status: "active",
+      variables: "{}",
+      fromAddress: "me@saasmail.test",
+      enrolledAt: now,
+    });
+    await db.insert(sequenceEmails).values({
+      id: "se-1",
+      enrollmentId: "enr-1",
+      stepOrder: 1,
+      templateSlug: "welcome",
+      scheduledAt: now - 100,
+      status: "queued",
+    });
+    await db.insert(outboxEmails).values({
+      id: "ob-sent-1",
+      sentEmailId: "sent-repair-1",
+      sequenceEmailId: "se-1",
+      fromAddress: "me@saasmail.test",
+      toAddress: "a@test.com",
+      subject: "Hello",
+      bodyHtml: "<p>Hello</p>",
+      status: "sent",
+      attempts: 0,
+      nextRetryAt: now + 3600,
+      headers: JSON.stringify({ "Message-ID": "<mid@saasmail.test>" }),
+      transactional: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const sender: EmailSender = {
+      provider: "none",
+      send: vi.fn(async () => {
+        throw new Error("must not send a delivered marker again");
+      }),
+      maxAttachmentBytes: () => 25_000_000,
+    };
+
+    await processSequenceEmail(
+      db,
+      sender,
+      env as unknown as CloudflareBindings,
+      "se-1",
+    );
+
+    expect(sender.send).not.toHaveBeenCalled();
+    const [step] = await db
+      .select()
+      .from(sequenceEmails)
+      .where(eq(sequenceEmails.id, "se-1"));
+    expect(step.status).toBe("sent");
+    expect(step.sentEmailId).toBe("sent-repair-1");
+    expect((await db.select().from(sentEmails))[0].status).toBe("sent");
+    expect(await db.select().from(outboxEmails)).toHaveLength(0);
+    expect((await db.select().from(sequenceEnrollments))[0].status).toBe(
+      "completed",
+    );
+  });
+
+  it("atomically claims concurrent Queue deliveries", async () => {
+    const db = getDb();
+    const now = Math.floor(Date.now() / 1000);
+    await createTestPerson({ id: "p1", email: "a@test.com" });
+    await createTestTemplate({ slug: "welcome" });
+    await db.insert(sequences).values({
+      id: "seq-1",
+      name: "Test",
+      steps: JSON.stringify([
+        { order: 1, templateSlug: "welcome", delayHours: 0 },
+      ]),
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(sequenceEnrollments).values({
+      id: "enr-1",
+      sequenceId: "seq-1",
+      personId: "p1",
+      status: "active",
+      variables: "{}",
+      fromAddress: "me@saasmail.test",
+      enrolledAt: now,
+    });
+    await db.insert(sequenceEmails).values({
+      id: "se-1",
+      enrollmentId: "enr-1",
+      stepOrder: 1,
+      templateSlug: "welcome",
+      scheduledAt: now - 100,
+      status: "queued",
+    });
+
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started!: () => void;
+    const sending = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const sender: EmailSender = {
+      provider: "none",
+      send: vi.fn(async () => {
+        started();
+        await held;
+        return { id: "provider-id", error: null };
+      }),
+      maxAttachmentBytes: () => 25_000_000,
+    };
+
+    const first = processSequenceEmail(
+      db,
+      sender,
+      env as unknown as CloudflareBindings,
+      "se-1",
+    );
+    await sending;
+    await processSequenceEmail(
+      db,
+      sender,
+      env as unknown as CloudflareBindings,
+      "se-1",
+    );
+    expect(sender.send).toHaveBeenCalledTimes(1);
+    release();
+    await first;
+
+    expect(sender.send).toHaveBeenCalledTimes(1);
+    expect(await db.select().from(sentEmails)).toHaveLength(1);
+    expect((await db.select().from(sequenceEmails))[0].status).toBe("sent");
+  });
 });
 
 describe("sequence processor - template rendering", () => {
@@ -687,6 +910,69 @@ describe("sequence processor - template rendering", () => {
       .where(eq(sequenceEnrollments.id, "enr-1"))
       .limit(1);
     expect(enr[0].status).toBe("completed");
+  });
+
+  it("does not send a slug recreated under another inbox", async () => {
+    const db = await seedStep("recreated");
+    await createTestTemplate({
+      slug: "recreated",
+      subject: "Tenant B content",
+      bodyHtml: "<p>Do not send from tenant A</p>",
+      fromAddress: "other-inbox@test.com",
+    });
+    const fakeSender: EmailSender = {
+      provider: "none",
+      maxAttachmentBytes: () => 25_000_000,
+      send: vi.fn(async () => ({ id: "must-not-send", error: null })),
+    };
+
+    await processSequenceEmail(
+      db,
+      fakeSender,
+      env as unknown as CloudflareBindings,
+      "se-1",
+    );
+
+    expect(fakeSender.send).not.toHaveBeenCalled();
+    expect((await db.select().from(sequenceEmails))[0].status).toBe("failed");
+    expect(await db.select().from(sentEmails)).toHaveLength(0);
+  });
+
+  it("marks an over-expanded template failed before transport", async () => {
+    const db = await seedStep("huge", "a@test.com", {
+      value: "x".repeat(2_000),
+    });
+    await createTestTemplate({
+      slug: "huge",
+      subject: "Hi",
+      bodyHtml: "{{value}}".repeat(1_000),
+    });
+
+    const fakeSender: EmailSender = {
+      provider: "none",
+      maxAttachmentBytes: () => 25_000_000,
+      send: vi.fn(async (_params: SendEmailParams) => ({
+        id: "should-not-be-called",
+        error: null,
+      })),
+    };
+
+    await processSequenceEmail(
+      db,
+      fakeSender,
+      env as unknown as CloudflareBindings,
+      "se-1",
+    );
+
+    expect(fakeSender.send).not.toHaveBeenCalled();
+    const row = await db
+      .select()
+      .from(sequenceEmails)
+      .where(eq(sequenceEmails.id, "se-1"))
+      .limit(1);
+    expect(row[0].status).toBe("failed");
+    expect(await db.select().from(outboxEmails)).toHaveLength(0);
+    expect(await db.select().from(sentEmails)).toHaveLength(0);
   });
 
   it("does not HTML-escape the subject, but still escapes the body", async () => {

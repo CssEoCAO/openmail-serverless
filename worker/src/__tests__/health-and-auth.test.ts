@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import { eq } from "drizzle-orm";
 import { exports } from "cloudflare:workers";
-import { applyMigrations, cleanDb, createTestUser, authFetch } from "./helpers";
+import {
+  applyMigrations,
+  cleanDb,
+  createTestUser,
+  authFetch,
+  getDb,
+} from "./helpers";
+import { users } from "../db/auth.schema";
 
 describe("health check", () => {
   beforeAll(async () => {
@@ -40,6 +48,28 @@ describe("auth middleware", () => {
       apiKey: "sk_00000000000000000000000000000000",
     });
     expect(res.status).toBe(401);
+  });
+
+  it("revokes API-key access while the owning account is banned", async () => {
+    const { apiKey, userId } = await createTestUser();
+    await getDb()
+      .update(users)
+      .set({ banned: true, banExpires: null })
+      .where(eq(users.id, userId));
+
+    const res = await authFetch("/api/people", { apiKey });
+    expect(res.status).toBe(401);
+  });
+
+  it("allows an API key again after a timed ban expires", async () => {
+    const { apiKey, userId } = await createTestUser();
+    await getDb()
+      .update(users)
+      .set({ banned: true, banExpires: new Date(Date.now() - 1_000) })
+      .where(eq(users.id, userId));
+
+    const res = await authFetch("/api/people", { apiKey });
+    expect(res.status).toBe(200);
   });
 
   it("skips auth for /api/setup paths", async () => {

@@ -102,6 +102,27 @@ describe("public unsubscribe endpoints", () => {
     expect(r.status).toBe(200);
   });
 
+  it("an unsubscribe token cannot remove an admin manual suppression", async () => {
+    await getDb()
+      .insert(suppressions)
+      .values({
+        id: "manual-1",
+        email: "alice@example.com",
+        reason: "manual",
+        source: "admin",
+        note: "Operational block",
+        createdAt: Math.floor(Date.now() / 1000),
+      });
+    const token = await signToken("alice@example.com", SECRET);
+    const r = await exports.default.fetch(
+      `http://localhost/api/unsubscribe/undo?token=${encodeURIComponent(token)}`,
+      { method: "POST" },
+    );
+    expect(r.status).toBe(200);
+    expect((await r.json()).status).toBe("suppressed");
+    expect(await getDb().query.suppressions.findMany()).toHaveLength(1);
+  });
+
   it("public endpoints work without any auth headers", async () => {
     // Critical bypass check: NO API key, NO session, just the token.
     const token = await signToken("alice@example.com", SECRET);

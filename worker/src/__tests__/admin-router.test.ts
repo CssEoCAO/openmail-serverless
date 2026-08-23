@@ -211,7 +211,7 @@ describe("admin router", () => {
       expect(remaining).toBeUndefined();
     });
 
-    it("revokes a used invite", async () => {
+    it("does not erase an accepted or in-progress invite claim", async () => {
       const db = getDb();
       const now = new Date();
       const now2 = Date.now();
@@ -240,9 +240,16 @@ describe("admin router", () => {
         apiKey,
         method: "DELETE",
       });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(409);
       const data = await res.json();
-      expect(data.success).toBe(true);
+      expect(data.error).toContain("already in progress");
+      expect(
+        await db
+          .select()
+          .from(invitations)
+          .where(eq(invitations.id, "invite-2"))
+          .get(),
+      ).toBeDefined();
     });
 
     it("returns 404 for nonexistent invite id", async () => {

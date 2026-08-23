@@ -1,5 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { users, passkeys } from "../db/auth.schema";
 import { invitations } from "../db/invitations.schema";
 import { appSettings } from "../db/app-settings.schema";
@@ -156,6 +156,10 @@ const revokeInviteRoute = createRoute({
       description: "Invite not found",
       content: { "application/json": { schema: ErrorSchema } },
     },
+    409: {
+      description: "Invite acceptance already claimed",
+      content: { "application/json": { schema: ErrorSchema } },
+    },
   },
 });
 
@@ -172,7 +176,15 @@ adminRouter.openapi(revokeInviteRoute, async (c) => {
     return c.json({ error: "Invite not found" }, 404);
   }
 
-  await db.delete(invitations).where(eq(invitations.id, id));
+  const revoked = await db
+    .delete(invitations)
+    .where(and(eq(invitations.id, id), isNull(invitations.usedAt)))
+    .returning({ id: invitations.id });
+  if (revoked.length === 0) {
+    // `usedAt` is the acceptance claim. Never delete it while createUser may
+    // already be crossing its external side-effect boundary.
+    return c.json({ error: "Invitation acceptance already in progress" }, 409);
+  }
   return c.json({ success: true as const }, 200);
 });
 

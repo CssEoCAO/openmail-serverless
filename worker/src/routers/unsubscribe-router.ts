@@ -1,8 +1,11 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { suppressions } from "../db/suppressions.schema";
-import { verifyToken } from "../lib/unsubscribe-token";
+import {
+  MAX_UNSUBSCRIBE_TOKEN_LENGTH,
+  verifyToken,
+} from "../lib/unsubscribe-token";
 import { json200Response } from "../lib/helpers";
 import type { Variables } from "../variables";
 
@@ -36,7 +39,7 @@ const unsubscribeRoute = createRoute({
     "Record a suppression from a signed unsubscribe token. Idempotent.",
   request: {
     query: z.object({
-      token: z.string(),
+      token: z.string().min(1).max(MAX_UNSUBSCRIBE_TOKEN_LENGTH),
       source: z.enum(["one-click", "user-link"]).optional(),
     }),
   },
@@ -102,7 +105,7 @@ const undoRoute = createRoute({
   description: "Remove a suppression via signed token. Idempotent.",
   request: {
     query: z.object({
-      token: z.string(),
+      token: z.string().min(1).max(MAX_UNSUBSCRIBE_TOKEN_LENGTH),
     }),
   },
   responses: {
@@ -128,7 +131,25 @@ unsubscribeRouter.openapi(undoRoute, async (c) => {
   const email = result.email.toLowerCase();
   const db = c.get("db");
 
-  await db.delete(suppressions).where(eq(suppressions.email, email));
+  const deleted = await db
+    .delete(suppressions)
+    .where(
+      and(
+        eq(suppressions.email, email),
+        eq(suppressions.reason, "unsubscribe"),
+      ),
+    )
+    .returning({ id: suppressions.id });
+  if (deleted.length === 0) {
+    const remaining = await db
+      .select({ id: suppressions.id })
+      .from(suppressions)
+      .where(eq(suppressions.email, email))
+      .limit(1);
+    if (remaining.length > 0) {
+      return c.json({ email, status: "suppressed" as const }, 200);
+    }
+  }
 
   return c.json({ email, status: "subscribed" as const }, 200);
 });

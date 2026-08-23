@@ -1,6 +1,14 @@
 import { env } from "cloudflare:workers";
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
-import { applyMigrations, cleanDb, createTestUser, authFetch } from "./helpers";
+import {
+  applyMigrations,
+  cleanDb,
+  createTestUser,
+  authFetch,
+  getDb,
+} from "./helpers";
+import { users } from "../db/auth.schema";
+import { appSettings } from "../db/app-settings.schema";
 
 describe("setup router", () => {
   beforeAll(async () => {
@@ -100,6 +108,46 @@ describe("setup router", () => {
         }),
       });
       expect(res.status).toBe(400);
+    });
+
+    it("creates only one administrator across concurrent setup requests", async () => {
+      const setup = (email: string) =>
+        authFetch("/api/setup", {
+          method: "POST",
+          body: JSON.stringify({
+            name: "Admin",
+            email,
+            password: "securepassword123",
+          }),
+        });
+
+      const responses = await Promise.all([
+        setup("admin-one@example.com"),
+        setup("admin-two@example.com"),
+      ]);
+      expect(responses.map((res) => res.status).sort()).toEqual([200, 403]);
+      expect(await getDb().select().from(users)).toHaveLength(1);
+    });
+
+    it("does not recover an old setup claim by age", async () => {
+      const db = getDb();
+      await db.insert(appSettings).values({
+        key: "__setup_claim",
+        value: `claim:${Math.floor(Date.now() / 1000) - 86_400}:old`,
+        updatedAt: Math.floor(Date.now() / 1000) - 86_400,
+        updatedBy: null,
+      });
+
+      const res = await authFetch("/api/setup", {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Second Admin",
+          email: "second@example.com",
+          password: "securepassword123",
+        }),
+      });
+      expect(res.status).toBe(403);
+      expect(await db.select().from(users)).toHaveLength(0);
     });
   });
 });

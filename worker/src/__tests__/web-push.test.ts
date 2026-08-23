@@ -5,6 +5,10 @@ import {
   signVapidJwt,
   encryptAes128Gcm,
   decryptAes128Gcm,
+  isSafePushEndpoint,
+  isValidP256dh,
+  isValidPushAuth,
+  sendPush,
 } from "../lib/web-push";
 
 describe("web-push: base64url", () => {
@@ -14,6 +18,53 @@ describe("web-push: base64url", () => {
     expect(enc).not.toMatch(/[+/=]/);
     const dec = b64urlDecode(enc);
     expect(Array.from(dec)).toEqual(Array.from(bytes));
+  });
+});
+
+describe("web-push: subscription validation", () => {
+  const p256dh = b64urlEncode(
+    Uint8Array.from({ length: 65 }, (_, index) => (index === 0 ? 4 : index)),
+  );
+  const auth = b64urlEncode(new Uint8Array(16).fill(7));
+
+  it("accepts browser-shaped keys and HTTPS service endpoints", () => {
+    expect(isSafePushEndpoint("https://fcm.googleapis.com/fcm/send/id")).toBe(
+      true,
+    );
+    expect(isValidP256dh(p256dh)).toBe(true);
+    expect(isValidPushAuth(auth)).toBe(true);
+  });
+
+  it("rejects local request targets and malformed key material", () => {
+    expect(isSafePushEndpoint("http://push.example.com/send/id")).toBe(false);
+    expect(isSafePushEndpoint("https://127.0.0.1/send/id")).toBe(false);
+    expect(isSafePushEndpoint("https://[::1]/send/id")).toBe(false);
+    expect(isSafePushEndpoint("https://localhost./send/id")).toBe(false);
+    expect(isSafePushEndpoint("https://attacker.example/send/id")).toBe(false);
+    expect(isSafePushEndpoint("https://web.push.apple.com/QPU8aHza")).toBe(
+      true,
+    );
+    expect(
+      isSafePushEndpoint(
+        "https://updates.push.services.mozilla.com/wpush/v2/token",
+      ),
+    ).toBe(true);
+    expect(isValidP256dh(auth)).toBe(false);
+    expect(isValidPushAuth(p256dh)).toBe(false);
+  });
+
+  it("prunes unsafe legacy rows without attempting a network request", async () => {
+    await expect(
+      sendPush(
+        { endpoint: "http://127.0.0.1/internal", p256dh, auth },
+        { title: "test", body: "test", tag: "test" },
+        {
+          publicKey: "invalid-but-unused",
+          privateKey: "invalid-but-unused",
+          subject: "mailto:test@example.com",
+        },
+      ),
+    ).resolves.toEqual({ status: 410 });
   });
 });
 

@@ -254,7 +254,7 @@ const bulkMarkConversationsReadRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            conversationIds: z.array(z.string()).min(1),
+            conversationIds: z.array(z.string().max(128)).min(1).max(100),
           }),
         },
       },

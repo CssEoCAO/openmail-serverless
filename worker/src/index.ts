@@ -2,6 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { bodyLimit } from "hono/body-limit";
 import { injectDb } from "./db/middleware";
 import { createAuth } from "./auth";
 import { apiKeys } from "./db/api-keys.schema";
@@ -52,6 +53,13 @@ import {
   bearerAuthSecurityScheme,
   openapiInfoDescription,
 } from "./lib/openapi-auth";
+import {
+  DEFAULT_API_BODY_LIMIT_BYTES,
+  isSendApiPath,
+  isTrustedSessionMutation,
+  MCP_BODY_LIMIT_BYTES,
+  SEND_API_BODY_LIMIT_BYTES,
+} from "./lib/request-security";
 
 const app = new OpenAPIHono<{
   Bindings: CloudflareBindings;
@@ -67,6 +75,30 @@ app.openAPIRegistry.registerComponent(
   BEARER_AUTH_SCHEME,
   bearerAuthSecurityScheme,
 );
+
+// Reject oversized bodies before DB/auth initialization. The send endpoints
+// need room for attachments; every other JSON/API surface stays deliberately
+// small. Hono's middleware also counts chunked bodies rather than trusting
+// Content-Length.
+const defaultApiBodyLimit = bodyLimit({
+  maxSize: DEFAULT_API_BODY_LIMIT_BYTES,
+  onError: (c) => c.json({ error: "Payload too large" }, 413),
+});
+const sendApiBodyLimit = bodyLimit({
+  maxSize: SEND_API_BODY_LIMIT_BYTES,
+  onError: (c) => c.json({ error: "Payload too large" }, 413),
+});
+const mcpBodyLimit = bodyLimit({
+  maxSize: MCP_BODY_LIMIT_BYTES,
+  onError: (c) => c.json({ error: "Payload too large" }, 413),
+});
+
+app.use("/api/*", (c, next) =>
+  isSendApiPath(c.req.path)
+    ? sendApiBodyLimit(c, next)
+    : defaultApiBodyLimit(c, next),
+);
+app.use("/mcp", mcpBodyLimit);
 
 // Middleware
 app.use("*", injectDb);
@@ -148,6 +180,22 @@ app.post("/api/auth/sign-in/email", async (c, next) => {
   return next();
 });
 
+// BetterAuth's admin plugin exposes user creation, role changes, password
+// resets, impersonation and deletion under /api/auth/admin/*. Those routes
+// handle their own session/role checks, but otherwise sit outside saasmail's
+// passkey middleware because /api/auth/* is public to BetterAuth. Resolve the
+// same session here and enforce the second-factor boundary before handing a
+// privileged request to the plugin.
+app.use("/api/auth/admin/*", async (c, next) => {
+  const auth = createAuth(c.env);
+  const session = await auth.api.getSession({ headers: c.req.raw.headers });
+  if (!session) return next();
+
+  c.set("user", session.user);
+  c.set("authMethod", "session");
+  return requirePasskey(c, next);
+});
+
 // BetterAuth handler
 app.all("/api/auth/*", (c) => {
   const auth = createAuth(c.env);
@@ -190,7 +238,11 @@ app.use("/api/*", async (c, next) => {
         .limit(1);
 
       if (userRows.length > 0) {
-        c.set("user", userRows[0]);
+        const user = userRows[0];
+        if (user.banned && (!user.banExpires || user.banExpires > new Date())) {
+          return c.json({ error: "Unauthorized" }, 401);
+        }
+        c.set("user", user);
         c.set("authMethod", "apiKey");
         return next();
       }
@@ -198,6 +250,20 @@ app.use("/api/*", async (c, next) => {
   }
 
   return c.json({ error: "Unauthorized" }, 401);
+});
+
+// Custom API mutations authenticated by a browser session need their own
+// CSRF boundary. BetterAuth protects /api/auth/*; API keys are explicit bearer
+// credentials and are intentionally usable without a browser Origin header.
+app.use("/api/*", async (c, next) => {
+  if (isUnauthenticatedPath(c.req.path)) return next();
+  if (
+    c.get("authMethod") === "session" &&
+    !isTrustedSessionMutation(c.req.raw, c.env)
+  ) {
+    return c.json({ error: "Forbidden origin" }, 403);
+  }
+  return next();
 });
 
 // Enforce passkey registration for session-cookie users. Runs before

@@ -208,7 +208,7 @@ const bulkPatchRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            ids: z.array(z.string()),
+            ids: z.array(z.string().max(128)).min(1).max(200),
             isRead: z.boolean(),
           }),
         },

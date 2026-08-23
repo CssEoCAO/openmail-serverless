@@ -2,7 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 import {
   createEmailSender,
   BavimailSender,
+  IdentityRoutedSender,
   PostmarkSender,
+  type EmailSender,
 } from "../lib/email-sender";
 
 describe("createEmailSender", () => {
@@ -26,6 +28,36 @@ describe("createEmailSender", () => {
       EMAIL: { send: vi.fn() },
     } as unknown as CloudflareBindings);
     expect(sender.provider).toBe("resend");
+  });
+
+  it("uses per-identity routing when explicitly enabled", () => {
+    const sender = createEmailSender({
+      EMAIL_PROVIDER_ROUTING: "identity",
+      DB: {
+        prepare: vi.fn(),
+      },
+      RESEND_API_KEY: "re_test",
+      EMAIL: { send: vi.fn() },
+    } as unknown as CloudflareBindings);
+    expect(sender.provider).toBe("routed");
+    expect(sender.maxAttachmentBytes()).toBe(
+      Math.floor((25 * 1024 * 1024) / 1.4),
+    );
+  });
+
+  it("keeps identity routing authoritative over global provider secrets", () => {
+    const sender = createEmailSender({
+      EMAIL_PROVIDER_ROUTING: "identity",
+      DB: {
+        prepare: vi.fn(),
+      },
+      BAVIMAIL_API_KEY: "bm_test",
+      BAVIMAIL_ALIAS_ID: "alias-uuid",
+      POSTMARK_API_KEY: "pm_test",
+      RESEND_API_KEY: "re_test",
+      EMAIL: { send: vi.fn() },
+    } as unknown as CloudflareBindings);
+    expect(sender.provider).toBe("routed");
   });
 
   it("returns a stub when neither is configured", async () => {
@@ -83,6 +115,67 @@ describe("createEmailSender", () => {
       POSTMARK_API_KEY: "pm_test",
     } as unknown as CloudflareBindings);
     expect(sender.provider).toBe("bavimail");
+  });
+});
+
+describe("IdentityRoutedSender", () => {
+  function fakeSender(provider: "cloudflare" | "resend"): EmailSender {
+    return {
+      provider,
+      send: vi.fn().mockResolvedValue({
+        id: `${provider}-id`,
+        error: null,
+      }),
+      maxAttachmentBytes: () =>
+        provider === "cloudflare" ? 10 * 1024 * 1024 : 25 * 1024 * 1024,
+    };
+  }
+
+  const params = {
+    from: '"Nota" <Support@Example.com>',
+    to: "cliente@example.com",
+    subject: "Teste",
+    html: "<p>Teste</p>",
+  };
+
+  it("routes the message through the provider selected for the identity", async () => {
+    const cloudflare = fakeSender("cloudflare");
+    const resend = fakeSender("resend");
+    const resolver = vi.fn().mockResolvedValue("resend");
+    const sender = new IdentityRoutedSender({ cloudflare, resend }, resolver);
+
+    const result = await sender.send(params);
+
+    expect(resolver).toHaveBeenCalledWith("support@example.com");
+    expect(resend.send).toHaveBeenCalledWith(params);
+    expect(cloudflare.send).not.toHaveBeenCalled();
+    expect(result.id).toBe("resend-id");
+  });
+
+  it("fails closed instead of falling back when the selected provider is absent", async () => {
+    const cloudflare = fakeSender("cloudflare");
+    const sender = new IdentityRoutedSender(
+      { cloudflare },
+      async () => "resend",
+    );
+
+    const result = await sender.send(params);
+
+    expect(cloudflare.send).not.toHaveBeenCalled();
+    expect(result.id).toBeNull();
+    expect(result.error?.message).toContain("RESEND_API_KEY");
+    expect(result.error?.transient).toBe(false);
+  });
+
+  it("uses the strictest attachment limit among configured providers", () => {
+    const sender = new IdentityRoutedSender(
+      {
+        cloudflare: fakeSender("cloudflare"),
+        resend: fakeSender("resend"),
+      },
+      async () => "cloudflare",
+    );
+    expect(sender.maxAttachmentBytes()).toBe(10 * 1024 * 1024);
   });
 });
 
@@ -152,6 +245,41 @@ describe("CloudflareSender", () => {
     expect(JSON.stringify(sent)).toContain("Reply-To: <submitter@example.com>");
   });
 
+  it("delivers visible Cc recipients through distinct envelope submissions", async () => {
+    const fakeBinding = {
+      send: vi
+        .fn()
+        .mockResolvedValueOnce({ messageId: "msg-to" })
+        .mockResolvedValueOnce({ messageId: "msg-cc" }),
+    };
+    const sender = createEmailSender({
+      EMAIL: fakeBinding,
+    } as unknown as CloudflareBindings);
+
+    const result = await sender.send({
+      from: "a@b.com",
+      to: "to@example.com",
+      cc: ["Copy <cc@example.com>", "TO@example.com"],
+      subject: "group reply",
+      html: "<p>hi</p>",
+    });
+
+    expect(result).toEqual({ id: "msg-to", error: null });
+    expect(fakeBinding.send).toHaveBeenCalledTimes(2);
+    expect(fakeBinding.send.mock.calls.map(([message]) => message.to)).toEqual([
+      "to@example.com",
+      "cc@example.com",
+    ]);
+    for (const [message] of fakeBinding.send.mock.calls) {
+      const serialized = JSON.stringify(message);
+      expect(serialized).toContain("To: <to@example.com>");
+      // mimetext RFC-2047-encodes even an ASCII display name; assert the
+      // visible Cc mailbox instead of depending on that encoding detail.
+      expect(serialized).toContain("Cc:");
+      expect(serialized).toContain("<cc@example.com>");
+    }
+  });
+
   it("catches thrown errors and returns normalized result", async () => {
     const fakeBinding = {
       send: vi.fn().mockRejectedValue(new Error("sender not allowed")),
@@ -169,6 +297,7 @@ describe("CloudflareSender", () => {
 
     expect(result.id).toBeNull();
     expect(result.error?.message).toBe("sender not allowed");
+    expect(result.error?.ambiguous).toBe(true);
   });
 });
 
@@ -479,6 +608,7 @@ describe("BavimailSender", () => {
 
     expect(result.id).toBeNull();
     expect(result.error?.message).toBe("network down");
+    expect(result.error?.ambiguous).toBe(true);
   });
 });
 
@@ -678,5 +808,6 @@ describe("PostmarkSender", () => {
 
     expect(result.id).toBeNull();
     expect(result.error?.message).toBe("network down");
+    expect(result.error?.ambiguous).toBe(true);
   });
 });

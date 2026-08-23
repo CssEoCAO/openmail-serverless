@@ -80,6 +80,38 @@ describe("webhooks router", () => {
     });
   });
 
+  it("rejects malformed and non-HTTP webhook URLs", async () => {
+    const { apiKey } = await createTestUser({ role: "admin" });
+    for (const url of ["not-a-url", "file:///etc/passwd"]) {
+      const put = await authFetch("/api/webhook", {
+        apiKey,
+        method: "PUT",
+        body: JSON.stringify({ url }),
+      });
+      expect(put.status).toBe(400);
+    }
+  });
+
+  it("caps persisted URL and signing-secret sizes", async () => {
+    const { apiKey } = await createTestUser({ role: "admin" });
+    const tooLongUrl = await authFetch("/api/webhook", {
+      apiKey,
+      method: "PUT",
+      body: JSON.stringify({ url: `https://example.com/${"x".repeat(2048)}` }),
+    });
+    const tooLongSecret = await authFetch("/api/webhook", {
+      apiKey,
+      method: "PUT",
+      body: JSON.stringify({
+        url: "https://example.com/hook",
+        secret: "x".repeat(1025),
+      }),
+    });
+
+    expect(tooLongUrl.status).toBe(400);
+    expect(tooLongSecret.status).toBe(400);
+  });
+
   it("POST /test returns 400 when unconfigured", async () => {
     const { apiKey } = await createTestUser({ role: "admin" });
     const res = await authFetch("/api/webhook/test", {

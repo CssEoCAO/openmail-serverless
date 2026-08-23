@@ -6,6 +6,7 @@
 import { describe, it, expect } from "vitest";
 import {
   MAX_ADMIN_FANOUT,
+  MAX_TOTAL_FANOUT,
   computeFanoutTargets,
 } from "../lib/notification-fanout";
 
@@ -53,7 +54,7 @@ describe("computeFanoutTargets", () => {
     expect(adminTruncated).toBe(true);
   });
 
-  it("still includes all permission users even when admins are truncated", () => {
+  it("prioritizes permission users while enforcing the total cap", () => {
     const admins = Array.from(
       { length: MAX_ADMIN_FANOUT + 1 },
       (_, i) => `admin-${i}`,
@@ -63,7 +64,20 @@ describe("computeFanoutTargets", () => {
       adminUserIds: admins,
     });
     expect(userIds).toContain("u-perm");
-    expect(userIds).toHaveLength(MAX_ADMIN_FANOUT + 1); // perm + cap admins
+    expect(userIds).toHaveLength(MAX_TOTAL_FANOUT);
+  });
+
+  it("caps permission fanout and signals truncation", () => {
+    const permissions = Array.from(
+      { length: MAX_TOTAL_FANOUT + 3 },
+      (_, i) => `member-${i}`,
+    );
+    const { userIds, permissionTruncated } = computeFanoutTargets({
+      permissionUserIds: permissions,
+      adminUserIds: [],
+    });
+    expect(userIds).toEqual(permissions.slice(0, MAX_TOTAL_FANOUT));
+    expect(permissionTruncated).toBe(true);
   });
 
   it("honors an explicit maxAdminFanout override", () => {

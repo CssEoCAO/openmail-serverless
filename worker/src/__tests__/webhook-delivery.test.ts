@@ -57,6 +57,7 @@ describe("sendWebhook", () => {
     const [url, init] = fetchImpl.mock.calls[0];
     expect(url).toBe("https://hook.d.com");
     expect(init?.method).toBe("POST");
+    expect(init?.redirect).toBe("error");
     const headers = new Headers(init?.headers);
     expect(headers.get("Content-Type")).toBe("application/json");
     expect(headers.get("X-SaaSMail-Event")).toBe("message.received");

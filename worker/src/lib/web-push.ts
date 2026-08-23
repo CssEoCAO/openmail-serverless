@@ -87,6 +87,82 @@ export interface PushSubscriptionRecord {
   p256dh: string;
   auth: string;
 }
+
+export const MAX_PUSH_ENDPOINT_LENGTH = 2048;
+export const MAX_PUSH_KEY_LENGTH = 256;
+export const MAX_PUSH_SUBSCRIPTIONS_PER_USER = 10;
+
+const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+={0,2}$/;
+const WEB_PUSH_SERVICE_HOSTS = new Set([
+  "fcm.googleapis.com",
+  "push.services.mozilla.com",
+  "updates.push.services.mozilla.com",
+]);
+const WEB_PUSH_SERVICE_SUFFIXES = ["push.apple.com", "notify.windows.com"];
+
+function isKnownWebPushService(hostname: string): boolean {
+  return (
+    WEB_PUSH_SERVICE_HOSTS.has(hostname) ||
+    WEB_PUSH_SERVICE_SUFFIXES.some(
+      (suffix) => hostname === suffix || hostname.endsWith(`.${suffix}`),
+    )
+  );
+}
+
+export function isSafePushEndpoint(endpoint: string): boolean {
+  if (!endpoint || endpoint.length > MAX_PUSH_ENDPOINT_LENGTH) return false;
+  try {
+    const url = new URL(endpoint);
+    const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
+    // A subscription endpoint is attacker-controlled input once it reaches
+    // the API. Restrict transport to browser-vendor push services so an
+    // authenticated account cannot turn notification delivery into a generic
+    // server-side POST proxy (including via DNS rebinding).
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.hash ||
+      !hostname ||
+      hostname === "localhost" ||
+      hostname.endsWith(".localhost") ||
+      hostname.endsWith(".local") ||
+      /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname) ||
+      hostname.includes(":") ||
+      !isKnownWebPushService(hostname)
+    ) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function decodePushKey(value: string): Uint8Array | null {
+  if (
+    !value ||
+    value.length > MAX_PUSH_KEY_LENGTH ||
+    !BASE64URL_PATTERN.test(value)
+  ) {
+    return null;
+  }
+  try {
+    return b64urlDecode(value);
+  } catch {
+    return null;
+  }
+}
+
+export function isValidP256dh(value: string): boolean {
+  const decoded = decodePushKey(value);
+  return decoded?.length === 65 && decoded[0] === 0x04;
+}
+
+export function isValidPushAuth(value: string): boolean {
+  return decodePushKey(value)?.length === 16;
+}
+
 export interface PushPayload {
   title: string;
   body: string;
@@ -311,6 +387,17 @@ export async function sendPush(
     urgency?: "very-low" | "low" | "normal" | "high";
   } = {},
 ): Promise<{ status: number }> {
+  // Existing databases may contain subscriptions created before validation
+  // was enforced. Treat those like an expired subscription so the caller can
+  // prune them without issuing a request.
+  if (
+    !isSafePushEndpoint(sub.endpoint) ||
+    !isValidP256dh(sub.p256dh) ||
+    !isValidPushAuth(sub.auth)
+  ) {
+    return { status: 410 };
+  }
+
   const url = new URL(sub.endpoint);
   const audience = `${url.protocol}//${url.host}`;
 
@@ -329,6 +416,8 @@ export async function sendPush(
 
   const res = await fetch(sub.endpoint, {
     method: "POST",
+    redirect: "error",
+    signal: AbortSignal.timeout(10_000),
     headers: {
       TTL: String(opts.ttl ?? 60),
       Urgency: opts.urgency ?? "normal",

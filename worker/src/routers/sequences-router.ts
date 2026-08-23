@@ -8,7 +8,12 @@ import { sequenceEmails } from "../db/sequence-emails.schema";
 import { emailTemplates } from "../db/email-templates.schema";
 import { people } from "../db/people.schema";
 import { json200Response, json201Response } from "../lib/helpers";
-import { enrollPersonInSequence } from "../lib/enroll-sequence";
+import {
+  enrollPersonInSequence,
+  MAX_SEQUENCE_DELAY_HOURS,
+  MAX_SEQUENCE_STEPS,
+} from "../lib/enroll-sequence";
+import { cancelEnrollmentSteps } from "../lib/cancel-sequence";
 import type { Variables } from "../variables";
 import { bearerSecurity } from "../lib/openapi-auth";
 import {
@@ -26,10 +31,19 @@ export const sequencesRouter = new OpenAPIHono<{
 const ErrorSchema = z.object({ error: z.string() });
 
 const SequenceStepSchema = z.object({
-  order: z.number().int().min(1),
-  templateSlug: z.string(),
-  delayHours: z.number().int().min(0),
+  order: z.number().int().min(1).max(MAX_SEQUENCE_STEPS),
+  templateSlug: z.string().min(1).max(200),
+  delayHours: z.number().int().min(0).max(MAX_SEQUENCE_DELAY_HOURS),
 });
+
+const SequenceStepsInputSchema = z
+  .array(SequenceStepSchema)
+  .min(1)
+  .max(MAX_SEQUENCE_STEPS)
+  .refine(
+    (steps) => new Set(steps.map((step) => step.order)).size === steps.length,
+    { message: "Step order values must be unique" },
+  );
 
 const SequenceSchema = z.object({
   id: z.string(),
@@ -40,8 +54,8 @@ const SequenceSchema = z.object({
 });
 
 const CreateSequenceSchema = z.object({
-  name: z.string().min(1),
-  steps: z.array(SequenceStepSchema).min(1),
+  name: z.string().min(1).max(200),
+  steps: SequenceStepsInputSchema,
 });
 
 const EnrollSchema = z
@@ -50,9 +64,25 @@ const EnrollSchema = z
     personEmail: z.string().email().optional(),
     fromAddress: z.string().email(),
     variables: templateVariablesSchema.optional().default({}),
-    skipSteps: z.array(z.number().int()).optional().default([]),
+    skipSteps: z
+      .array(z.number().int().min(1).max(MAX_SEQUENCE_STEPS))
+      .max(MAX_SEQUENCE_STEPS)
+      .refine((orders) => new Set(orders).size === orders.length, {
+        message: "skipSteps must contain unique step orders",
+      })
+      .optional()
+      .default([]),
     delayOverrides: z
-      .record(z.string(), z.number().int().min(0))
+      .record(
+        z.string().regex(/^\d{1,9}$/),
+        z.number().int().min(0).max(MAX_SEQUENCE_DELAY_HOURS),
+      )
+      .refine(
+        (overrides) => Object.keys(overrides).length <= MAX_SEQUENCE_STEPS,
+        {
+          message: `delayOverrides supports at most ${MAX_SEQUENCE_STEPS} steps`,
+        },
+      )
       .optional()
       .default({}),
   })
@@ -201,8 +231,8 @@ const updateRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            name: z.string().min(1).optional(),
-            steps: z.array(SequenceStepSchema).min(1).optional(),
+            name: z.string().min(1).max(200).optional(),
+            steps: SequenceStepsInputSchema.optional(),
           }),
         },
       },
@@ -470,7 +500,12 @@ sequencesRouter.openapi(cancelEnrollmentRoute, async (c) => {
   const rows = await db
     .select()
     .from(sequenceEnrollments)
-    .where(eq(sequenceEnrollments.id, enrollmentId))
+    .where(
+      and(
+        eq(sequenceEnrollments.id, enrollmentId),
+        inboxFilter(c.get("allowedInboxes")!, sequenceEnrollments.fromAddress),
+      ),
+    )
     .limit(1);
 
   if (rows.length === 0) {
@@ -481,20 +516,20 @@ sequencesRouter.openapi(cancelEnrollmentRoute, async (c) => {
     return c.json({ error: "Enrollment is not active" }, 400);
   }
 
-  await db
+  const cancelled = await db
     .update(sequenceEnrollments)
     .set({ status: "cancelled", cancelledAt: now })
-    .where(eq(sequenceEnrollments.id, enrollmentId));
-
-  await db
-    .update(sequenceEmails)
-    .set({ status: "cancelled" })
     .where(
       and(
-        eq(sequenceEmails.enrollmentId, enrollmentId),
-        inArray(sequenceEmails.status, ["pending", "queued"]),
+        eq(sequenceEnrollments.id, enrollmentId),
+        eq(sequenceEnrollments.status, "active"),
       ),
-    );
+    )
+    .returning({ id: sequenceEnrollments.id });
+  if (cancelled.length === 0) {
+    return c.json({ error: "Enrollment is not active" }, 400);
+  }
+  await cancelEnrollmentSteps(db, enrollmentId);
 
   return c.json({ success: true }, 200);
 });

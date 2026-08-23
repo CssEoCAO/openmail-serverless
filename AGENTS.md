@@ -76,3 +76,33 @@ Details: [`migrations/README.md`](./migrations/README.md). Apply with `yarn db:m
 ## API surface
 
 Backend routes are Hono + Zod OpenAPI under `worker/src/routers/`. Spec is served at `/doc` (JSON) and `/swagger-ui` (not `/openapi.json` / `/api/doc`). When changing request/response shapes, update the zod-openapi schemas so `/doc` stays accurate.
+
+## Production deployment (reference)
+
+- Public app: `https://mail.example.com`.
+- Worker: `saasmail`; `workers_dev` and preview URLs stay disabled.
+- D1: `saasmail-db` (`DB`).
+- R2: `saasmail-attachments` (`R2`). The older bucket named
+  `saasmail` is unrelated and must not be deleted or reused.
+- Queue: `saasmail-sequences` (`EMAIL_QUEUE`).
+- Outbound provider is selected per sender identity. Cloudflare Email Sending is
+  the default; established exceptions use Resend. `EMAIL_PROVIDER_ROUTING=identity`
+  must remain enabled, and a missing selected provider must fail closed instead of
+  silently falling back to another one.
+- Example Co identities (`support@example.com` and
+  `billing@notify.example.com`) stay on Resend and must reuse the existing key.
+  Never generate or substitute a second key just for SaaSmail.
+- Production secrets: `BETTER_AUTH_SECRET`, `UNSUBSCRIBE_SECRET`, and
+  `VAPID_PRIVATE_KEY`, plus `RESEND_API_KEY` for the established exceptions. Never
+  put them in `wrangler.jsonc`.
+- Inbound domains are Cloudflare Email Routing zones whose catch-all rule targets
+  this Worker. Before changing a zone, back up its MX records and routing rules;
+  several zones had forwarding or external MX before this deployment.
+- All 56 active zones were migrated on 2026-08-21. The pre-migration inventory and
+  verified result live in the parent workspace under
+  `.secrets/backups/email-routing-*.json` (gitignored). The repeatable migrator is
+  `scripts/configura-email-routing.mjs` in the parent workspace; it preserves the
+  original backup when applying and supports `--dominio=<zone>` for a pilot.
+- Deploy: `yarn tsc --noEmit && yarn test && yarn deploy`.
+- Apply D1 migrations before first deploy and after pulling schema changes:
+  `yarn db:migrate:prod`.

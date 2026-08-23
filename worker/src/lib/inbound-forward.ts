@@ -1,5 +1,5 @@
 import { createEmailSender } from "./email-sender";
-import { encodeDisplayName } from "./format-from-address";
+import { encodeDisplayName, sanitizeHeaderValue } from "./format-from-address";
 import type {
   SendEmailAttachment,
   SendEmailParams,
@@ -166,7 +166,7 @@ export function buildForwardMessage(
     });
   }
 
-  const subject = params.subject || "(no subject)";
+  const subject = sanitizeHeaderValue(params.subject) || "(no subject)";
   const dateLabel = new Date(params.receivedAt * 1000).toUTCString();
   const authLabel = `spf=${params.auth.spf ?? "none"} dkim=${
     params.auth.dkim ?? "none"
@@ -243,11 +243,17 @@ export function buildForwardMessage(
       // redirect and mail people who never opted into it. They appear in the
       // header block only.
       headers: {
-        "Reply-To": params.from.address,
+        "Reply-To": sanitizeHeaderValue(params.from.address),
         [FORWARD_LOOP_HEADER]: inbox,
-        [FORWARD_ORIGINAL_FROM_HEADER]: params.from.address,
+        [FORWARD_ORIGINAL_FROM_HEADER]: sanitizeHeaderValue(
+          params.from.address,
+        ),
         ...(params.messageId
-          ? { [FORWARD_ORIGINAL_MESSAGE_ID_HEADER]: params.messageId }
+          ? {
+              [FORWARD_ORIGINAL_MESSAGE_ID_HEADER]: sanitizeHeaderValue(
+                params.messageId,
+              ),
+            }
           : {}),
       },
       ...(attachments.length > 0 ? { attachments } : {}),

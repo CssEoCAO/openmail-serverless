@@ -12,6 +12,7 @@ import { suppressions } from "../db/suppressions.schema";
 import { sentEmails } from "../db/sent-emails.schema";
 import { outboxEmails } from "../db/outbox-emails.schema";
 import { MAX_VARIABLE_DEPTH } from "../lib/template-variables-schema";
+import { MAX_D1_EMAIL_TEXT_BYTES } from "../lib/email-limits";
 
 /** Builds a value nested `n` array-levels deep, terminating in a string leaf. */
 function buildNestedArray(n: number): unknown {
@@ -95,6 +96,22 @@ describe("email templates router", () => {
       expect(res.status).toBe(400);
       const data = await res.json();
       expect(data.error).toContain("Unknown filter");
+    });
+
+    it("rejects a template that cannot fit in one D1 row", async () => {
+      const res = await authFetch("/api/email-templates", {
+        apiKey,
+        method: "POST",
+        body: JSON.stringify({
+          slug: "too-large",
+          name: "Too large",
+          subject: "D1 limit",
+          bodyHtml: "x".repeat(MAX_D1_EMAIL_TEXT_BYTES),
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/(?:storage|output) limit/i);
     });
   });
 
@@ -260,6 +277,32 @@ describe("email templates router", () => {
   });
 
   describe("POST /api/email-templates/:slug/send", () => {
+    it("rejects expansion beyond the D1 row limit before transport", async () => {
+      await createTestTemplate({
+        slug: "expands-too-large",
+        subject: "Hi",
+        bodyHtml: "{{value}}".repeat(1_000),
+      });
+
+      const res = await authFetch(
+        "/api/email-templates/expands-too-large/send",
+        {
+          apiKey,
+          method: "POST",
+          body: JSON.stringify({
+            to: "person@example.com",
+            fromAddress: "support@example.com",
+            variables: { value: "x".repeat(2_000) },
+          }),
+        },
+      );
+
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/output limit/i);
+      expect(await getDb().select().from(outboxEmails)).toHaveLength(0);
+      expect(await getDb().select().from(sentEmails)).toHaveLength(0);
+    });
+
     it("returns status=suppressed and does not write sent_emails when recipient is suppressed", async () => {
       const db = getDb();
       await createTestTemplate({
