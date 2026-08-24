@@ -95,6 +95,7 @@ export async function createAndAcceptInvite(
       role: params.role,
       email: params.email,
     },
+    headers: { origin: BASE_URL },
   });
   if (!createRes.ok()) {
     const body = await createRes.text();

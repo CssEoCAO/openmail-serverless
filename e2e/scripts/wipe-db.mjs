@@ -2,7 +2,7 @@
 // Run BEFORE `playwright test` so the dev server starts against a clean DB.
 // Usage: node e2e/scripts/wipe-db.mjs
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,7 +18,7 @@ function getDbName() {
 const dbName = getDbName();
 console.log(`[wipe-db] Using database: ${dbName}`);
 
-execSync(`rm -rf .wrangler/state/v3/d1`, { cwd: REPO_ROOT, stdio: "inherit" });
+rmSync(`${REPO_ROOT}/.wrangler/state/v3/d1`, { recursive: true, force: true });
 console.log(`[wipe-db] Cleared .wrangler/state/v3/d1`);
 
 execSync(`wrangler d1 migrations apply ${dbName} --local`, {
