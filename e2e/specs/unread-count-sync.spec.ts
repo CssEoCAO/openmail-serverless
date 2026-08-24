@@ -18,7 +18,7 @@ test.describe.serial("sidebar unread count stays in sync", () => {
   test("marking an email read decrements the sidebar unread badge", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/inbox/todas");
 
     const aliceRow = page.locator(
       `[data-testid="${TEST_IDS.personRow}"][data-person-id="p_alice"]`,

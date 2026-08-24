@@ -14,7 +14,7 @@ test.describe.serial("chat-mode display (support@)", () => {
     page,
   }) => {
     // Navigate to the inbox and select Alice
-    await page.goto("/");
+    await page.goto("/inbox/todas");
 
     await expect(page.getByText("Alice Anderson")).toBeVisible();
     await page.getByText("Alice Anderson").click();

@@ -14,7 +14,7 @@ test.describe.serial("thread-mode display (marketing@)", () => {
     page,
   }) => {
     // Navigate to the inbox page and select Alice
-    await page.goto("/");
+    await page.goto("/inbox/todas");
 
     await expect(page.getByText("Alice Anderson")).toBeVisible();
     await page.getByText("Alice Anderson").click();

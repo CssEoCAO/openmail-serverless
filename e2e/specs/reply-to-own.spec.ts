@@ -15,7 +15,7 @@ test.describe.serial("reply to own sent message", () => {
     page,
     api,
   }) => {
-    await page.goto("/");
+    await page.goto("/inbox/todas");
 
     // Wait for the inbox page to finish loading
     await expect(page.getByText("Alice Anderson")).toBeVisible();

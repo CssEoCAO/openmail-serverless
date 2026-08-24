@@ -13,7 +13,7 @@ test.describe.serial("global search", () => {
   test.beforeAll(() => truncateAndReseed());
 
   test("search input is visible with correct placeholder", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/inbox/todas");
 
     const input = page.getByTestId(TEST_IDS.personSearchInput);
     await expect(input).toBeVisible();
@@ -21,7 +21,7 @@ test.describe.serial("global search", () => {
   });
 
   test("clear button is hidden when search is empty", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/inbox/todas");
 
     const clear = page.getByTestId(TEST_IDS.personSearchClear);
     await expect(clear).not.toBeVisible();
@@ -30,7 +30,7 @@ test.describe.serial("global search", () => {
   test("clear button appears when typing and clears on click", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/inbox/todas");
 
     const input = page.getByTestId(TEST_IDS.personSearchInput);
     await input.fill("alice");
@@ -44,7 +44,7 @@ test.describe.serial("global search", () => {
   });
 
   test("filtering by person name shows matching person", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/inbox/todas");
 
     const input = page.getByTestId(TEST_IDS.personSearchInput);
     await input.fill("Alice");
@@ -63,7 +63,7 @@ test.describe.serial("global search", () => {
   test("FTS search by email subject returns matching person", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/inbox/todas");
 
     const input = page.getByTestId(TEST_IDS.personSearchInput);
     // "billing" appears only in Bob's email subject
@@ -83,7 +83,7 @@ test.describe.serial("global search", () => {
   test("FTS search by email body text returns matching person", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/inbox/todas");
 
     const input = page.getByTestId(TEST_IDS.personSearchInput);
     // "login" is the body_text of Alice's support email
@@ -103,7 +103,7 @@ test.describe.serial("global search", () => {
   test("no results message shown when search matches nothing", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/inbox/todas");
 
     const input = page.getByTestId(TEST_IDS.personSearchInput);
     await input.fill("xyzzyunlikely");
@@ -112,7 +112,7 @@ test.describe.serial("global search", () => {
   });
 
   test("clearing search restores full list", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/inbox/todas");
 
     const input = page.getByTestId(TEST_IDS.personSearchInput);
     await input.fill("alice");

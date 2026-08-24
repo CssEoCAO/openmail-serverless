@@ -32,15 +32,28 @@ interface NavItem {
   path: string;
   icon: React.ElementType;
   end?: boolean;
+  /** Prefixo extra que tambem acende o item. Ver o comentario em PRIMARY_NAV. */
+  tambemAtivoEm?: string;
 }
 
 // Top-level nav: just the daily-driver tabs. Admin/settings stuff lives
 // in the user dropdown so the nav stays scannable.
 const PRIMARY_NAV: NavItem[] = [
-  { label: "Inbox", path: "/", icon: Mail, end: true },
+  // `end: true` para o item nao ficar aceso em TODA rota (NavLink casa por prefixo, e
+  // "/" e' prefixo de tudo). Como a raiz agora e' a escolha de caixa e as mensagens
+  // moram sob /inbox, o realce em /inbox/* vem do `caminhosAtivos` abaixo.
+  { label: "Inbox", path: "/", icon: Mail, end: true, tambemAtivoEm: "/inbox" },
   { label: "Templates", path: "/templates", icon: FileText },
   { label: "Sequences", path: "/sequences", icon: ListOrdered },
 ];
+
+/** NavLink so' sabe casar o proprio `to`. Este helper acende o item tambem quando a
+ *  rota atual esta sob o prefixo declarado — e o que mantem "Inbox" aceso enquanto se
+ *  le uma caixa em /inbox/..., agora que a raiz e' a tela de escolha. */
+function navAtivo(item: NavItem, isActive: boolean, pathname: string): boolean {
+  if (isActive) return true;
+  return !!item.tambemAtivoEm && pathname.startsWith(item.tambemAtivoEm);
+}
 
 export default function TopNav() {
   const { data: session } = useSession();
@@ -114,7 +127,7 @@ export default function TopNav() {
                   end={item.end}
                   className={({ isActive }) =>
                     `flex items-center gap-1.5 rounded-[6px] px-3 py-1.5 text-xs font-medium transition-colors duration-150 ${
-                      isActive
+                      navAtivo(item, isActive, location.pathname)
                         ? "bg-white/[0.12] text-white"
                         : "text-white/60 hover:bg-white/[0.08] hover:text-white"
                     }`
@@ -284,7 +297,7 @@ export default function TopNav() {
                     end={item.end}
                     className={({ isActive }) =>
                       `flex items-center gap-2 px-4 py-2.5 text-sm font-medium ${
-                        isActive
+                        navAtivo(item, isActive, location.pathname)
                           ? "bg-white/[0.08] text-white"
                           : "text-white/60 hover:text-white"
                       }`

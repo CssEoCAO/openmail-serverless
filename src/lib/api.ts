@@ -117,6 +117,11 @@ export interface Stats {
     email: string;
     displayName: string | null;
     podeEnviar: boolean;
+    /** Mensagens recebidas nessa caixa. */
+    total: number;
+    naoLidas: number;
+    /** Epoch segundos da mais recente; null quando a caixa nunca recebeu. */
+    ultima: number | null;
   }>;
 }
 

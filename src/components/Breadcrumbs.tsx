@@ -14,9 +14,26 @@ function buildCrumbs(
   pathname: string,
   params: Record<string, string | undefined>,
 ): Crumb[] {
-  // Inbox covers / and /inbox/:inbox/:personId — both render the same page
-  if (pathname === "/" || pathname.startsWith("/inbox/")) {
-    return [{ label: "Inbox" }];
+  // A raiz e' a escolha de caixa; /inbox/... e' uma caixa aberta. A trilha existe
+  // aqui porque agora ha para onde voltar — e o breadcrumb some quando ha menos de
+  // dois degraus, entao sem estes dois a tela de caixa unica ficaria sem saida
+  // visivel que nao fosse o botao do navegador.
+  if (pathname === "/") return [{ label: "Caixas" }];
+  if (pathname.startsWith("/inbox/")) {
+    const bruto = params.inbox;
+    const atual =
+      !bruto || bruto === "todas"
+        ? "Todas juntas"
+        : // O parametro vem percent-encoded (endereco tem @). Decodificar pode
+          // lancar em URL malformada, e um breadcrumb nunca pode derrubar a pagina.
+          (() => {
+            try {
+              return decodeURIComponent(bruto);
+            } catch {
+              return bruto;
+            }
+          })();
+    return [{ label: "Caixas", href: "/" }, { label: atual }];
   }
 
   if (pathname.startsWith("/templates")) {

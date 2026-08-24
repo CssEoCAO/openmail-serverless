@@ -20,7 +20,7 @@ test.describe.serial("compose & send", () => {
     page,
     api,
   }) => {
-    await page.goto("/");
+    await page.goto("/inbox/todas");
 
     // Wait for the inbox page to finish loading
     await expect(page.getByText("Alice Anderson")).toBeVisible();
@@ -92,7 +92,7 @@ test.describe.serial("compose & send", () => {
   test("reply composer sends reply in DEMO_MODE, resendId starts with demo_", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/inbox/todas");
 
     // Select alice from PersonList
     await expect(page.getByText("Alice Anderson")).toBeVisible();
@@ -158,7 +158,7 @@ test.describe.serial("compose & send", () => {
   test("compose modal Send button is disabled when body is empty", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/inbox/todas");
     await expect(page.getByText("Alice Anderson")).toBeVisible();
 
     // Open Compose

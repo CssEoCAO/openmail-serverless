@@ -33,6 +33,9 @@ const StatsSchema = z.object({
       email: z.string(),
       displayName: z.string().nullable(),
       podeEnviar: z.boolean(),
+      total: z.number(),
+      naoLidas: z.number(),
+      ultima: z.number().nullable(),
     }),
   ),
 });
@@ -102,19 +105,41 @@ statsRouter.openapi(statsRoute, async (c) => {
     displayName: string | null;
     signatureHtml: string | null;
     configurada: number;
+    total: number;
+    naoLidas: number;
+    ultima: number | null;
   }>(sql`
     WITH universe AS (
       SELECT DISTINCT recipient AS email FROM ${emails}
       UNION
       SELECT email FROM ${senderIdentities}
+    ),
+    -- Um GROUP BY recipient para a tela de escolha de caixa, em vez de uma chamada
+    -- por caixa (N+1). Anda pelo emails_recipient_received_idx, que ja e' liderado por
+    -- recipient. Nao ha indice sobre is_read em lugar nenhum do schema, entao a soma
+    -- de nao-lidas le as linhas do grupo — barato na ordem de grandeza de hoje, e o
+    -- teto e' o tamanho da caixa, nao o numero de caixas.
+    contagem AS (
+      SELECT recipient,
+             COUNT(*) AS total,
+             SUM(CASE WHEN is_read = 0 THEN 1 ELSE 0 END) AS naoLidas,
+             MAX(received_at) AS ultima
+      FROM ${emails}
+      GROUP BY recipient
     )
     SELECT
       u.email AS email,
       s.display_name AS displayName,
       s.signature_html AS signatureHtml,
-      (s.email IS NOT NULL) AS configurada
+      (s.email IS NOT NULL) AS configurada,
+      COALESCE(c.total, 0) AS total,
+      COALESCE(c.naoLidas, 0) AS naoLidas,
+      c.ultima AS ultima
     FROM universe u
     LEFT JOIN ${senderIdentities} s ON s.email = u.email
+    LEFT JOIN contagem c ON c.recipient = u.email
+    -- Identidade configurada primeiro: a lista de remetentes sai desta mesma ordem,
+    -- e o ComposeModal usa o primeiro item dela como remetente default.
     ORDER BY (s.email IS NULL), u.email
   `);
   const visiveis = allowed.isAdmin
@@ -140,6 +165,9 @@ statsRouter.openapi(statsRoute, async (c) => {
         email: r.email,
         displayName: r.displayName,
         podeEnviar: !!r.configurada,
+        total: r.total ?? 0,
+        naoLidas: r.naoLidas ?? 0,
+        ultima: r.ultima ?? null,
       })),
     },
     200,

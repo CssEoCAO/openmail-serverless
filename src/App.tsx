@@ -15,6 +15,7 @@ import LoginPage from "@/pages/LoginPage";
 import ConsentPage from "@/pages/ConsentPage";
 import OnboardingPage from "@/pages/OnboardingPage";
 import InboxPage from "@/pages/InboxPage";
+import InboxSelectorPage from "@/pages/InboxSelectorPage";
 import TemplatesPage from "@/pages/TemplatesPage";
 import TemplateEditorPage from "@/pages/TemplateEditorPage";
 import SetupPasskeyPage from "@/pages/SetupPasskeyPage";
@@ -167,6 +168,12 @@ function App() {
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/blocklist" element={<BlocklistPage />} />
                 <Route path="/outbox" element={<OutboxPage />} />
+                {/* A raiz e' a ESCOLHA da caixa; a lista de mensagens mora sob
+                    /inbox. Numa conta que recebe por catch-all em dezenas de
+                    dominios, "todas juntas" e' o caso raro — abrir nele escondia
+                    as caixas atras de um dropdown que ninguem clicava. */}
+                <Route path="/inbox/todas" element={<InboxPage />} />
+                <Route path="/inbox/:inbox" element={<InboxPage />} />
                 {/* Deep link from Web Push notifications — see
                     worker/src/do/notifications.ts where data.url is set. */}
                 <Route path="/inbox/:inbox/:personId" element={<InboxPage />} />
@@ -174,6 +181,7 @@ function App() {
                     email's person/inbox and forwards to the route above
                     with a `#m=<id>` hash for scroll/flash. */}
                 <Route path="/m/:emailId" element={<MessageLinkPage />} />
+                <Route path="/" element={<InboxSelectorPage />} />
                 <Route path="/*" element={<InboxPage />} />
               </Route>
             </Route>

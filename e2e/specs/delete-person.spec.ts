@@ -15,7 +15,7 @@ test.describe.serial("delete person", () => {
   test.beforeAll(() => truncateAndReseed());
 
   test("admin sees kebab menu on hover and can open it", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/inbox/todas");
 
     const aliceRow = page.locator(
       `[data-testid="${TEST_IDS.personRow}"][data-person-id="p_alice"]`,
@@ -40,7 +40,7 @@ test.describe.serial("delete person", () => {
   test("cancelling the confirm dialog keeps person in list", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/inbox/todas");
 
     const aliceRow = page.locator(
       `[data-testid="${TEST_IDS.personRow}"][data-person-id="p_alice"]`,
@@ -63,7 +63,7 @@ test.describe.serial("delete person", () => {
   test("confirming deletion removes person from list and clears right panel", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/inbox/todas");
 
     // First select Bob so the right panel is open for him.
     const bobRow = page.locator(
@@ -98,7 +98,7 @@ test.describe.serial("delete person", () => {
   });
 
   test("deletion persists after page reload", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/inbox/todas");
 
     // Bob was deleted in the previous test; reload to verify persistence.
     await page.reload();
@@ -116,7 +116,7 @@ test.describe.serial("delete person", () => {
     });
     const mp = await memberCtx.newPage();
 
-    await mp.goto("/");
+    await mp.goto("/inbox/todas");
 
     // Members have no inbox assignments so they see the "no inboxes" screen,
     // but regardless, no kebab button should ever be rendered.

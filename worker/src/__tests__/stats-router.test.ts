@@ -118,15 +118,25 @@ describe("stats router", () => {
         "created-only@saasmail.test",
         "received-only@saasmail.test",
       ]);
+      // A caixa que so' recebe traz as contagens que a tela de escolha precisa; a
+      // identidade que nunca recebeu vem zerada em vez de ausente, senao o cartao dela
+      // teria que adivinhar a diferenca entre "zero" e "nao sei".
       expect(
         data.inboxes.find(
           (i: { email: string }) => i.email === "received-only@saasmail.test",
         ),
-      ).toEqual({
+      ).toMatchObject({
         email: "received-only@saasmail.test",
         displayName: null,
         podeEnviar: false,
+        total: 1,
+        naoLidas: 1,
       });
+      expect(
+        data.inboxes.find(
+          (i: { email: string }) => i.email === "created-only@saasmail.test",
+        ),
+      ).toMatchObject({ total: 0, naoLidas: 0, ultima: null });
     });
 
     it("filters by recipient", async () => {

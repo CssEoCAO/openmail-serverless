@@ -62,10 +62,18 @@ export default function InboxPage() {
     totalUnreadEmails: 0,
   });
   const [stats, setStats] = useState<Stats | null>(null);
-  const [filters, setFilters] = useState<InboxFilters>({});
+  const [searchParams] = useSearchParams();
+  // Seed the inbox filter from the URL param (/inbox/:inbox) so the selector
+  // can deep-link into a specific inbox. "todas" is the "all inboxes" sentinel.
+  const { inbox: inboxParam } = useParams<{
+    inbox: string;
+    personId: string;
+  }>();
+  const [filters, setFilters] = useState<InboxFilters>(() =>
+    inboxParam && inboxParam !== "todas" ? { recipient: inboxParam } : {},
+  );
   // Deep-link support: seed search from `?q=` (or `?search=`) so an
   // external admin link like `/?q=user@example.com` lands pre-filtered.
-  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(
     () => searchParams.get("q") ?? searchParams.get("search") ?? "",
   );
@@ -321,10 +329,25 @@ export default function InboxPage() {
   // /inbox/:inbox/:personId — see worker/src/do/notifications.ts and
   // the route in App.tsx), pre-select that person so the tab shows the
   // intended conversation rather than the empty default view.
-  const { personId: routePersonId } = useParams<{
+  const { inbox: routeInbox, personId: routePersonId } = useParams<{
     inbox: string;
     personId: string;
   }>();
+  // A caixa agora vem da ROTA, nao de estado local. Isso e' o que faz recarregar,
+  // compartilhar link e voltar pelo historico manterem a caixa — antes `filters`
+  // nascia {} a cada mount e o dropdown voltava sozinho para "todas".
+  //
+  // "todas" e' sentinela segura: todo valor real e' um endereco e contem "@".
+  const caixaDaRota =
+    routeInbox && routeInbox !== "todas"
+      ? decodeURIComponent(routeInbox)
+      : undefined;
+  useEffect(() => {
+    setFilters((f) =>
+      f.recipient === caixaDaRota ? f : { ...f, recipient: caixaDaRota },
+    );
+  }, [caixaDaRota]);
+
   const lastProcessedPersonId = useRef<string | null>(null);
 
   useEffect(() => {
