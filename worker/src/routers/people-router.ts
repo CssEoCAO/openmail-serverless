@@ -11,7 +11,7 @@ import {
   peopleScopeClause,
 } from "../lib/queries/people";
 import type { Variables } from "../variables";
-import { isInboxAllowed } from "../lib/inbox-permissions";
+import { inboxScopeSql, isInboxAllowed } from "../lib/inbox-permissions";
 
 export const peopleRouter = new OpenAPIHono<{
   Bindings: CloudflareBindings;
@@ -158,20 +158,22 @@ peopleRouter.openapi(listGroupedPeopleRoute, async (c) => {
   const allowed = c.get("allowedInboxes")!;
 
   // ----- PERSON ROWS (1-on-1 threads only — conversation_id IS NULL) -----
+  const receivedInboxScope = inboxScopeSql(allowed, sql`recipient`);
+  const receivedAliasInboxScope = inboxScopeSql(allowed, sql`e2.recipient`);
   const personConditions: any[] = [];
   if (recipient) {
     personConditions.push(
-      sql`s.id IN (SELECT person_id FROM emails WHERE recipient = ${recipient} AND conversation_id IS NULL)`,
+      sql`s.id IN (SELECT person_id FROM emails WHERE recipient = ${recipient} ${receivedInboxScope} AND conversation_id IS NULL)`,
     );
   }
   if (unread) {
     personConditions.push(
-      sql`s.id IN (SELECT person_id FROM emails WHERE is_read = 0 AND conversation_id IS NULL)`,
+      sql`s.id IN (SELECT person_id FROM emails WHERE is_read = 0 ${receivedInboxScope} AND conversation_id IS NULL)`,
     );
   }
   if (hasAttachment) {
     personConditions.push(
-      sql`s.id IN (SELECT e2.person_id FROM emails e2 JOIN ${attachments} a ON a.email_id = e2.id WHERE a.content_id IS NULL AND e2.conversation_id IS NULL)`,
+      sql`s.id IN (SELECT e2.person_id FROM emails e2 JOIN ${attachments} a ON a.email_id = e2.id WHERE a.content_id IS NULL ${receivedAliasInboxScope} AND e2.conversation_id IS NULL)`,
     );
   }
   if (q) {
@@ -205,7 +207,8 @@ peopleRouter.openapi(listGroupedPeopleRoute, async (c) => {
     personConditions.length > 0
       ? sql`AND ${sql.join(personConditions, sql` AND `)}`
       : sql``;
-  const personWhereClause = sql`WHERE 1=1 ${personExtraConditions} ${scopeClause}`;
+  const activityInboxScope = inboxScopeSql(allowed, sql`e.inbox`);
+  const personWhereClause = sql`WHERE 1=1 ${personExtraConditions} ${scopeClause} ${activityInboxScope}`;
 
   // Aggregate over both received and sent emails so people we've composed to
   // appear in the list, not just senders who have emailed us. We exclude
@@ -244,6 +247,7 @@ peopleRouter.openapi(listGroupedPeopleRoute, async (c) => {
         JOIN ${emails} e2 ON e2.id = a.email_id
         WHERE e2.person_id = s.id
         AND a.content_id IS NULL
+        ${receivedAliasInboxScope}
         AND e2.conversation_id IS NULL
       ) AS hasAttachment
     FROM ${activity} e

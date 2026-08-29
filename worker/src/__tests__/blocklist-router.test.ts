@@ -13,6 +13,27 @@ beforeAll(applyMigrations);
 beforeEach(cleanDb);
 
 describe("blocklist router", () => {
+  it("returns 403 to members for every blocklist operation", async () => {
+    const { apiKey } = await createTestUser({ role: "member" });
+    const requests: Array<[string, RequestInit]> = [
+      ["/api/blocklist", {}],
+      [
+        "/api/blocklist",
+        {
+          method: "POST",
+          body: JSON.stringify({ type: "domain", value: "evil.com" }),
+        },
+      ],
+      ["/api/blocklist/mail", { method: "DELETE" }],
+      ["/api/blocklist/rule-id", { method: "DELETE" }],
+    ];
+
+    for (const [path, init] of requests) {
+      const response = await authFetch(path, { apiKey, ...init });
+      expect(response.status).toBe(403);
+    }
+  });
+
   it("POST creates an email rule (lowercased)", async () => {
     const { apiKey } = await createTestUser();
     const r = await authFetch("/api/blocklist", {

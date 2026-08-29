@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Global blocklist operations and sequence-definition mutations now require an admin. Members retain read access to sequence options and inbox-scoped enrollment, and `GET /api/people/grouped` now applies that same inbox scope to every aggregate and filter so a shared contact cannot reveal another inbox's address, counts, unread state, or attachments.
 - Attachment reads are scoped to the caller's allowed inboxes. `GET /api/attachments/{id}` and `/{id}/inline` looked the attachment up by id alone, so any authenticated user could read any attachment in the deployment given only its id. Both routes now resolve the owning inbox through the attachment's message — `emails.recipient` for inbound, `sent_emails.from_address` for sent — and answer `404` when it is not allowed, so the response does not confirm the id exists.
 - Inline attachments are served with `Cache-Control: private` instead of `public`, so shared caches in front of the worker cannot store authenticated mailbox content and hand it to a different caller.
 - Attachment downloads sanitize the filename before interpolating it into `Content-Disposition` and add an RFC 5987 `filename*` field, so a stored filename carrying quotes or CR/LF can no longer inject headers or split the response.

@@ -10,6 +10,7 @@ import {
   createTestUser,
   getDb,
 } from "./helpers";
+import { attachments } from "../db/attachments.schema";
 import { emails } from "../db/emails.schema";
 import { emailTemplates } from "../db/email-templates.schema";
 import { inboxPermissions } from "../db/inbox-permissions.schema";
@@ -17,6 +18,7 @@ import { people } from "../db/people.schema";
 import { sequenceEmails } from "../db/sequence-emails.schema";
 import { sequenceEnrollments } from "../db/sequence-enrollments.schema";
 import { senderIdentities } from "../db/sender-identities.schema";
+import { sentEmails } from "../db/sent-emails.schema";
 
 async function grantInbox(userId: string, email: string) {
   await getDb()
@@ -263,6 +265,90 @@ describe("people scoping", () => {
     const body = (await res.json()) as { data: Array<{ id: string }> };
     const ids = body.data.map((p) => p.id);
     expect(ids).toEqual(["p1"]);
+  });
+
+  it("scopes grouped aggregates and filters to the member's inbox", async () => {
+    const { apiKey, userId } = await createTestUser({
+      id: "u-mem",
+      role: "member",
+      email: "m@x.com",
+    });
+    await grantInbox(userId, "a@x.com");
+    await createTestPerson({ id: "p1", email: "shared@external.com" });
+    await createTestEmail({
+      id: "e-allowed",
+      personId: "p1",
+      recipient: "a@x.com",
+      isRead: 1,
+    });
+    await createTestEmail({
+      id: "e-private",
+      personId: "p1",
+      recipient: "b@x.com",
+      messageId: "private@example.com",
+      isRead: 0,
+    });
+    const now = Math.floor(Date.now() / 1000);
+    await getDb().insert(attachments).values({
+      id: "a-private",
+      emailId: "e-private",
+      kind: "inbound",
+      filename: "private.pdf",
+      contentType: "application/pdf",
+      size: 1,
+      r2Key: "private.pdf",
+      contentId: null,
+      createdAt: now,
+    });
+    await getDb().insert(sentEmails).values({
+      id: "s-private",
+      personId: "p1",
+      fromAddress: "b@x.com",
+      toAddress: "shared@external.com",
+      subject: "Private",
+      sentAt: now,
+      createdAt: now,
+    });
+
+    const response = await authFetch("/api/people/grouped", { apiKey });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      data: Array<{
+        recipients: string[];
+        recipientCount: number;
+        unreadCount: number;
+        totalCount: number;
+        hasAttachment: number;
+      }>;
+      aggregates: Record<string, number>;
+    };
+    expect(body.data).toEqual([
+      expect.objectContaining({
+        recipients: ["a@x.com"],
+        recipientCount: 1,
+        unreadCount: 0,
+        totalCount: 1,
+        hasAttachment: 0,
+      }),
+    ]);
+    expect(body.aggregates).toEqual({
+      unreadRowCount: 0,
+      attachmentRowCount: 0,
+      multiInboxRowCount: 0,
+      totalUnreadEmails: 0,
+    });
+
+    for (const query of [
+      "recipient=b%40x.com",
+      "unread=1",
+      "hasAttachment=1",
+    ]) {
+      const filtered = await authFetch(`/api/people/grouped?${query}`, {
+        apiKey,
+      });
+      expect(filtered.status).toBe(200);
+      expect(((await filtered.json()) as { data: unknown[] }).data).toEqual([]);
+    }
   });
 
   it("member detail GET for disallowed person returns 404", async () => {

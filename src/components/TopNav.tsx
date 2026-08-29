@@ -34,6 +34,7 @@ interface NavItem {
   end?: boolean;
   /** Prefixo extra que tambem acende o item. Ver o comentario em PRIMARY_NAV. */
   tambemAtivoEm?: string;
+  adminOnly?: boolean;
 }
 
 // Top-level nav: just the daily-driver tabs. Admin/settings stuff lives
@@ -44,7 +45,12 @@ const PRIMARY_NAV: NavItem[] = [
   // moram sob /inbox, o realce em /inbox/* vem do `caminhosAtivos` abaixo.
   { label: "Inbox", path: "/", icon: Mail, end: true, tambemAtivoEm: "/inbox" },
   { label: "Templates", path: "/templates", icon: FileText },
-  { label: "Sequences", path: "/sequences", icon: ListOrdered },
+  {
+    label: "Sequences",
+    path: "/sequences",
+    icon: ListOrdered,
+    adminOnly: true,
+  },
 ];
 
 /** NavLink so' sabe casar o proprio `to`. Este helper acende o item tambem quando a
@@ -118,34 +124,36 @@ export default function TopNav() {
 
           {/* Primary nav (desktop) */}
           <div className="hidden items-center gap-0.5 sm:flex">
-            {PRIMARY_NAV.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  end={item.end}
-                  className={({ isActive }) =>
-                    `flex items-center gap-1.5 rounded-[6px] px-3 py-1.5 text-xs font-medium transition-colors duration-150 ${
-                      navAtivo(item, isActive, location.pathname)
-                        ? "bg-white/[0.12] text-white"
-                        : "text-white/60 hover:bg-white/[0.08] hover:text-white"
-                    }`
-                  }
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {item.label}
-                  {item.path === "/" && unreadCount > 0 && (
-                    <span
-                      className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none text-white"
-                      style={{ backgroundColor: "#7c5cfc" }}
-                    >
-                      {unreadCount > 99 ? "99+" : unreadCount}
-                    </span>
-                  )}
-                </NavLink>
-              );
-            })}
+            {PRIMARY_NAV.filter((item) => !item.adminOnly || isAdmin).map(
+              (item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    end={item.end}
+                    className={({ isActive }) =>
+                      `flex items-center gap-1.5 rounded-[6px] px-3 py-1.5 text-xs font-medium transition-colors duration-150 ${
+                        navAtivo(item, isActive, location.pathname)
+                          ? "bg-white/[0.12] text-white"
+                          : "text-white/60 hover:bg-white/[0.08] hover:text-white"
+                      }`
+                    }
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {item.label}
+                    {item.path === "/" && unreadCount > 0 && (
+                      <span
+                        className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none text-white"
+                        style={{ backgroundColor: "#7c5cfc" }}
+                      >
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              },
+            )}
           </div>
 
           {/* Right cluster */}
@@ -213,13 +221,15 @@ export default function TopNav() {
                     </DropdownMenuItem>
                   </>
                 )}
-                <DropdownMenuItem
-                  onClick={() => navigate("/blocklist")}
-                  className="cursor-pointer"
-                >
-                  <ShieldBan className="h-4 w-4" />
-                  Blocklist
-                </DropdownMenuItem>
+                {isAdmin && (
+                  <DropdownMenuItem
+                    onClick={() => navigate("/blocklist")}
+                    className="cursor-pointer"
+                  >
+                    <ShieldBan className="h-4 w-4" />
+                    Blocklist
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={() => navigate("/outbox")}
                   className="cursor-pointer"
@@ -288,34 +298,36 @@ export default function TopNav() {
         {mobileOpen && (
           <div className="border-t border-white/[0.06] sm:hidden">
             <div className="flex flex-col py-2">
-              {PRIMARY_NAV.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <NavLink
-                    key={item.path}
-                    to={item.path}
-                    end={item.end}
-                    className={({ isActive }) =>
-                      `flex items-center gap-2 px-4 py-2.5 text-sm font-medium ${
-                        navAtivo(item, isActive, location.pathname)
-                          ? "bg-white/[0.08] text-white"
-                          : "text-white/60 hover:text-white"
-                      }`
-                    }
-                  >
-                    <Icon className="h-4 w-4" />
-                    {item.label}
-                    {item.path === "/" && unreadCount > 0 && (
-                      <span
-                        className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none text-white"
-                        style={{ backgroundColor: "#7c5cfc" }}
-                      >
-                        {unreadCount > 99 ? "99+" : unreadCount}
-                      </span>
-                    )}
-                  </NavLink>
-                );
-              })}
+              {PRIMARY_NAV.filter((item) => !item.adminOnly || isAdmin).map(
+                (item) => {
+                  const Icon = item.icon;
+                  return (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      end={item.end}
+                      className={({ isActive }) =>
+                        `flex items-center gap-2 px-4 py-2.5 text-sm font-medium ${
+                          navAtivo(item, isActive, location.pathname)
+                            ? "bg-white/[0.08] text-white"
+                            : "text-white/60 hover:text-white"
+                        }`
+                      }
+                    >
+                      <Icon className="h-4 w-4" />
+                      {item.label}
+                      {item.path === "/" && unreadCount > 0 && (
+                        <span
+                          className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none text-white"
+                          style={{ backgroundColor: "#7c5cfc" }}
+                        >
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </span>
+                      )}
+                    </NavLink>
+                  );
+                },
+              )}
               <div className="my-2 border-t border-white/[0.06]" />
               <button
                 onClick={() => navigate("/api-keys")}
@@ -349,13 +361,15 @@ export default function TopNav() {
                   </button>
                 </>
               )}
-              <button
-                onClick={() => navigate("/blocklist")}
-                className="flex items-center gap-2 px-4 py-2.5 text-sm text-white/60 hover:text-white"
-              >
-                <ShieldBan className="h-4 w-4" />
-                Blocklist
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={() => navigate("/blocklist")}
+                  className="flex items-center gap-2 px-4 py-2.5 text-sm text-white/60 hover:text-white"
+                >
+                  <ShieldBan className="h-4 w-4" />
+                  Blocklist
+                </button>
+              )}
               <button
                 onClick={() => navigate("/outbox")}
                 className="flex items-center gap-2 px-4 py-2.5 text-sm text-white/60 hover:text-white"

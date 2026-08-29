@@ -304,8 +304,19 @@ app.route("/api/email-templates", emailTemplatesRouter);
 app.route("/api/user", userRouter);
 app.route("/api/api-keys", apiKeysRouter);
 app.route("/api/invites", invitesRouter);
+
+// Sequence definitions are global instance config; enrollments remain scoped
+// by their from-address inside the router.
+const requireSequenceAdmin: typeof requireAdmin = (c, next) =>
+  c.req.method === "GET" ? next() : requireAdmin(c, next);
+app.use("/api/sequences", requireSequenceAdmin);
+app.use("/api/sequences/:id", requireSequenceAdmin);
 app.route("/api/sequences", sequencesRouter);
 app.route("/api/notifications", notificationsRouter);
+
+// Block rules and their destructive purge apply to every inbox.
+app.use("/api/blocklist", requireAdmin);
+app.use("/api/blocklist/*", requireAdmin);
 app.route("/api/blocklist", blocklistRouter);
 app.route("/api/outbox", outboxRouter);
 

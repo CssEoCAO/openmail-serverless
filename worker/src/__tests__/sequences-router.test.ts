@@ -4,6 +4,7 @@ import {
   cleanDb,
   createTestUser,
   createTestPerson,
+  createTestEmail,
   createTestTemplate,
   authFetch,
   getDb,
@@ -11,6 +12,7 @@ import {
 import { sequences } from "../db/sequences.schema";
 import { sequenceEnrollments } from "../db/sequence-enrollments.schema";
 import { sequenceEmails } from "../db/sequence-emails.schema";
+import { inboxPermissions } from "../db/inbox-permissions.schema";
 import { eq } from "drizzle-orm";
 
 describe("sequences router", () => {
@@ -47,6 +49,73 @@ describe("sequences router", () => {
     });
     return res.json();
   }
+
+  it("lets members read and enroll, but rejects global sequence mutations", async () => {
+    const sequence = await createSequenceWithTemplates();
+    const { apiKey: memberApiKey, userId } = await createTestUser({
+      id: "sequence-member",
+      role: "member",
+      email: "sequence-member@example.com",
+    });
+    await getDb()
+      .insert(inboxPermissions)
+      .values({
+        userId,
+        email: "me@saasmail.test",
+        createdAt: Math.floor(Date.now() / 1000),
+      });
+    await createTestPerson({
+      id: "member-person",
+      email: "member-person@example.com",
+    });
+    await createTestEmail({
+      id: "member-email",
+      personId: "member-person",
+      recipient: "me@saasmail.test",
+    });
+
+    for (const path of ["/api/sequences", `/api/sequences/${sequence.id}`]) {
+      expect((await authFetch(path, { apiKey: memberApiKey })).status).toBe(
+        200,
+      );
+    }
+
+    const requests: Array<[string, RequestInit]> = [
+      [
+        "/api/sequences",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: "Forbidden",
+            steps: [{ order: 1, templateSlug: "welcome", delayHours: 0 }],
+          }),
+        },
+      ],
+      [
+        `/api/sequences/${sequence.id}`,
+        { method: "PUT", body: JSON.stringify({ name: "Forbidden" }) },
+      ],
+      [`/api/sequences/${sequence.id}`, { method: "DELETE" }],
+    ];
+
+    for (const [path, init] of requests) {
+      const response = await authFetch(path, {
+        apiKey: memberApiKey,
+        ...init,
+      });
+      expect(response.status).toBe(403);
+    }
+
+    const enrollment = await authFetch(`/api/sequences/${sequence.id}/enroll`, {
+      apiKey: memberApiKey,
+      method: "POST",
+      body: JSON.stringify({
+        personId: "member-person",
+        fromAddress: "me@saasmail.test",
+      }),
+    });
+    expect(enrollment.status).toBe(201);
+  });
 
   describe("POST /api/sequences", () => {
     it("creates a sequence", async () => {
