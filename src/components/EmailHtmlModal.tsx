@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   X,
-  Paperclip,
-  Download,
   Copy,
   CheckCircle2,
   ChevronDown,
@@ -16,7 +14,8 @@ import {
   UserPen,
   Check,
 } from "lucide-react";
-import { sanitizeEmailHtml } from "@/lib/sanitize-html";
+import AttachmentList from "@/components/AttachmentList";
+import EmailHtmlFrame from "@/components/EmailHtmlFrame";
 import {
   TrayMaximizeButton,
   TrayMetaRow,
@@ -38,12 +37,6 @@ interface EmailHtmlModalProps {
   onClose: () => void;
   /** Called after the message's From/To (person) is changed in-place. */
   onUpdated?: () => void;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function avatarInitial(addr: string | null): string {
@@ -410,30 +403,7 @@ export default function EmailHtmlModal({
                 {downloadable.length} attachment
                 {downloadable.length !== 1 ? "s" : ""}
               </p>
-              <ul className="space-y-1.5">
-                {downloadable.map((att) => (
-                  <li key={att.id}>
-                    <a
-                      href={`/api/attachments/${att.id}`}
-                      className="flex items-center justify-between gap-3 rounded-[8px] border border-border bg-card px-3 py-2 text-xs transition-colors hover:bg-bg-muted"
-                    >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <Paperclip
-                          size={14}
-                          className="shrink-0 text-text-tertiary"
-                        />
-                        <span className="truncate font-medium text-text-primary">
-                          {att.filename}
-                        </span>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2 text-text-tertiary">
-                        <span>{formatBytes(att.size)}</span>
-                        <Download size={12} />
-                      </div>
-                    </a>
-                  </li>
-                ))}
-              </ul>
+              <AttachmentList variant="list" attachments={downloadable} />
             </div>
           )}
 
@@ -538,12 +508,9 @@ export default function EmailHtmlModal({
               </div>
             )}
             {view === "rendered" && email.bodyHtml ? (
-              <div
-                className="prose prose-sm max-w-none px-5 py-4 text-text-primary [&_a]:text-violet [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-text-secondary [&_p]:my-2 sm:px-7 sm:py-5"
-                style={{ "--tw-prose-links": "#7c5cfc" } as React.CSSProperties}
-                dangerouslySetInnerHTML={{
-                  __html: sanitizeEmailHtml(email.bodyHtml),
-                }}
+              <EmailHtmlFrame
+                html={email.bodyHtml}
+                attachments={email.attachments}
               />
             ) : (
               <pre className="whitespace-pre-wrap break-words px-5 py-4 font-sans text-sm leading-relaxed text-text-primary sm:px-7 sm:py-5">

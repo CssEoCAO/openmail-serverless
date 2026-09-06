@@ -123,7 +123,6 @@ export default function ThreadInboxSection({
               onReply={onReply}
               onDelete={onDelete}
               onReassign={onReassign}
-              renderHtml
             />
           </Fragment>
         )}

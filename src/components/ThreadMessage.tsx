@@ -1,5 +1,5 @@
 import { Send, Inbox as InboxIcon, AlertTriangle, Clock } from "lucide-react";
-import { sanitizeEmailHtml } from "@/lib/sanitize-html";
+import EmailHtmlFrame from "@/components/EmailHtmlFrame";
 import type { Email } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -90,14 +90,11 @@ export default function ThreadMessage({
         <span className="ml-auto shrink-0 text-text-tertiary">{fullStamp}</span>
       </div>
       {email.bodyHtml ? (
-        <div
-          className={cn(
-            "prose prose-sm max-w-none text-[13px] leading-relaxed [&_p]:my-1.5",
-            highlight ? "text-text-primary" : "text-text-secondary",
-          )}
-          dangerouslySetInnerHTML={{
-            __html: sanitizeEmailHtml(email.bodyHtml),
-          }}
+        <EmailHtmlFrame
+          html={email.bodyHtml}
+          attachments={email.attachments}
+          collapsedHeight={240}
+          className="overflow-hidden rounded-[8px] ring-1 ring-border"
         />
       ) : (
         <pre className="whitespace-pre-wrap break-words font-sans text-[13px] leading-relaxed text-text-secondary">

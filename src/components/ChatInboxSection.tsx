@@ -3,7 +3,6 @@ import {
   Inbox,
   Link2,
   Maximize2,
-  Paperclip,
   Trash2,
   UserPen,
   ArrowDown,
@@ -12,11 +11,12 @@ import {
 } from "lucide-react";
 import type { Email } from "@/lib/api";
 import type { ThreadInboxGroup } from "@/components/ThreadInboxSection";
+import AttachmentList from "@/components/AttachmentList";
 import ChatQuickReply from "@/components/ChatQuickReply";
 import CcChips, { RosterDiffNotice } from "@/components/CcChips";
+import EmailHtmlFrame from "@/components/EmailHtmlFrame";
 import { rosterOf, diffRosters } from "@/lib/roster";
 import type { ComposePrefill } from "@/pages/ComposeModal";
-import { sanitizeEmailHtml } from "@/lib/sanitize-html";
 import { copyMessageLink, messageDomId } from "@/lib/message-link";
 import {
   HIDE_SIGNATURES_EVENT,
@@ -67,15 +67,14 @@ function emailToText(email: Email): string {
 }
 
 /**
- * Heuristic: should we render an inline HTML preview card instead of dumping
- * the (often broken) plain-text fallback? True for marketing/transactional
- * emails that ship HTML-only or whose HTML is significantly richer than the
- * stripped-text fallback would be readable as.
+ * Received mail always shows its original HTML. Sent bubbles keep the chat
+ * look unless the HTML is significantly richer than the plain-text fallback.
  */
 function shouldShowHtmlPreview(email: Email): boolean {
   const txt = email.bodyText?.trim() ?? "";
   const html = email.bodyHtml ?? "";
   if (!html) return false;
+  if (email.type === "received") return true;
   if (!txt) return true;
   // Plain text exists but the HTML is significantly richer — render preview.
   const looksMarketingy = /<table|<style|class="/i.test(html);
@@ -164,11 +163,6 @@ function Bubble({
     () => shouldShowHtmlPreview(visibleEmail),
     [visibleEmail],
   );
-  const sanitizedHtml = useMemo(
-    () =>
-      showHtmlPreview ? sanitizeEmailHtml(visibleEmail.bodyHtml ?? "") : "",
-    [showHtmlPreview, visibleEmail.bodyHtml],
-  );
   const truncated = text.length > BUBBLE_TRUNCATE_CHARS && !expanded;
   const displayText = truncated
     ? text.slice(0, BUBBLE_TRUNCATE_CHARS).trimEnd() + "…"
@@ -179,8 +173,6 @@ function Bubble({
     hour: "numeric",
     minute: "2-digit",
   });
-
-  const downloadable = (email.attachments ?? []).filter((a) => !a.contentId);
 
   function handleClick() {
     if (isUnread) onMarkRead(email);
@@ -221,13 +213,10 @@ function Bubble({
             isUnread ? "outline outline-2 outline-violet/40" : ""
           }`}
         >
-          {/* Sanitized inline preview. Images render at their natural
-              size, constrained only by the bubble width so aspect ratio
-              is preserved — capping height made hero/inline images
-              unreadably small. */}
-          <div
-            className="prose prose-sm relative max-w-none px-4 py-3 text-xs text-text-secondary [&_*]:max-w-full [&_a]:pointer-events-none [&_img]:h-auto [&_img]:max-w-full [&_table]:!w-full [&_table]:!table-fixed"
-            dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+          <EmailHtmlFrame
+            html={visibleEmail.bodyHtml ?? ""}
+            attachments={email.attachments}
+            collapsedHeight={360}
           />
         </div>
       ) : (
@@ -275,25 +264,12 @@ function Bubble({
         </div>
       )}
 
-      {downloadable.length > 0 && (
-        <div
-          className={`mt-1.5 flex max-w-[85%] flex-wrap gap-1.5 sm:max-w-[78%] ${
-            isSent ? "justify-end" : "justify-start"
-          }`}
-        >
-          {downloadable.map((att) => (
-            <a
-              key={att.id}
-              href={`/api/attachments/${att.id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="flex items-center gap-1 rounded-[6px] border border-border bg-card px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-bg-muted"
-            >
-              <Paperclip size={11} />
-              {att.filename}
-            </a>
-          ))}
-        </div>
-      )}
+      <AttachmentList
+        attachments={email.attachments ?? []}
+        className={`mt-1.5 max-w-[85%] sm:max-w-[78%] ${
+          isSent ? "justify-end" : "justify-start"
+        }`}
+      />
 
       <div
         className={`mt-1 flex items-center gap-2 text-[10px] text-text-tertiary ${isSent ? "flex-row-reverse" : ""}`}

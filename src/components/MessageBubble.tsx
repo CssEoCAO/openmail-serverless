@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { sanitizeEmailHtml } from "@/lib/sanitize-html";
 import {
   AlertTriangle,
   Clock,
   Link2,
   Maximize2,
-  Paperclip,
   Trash2,
   UserPen,
 } from "lucide-react";
+import AttachmentList from "@/components/AttachmentList";
 import CcChips from "@/components/CcChips";
+import EmailHtmlFrame from "@/components/EmailHtmlFrame";
 import type { Email } from "@/lib/api";
 import { copyMessageLink, messageDomId } from "@/lib/message-link";
 
@@ -34,7 +34,6 @@ interface MessageBubbleProps {
    *  omitted, the action is hidden (e.g. group-conversation views). */
   onReassign?: (email: Email) => void;
   compact?: boolean;
-  renderHtml?: boolean;
 }
 
 const MAX_LINES = 4;
@@ -52,7 +51,6 @@ export default function MessageBubble({
   onDelete,
   onReassign,
   compact = false,
-  renderHtml = false,
 }: MessageBubbleProps) {
   const override = senderResolver?.(email) ?? null;
   const [expanded, setExpanded] = useState(false);
@@ -95,11 +93,6 @@ export default function MessageBubble({
     month: "short",
     day: "numeric",
   });
-
-  // Filter to non-inline attachments only
-  const downloadableAttachments = (email.attachments ?? []).filter(
-    (att) => !att.contentId,
-  );
 
   function handleClick() {
     if (isUnread) {
@@ -183,13 +176,13 @@ export default function MessageBubble({
         </div>
       )}
 
-      {/* Body */}
-      {renderHtml && email.bodyHtml ? (
-        <div
-          className="prose prose-sm max-w-none text-xs text-text-secondary leading-relaxed"
-          dangerouslySetInnerHTML={{
-            __html: sanitizeEmailHtml(email.bodyHtml),
-          }}
+      {/* Body — the original HTML whenever there is one, plain text otherwise */}
+      {email.bodyHtml ? (
+        <EmailHtmlFrame
+          html={email.bodyHtml}
+          attachments={email.attachments}
+          collapsedHeight={compact ? 200 : 360}
+          className="mt-1 overflow-hidden rounded-[8px] ring-1 ring-border"
         />
       ) : displayText ? (
         <p className="whitespace-pre-wrap text-xs text-text-secondary leading-relaxed">
@@ -200,7 +193,7 @@ export default function MessageBubble({
       )}
 
       {/* Show more / less */}
-      {!renderHtml && text.length > truncateLength && (
+      {!email.bodyHtml && text.length > truncateLength && (
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -212,22 +205,10 @@ export default function MessageBubble({
         </button>
       )}
 
-      {/* Downloadable attachments */}
-      {downloadableAttachments.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1.5">
-          {downloadableAttachments.map((att) => (
-            <a
-              key={att.id}
-              href={`/api/attachments/${att.id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="flex items-center gap-1 rounded border border-border px-2 py-1 text-[10px] text-text-secondary hover:bg-bg-muted"
-            >
-              <Paperclip size={10} />
-              {att.filename}
-            </a>
-          ))}
-        </div>
-      )}
+      <AttachmentList
+        attachments={email.attachments ?? []}
+        className="mt-1.5"
+      />
 
       {/* Action buttons */}
       <div className="flex items-center gap-3 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
