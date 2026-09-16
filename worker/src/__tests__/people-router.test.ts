@@ -9,6 +9,10 @@ import {
   getDb,
 } from "./helpers";
 import { blocklist } from "../db/blocklist.schema";
+import { eq } from "drizzle-orm";
+import { emails } from "../db/emails.schema";
+import { sentEmails } from "../db/sent-emails.schema";
+import { inboxPermissions } from "../db/inbox-permissions.schema";
 
 describe("people router", () => {
   let apiKey: string;
@@ -163,6 +167,86 @@ describe("people router", () => {
   });
 
   describe("GET /api/people/grouped — sort direction + aggregates", () => {
+    it.each([null, "subject-group"])(
+      "returns the latest visible subject for conversation %s",
+      async (conversationId) => {
+        const db = getDb();
+        await createTestPerson({ id: "subject-person" });
+        await createTestEmail({
+          id: "subject-visible",
+          personId: "subject-person",
+          recipient: "visible@test.com",
+          subject: "Recebido: ação necessária",
+          conversationId,
+        });
+        await db.update(emails).set({ receivedAt: 100 });
+
+        const filtered = "/api/people/grouped?recipient=visible%40test.com";
+        const first = await authFetch(filtered, { apiKey }).then((r) =>
+          r.json(),
+        );
+        expect(first.data[0].latestSubject).toBe("Recebido: ação necessária");
+
+        await db.update(emails).set({ subject: null });
+        const noSubject = await authFetch(filtered, { apiKey }).then((r) =>
+          r.json(),
+        );
+        expect(noSubject.data[0].latestSubject).toBeNull();
+
+        await db.insert(sentEmails).values({
+          id: "subject-sent",
+          personId: "subject-person",
+          fromAddress: "visible@test.com",
+          toAddress: "alice@example.com",
+          subject: "Resposta mais recente",
+          conversationId,
+          sentAt: 200,
+          createdAt: 200,
+        });
+        await createTestEmail({
+          id: "subject-private",
+          personId: "subject-person",
+          recipient: "private@test.com",
+          subject: "Assunto privado mais recente",
+          messageId: "private-message",
+          conversationId,
+        });
+        await db
+          .update(emails)
+          .set({ receivedAt: 300 })
+          .where(eq(emails.id, "subject-private"));
+
+        const all = await authFetch("/api/people/grouped", { apiKey }).then(
+          (r) => r.json(),
+        );
+        expect(all.data[0].latestSubject).toBe("Assunto privado mais recente");
+        const scoped = await authFetch(filtered, { apiKey }).then((r) =>
+          r.json(),
+        );
+        expect(scoped.data[0].latestSubject).toBe("Resposta mais recente");
+
+        const member = await createTestUser({
+          id: "subject-member",
+          email: "member@test.com",
+          role: "member",
+        });
+        await db
+          .insert(inboxPermissions)
+          .values({
+            userId: member.userId,
+            email: "visible@test.com",
+            createdAt: 100,
+          });
+        const response = await authFetch("/api/people/grouped", {
+          apiKey: member.apiKey,
+        });
+        expect(response.status).toBe(200);
+        const body = await response.json();
+        expect(body.data).toHaveLength(1);
+        expect(body.data[0].latestSubject).toBe("Resposta mais recente");
+      },
+    );
+
     it("returns aggregates over the filtered set, not just the page", async () => {
       // Three people: two unread, one with attachments. Aggregates
       // should reflect the whole set even when limit=1.

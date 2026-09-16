@@ -15,6 +15,7 @@ export interface GroupedPerson {
   email: string;
   name: string | null;
   lastEmailAt: number;
+  latestSubject?: string | null;
   unreadCount: number;
   totalCount: number;
   recipientCount: number;
@@ -42,6 +43,7 @@ export interface GroupedConversation {
     name: string | null;
   }>;
   lastEmailAt: number;
+  latestSubject?: string | null;
   unreadCount: number;
   totalCount: number;
   hasAttachment: number;

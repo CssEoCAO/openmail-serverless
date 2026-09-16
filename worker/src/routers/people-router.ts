@@ -36,6 +36,7 @@ const GroupedPersonSchema = z.object({
   email: z.string(),
   name: z.string().nullable(),
   lastEmailAt: z.number(),
+  latestSubject: z.string().nullable(),
   unreadCount: z.number(),
   totalCount: z.number(),
   recipientCount: z.number(),
@@ -66,6 +67,7 @@ const GroupedConversationSchema = z.object({
     }),
   ),
   lastEmailAt: z.number(),
+  latestSubject: z.string().nullable(),
   unreadCount: z.number(),
   totalCount: z.number(),
   hasAttachment: z.number(),
@@ -214,10 +216,10 @@ peopleRouter.openapi(listGroupedPeopleRoute, async (c) => {
   // appear in the list, not just senders who have emailed us. We exclude
   // any rows with a non-null conversation_id — those belong under group rows.
   const activity = sql`(
-    SELECT person_id, recipient AS inbox, received_at AS at, is_read, conversation_id
+    SELECT id, subject, person_id, recipient AS inbox, received_at AS at, is_read, conversation_id
     FROM ${emails}
     UNION ALL
-    SELECT person_id, from_address AS inbox, sent_at AS at, 1 AS is_read, conversation_id
+    SELECT id, subject, person_id, from_address AS inbox, sent_at AS at, 1 AS is_read, conversation_id
     FROM ${sentEmails}
     WHERE person_id IS NOT NULL
   )`;
@@ -232,12 +234,20 @@ peopleRouter.openapi(listGroupedPeopleRoute, async (c) => {
     recipientCount: number;
     recipientsCsv: string | null;
     hasAttachment: number;
+    latestSubject: string | null;
   }>(sql`
     SELECT
       s.id,
       s.email,
       s.name,
       MAX(e.at) AS lastEmailAt,
+      (
+        SELECT latest.subject FROM ${activity} latest
+        WHERE latest.person_id = s.id AND latest.conversation_id IS NULL
+        ${inboxScopeSql(allowed, sql`latest.inbox`)}
+        ${recipient ? sql`AND latest.inbox = ${recipient}` : sql``}
+        ORDER BY latest.at DESC, latest.id DESC LIMIT 1
+      ) AS latestSubject,
       SUM(CASE WHEN e.is_read = 0 THEN 1 ELSE 0 END) AS unreadCount,
       COUNT(*) AS totalCount,
       COUNT(DISTINCT e.inbox) AS recipientCount,
@@ -263,6 +273,7 @@ peopleRouter.openapi(listGroupedPeopleRoute, async (c) => {
     email: r.email,
     name: r.name,
     lastEmailAt: r.lastEmailAt,
+    latestSubject: r.latestSubject,
     unreadCount: r.unreadCount,
     totalCount: r.totalCount,
     recipientCount: r.recipientCount,
@@ -328,6 +339,7 @@ peopleRouter.openapi(listGroupedPeopleRoute, async (c) => {
     conversation_id: string;
     inbox: string;
     lastEmailAt: number;
+    latestSubject: string | null;
     unreadCount: number;
     totalCount: number;
     hasAttachment: number;
@@ -336,6 +348,16 @@ peopleRouter.openapi(listGroupedPeopleRoute, async (c) => {
       g.conversation_id,
       g.inbox,
       g.lastEmailAt,
+      (
+        SELECT subject FROM (
+          SELECT id, subject, received_at AS at FROM ${emails}
+          WHERE conversation_id = g.conversation_id AND recipient = g.inbox
+          UNION ALL
+          SELECT id, subject, sent_at AS at FROM ${sentEmails}
+          WHERE conversation_id = g.conversation_id AND from_address = g.inbox
+        )
+        ORDER BY at DESC, id DESC LIMIT 1
+      ) AS latestSubject,
       g.unreadCount,
       g.totalCount,
       g.hasAttachment
@@ -380,6 +402,7 @@ peopleRouter.openapi(listGroupedPeopleRoute, async (c) => {
     }>,
     ccParticipants: [] as Array<{ email: string; name: string | null }>,
     lastEmailAt: r.lastEmailAt,
+    latestSubject: r.latestSubject,
     unreadCount: r.unreadCount,
     totalCount: r.totalCount,
     hasAttachment: r.hasAttachment,

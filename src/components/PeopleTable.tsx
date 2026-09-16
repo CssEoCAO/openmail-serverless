@@ -420,6 +420,14 @@ export default function PeopleTable({
                               {person.email}
                             </p>
                           )}
+                          <p
+                            className="max-w-[28rem] truncate text-xs text-text-secondary"
+                            title={
+                              person.latestSubject?.trim() || "(sem assunto)"
+                            }
+                          >
+                            {person.latestSubject?.trim() || "(sem assunto)"}
+                          </p>
                         </div>
                       </div>
                     </td>
@@ -690,6 +698,12 @@ function GroupTableRow({
             </p>
             <p className="truncate text-xs font-light text-text-tertiary">
               {group.participants.length} participants
+            </p>
+            <p
+              className="max-w-[28rem] truncate text-xs text-text-secondary"
+              title={group.latestSubject?.trim() || "(sem assunto)"}
+            >
+              {group.latestSubject?.trim() || "(sem assunto)"}
             </p>
           </div>
         </div>
