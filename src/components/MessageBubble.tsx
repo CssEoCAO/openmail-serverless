@@ -6,7 +6,10 @@ import {
   Maximize2,
   Trash2,
   UserPen,
+  Reply as ReplyIcon,
 } from "lucide-react";
+import RascunhoPill from "@/components/RascunhoPill";
+import { useRascunhos } from "@/lib/rascunho";
 import AttachmentList from "@/components/AttachmentList";
 import CcChips from "@/components/CcChips";
 import EmailHtmlFrame from "@/components/EmailHtmlFrame";
@@ -54,6 +57,7 @@ export default function MessageBubble({
 }: MessageBubbleProps) {
   const override = senderResolver?.(email) ?? null;
   const [expanded, setExpanded] = useState(false);
+  const temRascunho = useRascunhos().porEmail.has(email.id);
   const isSent = email.type === "sent";
   const isUnread = email.type === "received" && email.isRead === 0;
   const failedToSend = isSent && email.status === "failed";
@@ -210,8 +214,9 @@ export default function MessageBubble({
         className="mt-1.5"
       />
 
-      {/* Action buttons */}
-      <div className="flex items-center gap-3 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* Action buttons. Sempre visiveis: o "so no hover" escondia o Responder
+          de quem nao tem mouse (toque) e de quem nao sabia que existia. */}
+      <div className="flex items-center gap-3 mt-1">
         {email.bodyHtml && (
           <button
             onClick={(e) => {
@@ -230,10 +235,13 @@ export default function MessageBubble({
             e.stopPropagation();
             onReply(email.id);
           }}
-          className="text-[11px] text-text-tertiary hover:text-text-secondary"
+          data-testid="message-reply"
+          className="flex items-center gap-1 text-[11px] text-text-tertiary hover:text-text-secondary"
         >
-          Reply
+          <ReplyIcon size={12} />
+          {temRascunho ? "Continuar rascunho" : "Reply"}
         </button>
+        {temRascunho && <RascunhoPill />}
         {onReassign && (
           <button
             onClick={(e) => {

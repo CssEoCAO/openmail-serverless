@@ -82,6 +82,8 @@ export async function applyMigrations() {
     `CREATE INDEX IF NOT EXISTS outbox_status_retry_idx ON outbox_emails(status, next_retry_at)`,
     `CREATE INDEX IF NOT EXISTS outbox_from_idx ON outbox_emails(from_address)`,
     `CREATE INDEX IF NOT EXISTS outbox_sent_email_idx ON outbox_emails(sent_email_id)`,
+    `CREATE TABLE IF NOT EXISTS reply_drafts (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, email_id TEXT NOT NULL, from_address TEXT NOT NULL, cc TEXT, body_html TEXT NOT NULL, body_text TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(user_id, email_id))`,
+    `CREATE INDEX IF NOT EXISTS reply_drafts_user_idx ON reply_drafts(user_id)`,
     `CREATE INDEX IF NOT EXISTS outbox_sequence_email_idx ON outbox_emails(sequence_email_id)`,
     `CREATE TRIGGER IF NOT EXISTS push_subscriptions_user_cap BEFORE INSERT ON push_subscriptions WHEN (SELECT COUNT(*) FROM push_subscriptions WHERE user_id = NEW.user_id) >= 10 BEGIN SELECT RAISE(ABORT, 'push subscription limit'); END`,
   ];
@@ -277,6 +279,7 @@ export function buildSendForm(
 export async function cleanDb() {
   const db = env.DB;
   await db.exec(`
+    DELETE FROM reply_drafts;
     DELETE FROM outbox_emails;
     DELETE FROM blocklist;
     DELETE FROM suppressions;

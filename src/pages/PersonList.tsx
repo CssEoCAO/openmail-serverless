@@ -17,6 +17,8 @@ import {
   type GroupedConversation,
 } from "@/lib/api";
 import GroupRow from "@/components/GroupRow";
+import RascunhoPill from "@/components/RascunhoPill";
+import { useRascunhos } from "@/lib/rascunho";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 
 interface PersonListProps {
@@ -119,6 +121,7 @@ export default function PersonList({
   onRefresh,
   compact = false,
 }: PersonListProps) {
+  const rascunhos = useRascunhos();
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(
     null,
@@ -410,6 +413,9 @@ export default function PersonList({
                                 className="text-text-tertiary"
                                 aria-label="Has attachment"
                               />
+                            )}
+                            {rascunhos.porPessoa.has(person.id) && (
+                              <RascunhoPill />
                             )}
                           </div>
 

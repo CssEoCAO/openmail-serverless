@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { signOut, useSession } from "@/lib/auth-client";
 import { fetchOutboxCount, fetchStats } from "@/lib/api";
+import { useRascunhos } from "@/lib/rascunho";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,6 +64,7 @@ function navAtivo(item: NavItem, isActive: boolean, pathname: string): boolean {
 
 export default function TopNav() {
   const { data: session } = useSession();
+  const rascunhos = useRascunhos();
   const { brandName } = useBranding();
   const navigate = useNavigate();
   const location = useLocation();
@@ -242,6 +244,19 @@ export default function TopNav() {
                     </span>
                   )}
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => navigate("/rascunhos")}
+                  className="cursor-pointer"
+                  data-testid="nav-rascunhos"
+                >
+                  <FileText className="h-4 w-4" />
+                  Rascunhos
+                  {rascunhos.porEmail.size > 0 && (
+                    <span className="ml-auto rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                      {rascunhos.porEmail.size}
+                    </span>
+                  )}
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => navigate("/settings")}
@@ -379,6 +394,18 @@ export default function TopNav() {
                 {outboxPending > 0 && (
                   <span className="ml-auto rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
                     {outboxPending}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => navigate("/rascunhos")}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm text-white/60 hover:text-white"
+              >
+                <FileText className="h-4 w-4" />
+                Rascunhos
+                {rascunhos.porEmail.size > 0 && (
+                  <span className="ml-auto rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                    {rascunhos.porEmail.size}
                   </span>
                 )}
               </button>

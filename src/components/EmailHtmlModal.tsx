@@ -13,6 +13,7 @@ import {
   Code,
   UserPen,
   Check,
+  Reply,
 } from "lucide-react";
 import AttachmentList from "@/components/AttachmentList";
 import EmailHtmlFrame from "@/components/EmailHtmlFrame";
@@ -37,6 +38,8 @@ interface EmailHtmlModalProps {
   onClose: () => void;
   /** Called after the message's From/To (person) is changed in-place. */
   onUpdated?: () => void;
+  /** Abre o ReplyComposer para esta mensagem (o pai fecha o modal). */
+  onReply?: (emailId: string) => void;
 }
 
 function avatarInitial(addr: string | null): string {
@@ -62,6 +65,7 @@ export default function EmailHtmlModal({
   open,
   onClose,
   onUpdated,
+  onReply,
 }: EmailHtmlModalProps) {
   const [view, setView] = useState<"rendered" | "plain">("rendered");
   const [copied, setCopied] = useState(false);
@@ -294,6 +298,18 @@ export default function EmailHtmlModal({
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
+              {onReply && (
+                <button
+                  type="button"
+                  onClick={() => onReply(email.id)}
+                  data-testid="modal-reply"
+                  className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
+                  title="Responder a esta mensagem"
+                >
+                  <Reply size={12} />
+                  Responder
+                </button>
+              )}
               <TrayMaximizeButton
                 fullscreen={fullscreen}
                 onToggle={() => setFullscreen((v) => !v)}

@@ -8,10 +8,12 @@ import {
   type GroupedConversation,
   type Email,
   type ConversationDetail as ConversationDetailData,
+  fetchStats,
 } from "@/lib/api";
 import EmailHtmlModal from "@/components/EmailHtmlModal";
 import { type ThreadInboxGroup } from "@/components/ThreadInboxSection";
 import ChatInboxSection from "@/components/ChatInboxSection";
+import ReplyComposer from "@/components/ReplyComposer";
 import type { ComposePrefill } from "@/pages/ComposeModal";
 import { onEmailSent } from "@/lib/email-events";
 import { showToast } from "@/lib/toast";
@@ -52,7 +54,19 @@ export default function ConversationDetail({
   const [data, setData] = useState<ConversationDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [htmlPreviewEmail, setHtmlPreviewEmail] = useState<Email | null>(null);
+  // Responder a UMA mensagem do grupo: mesmo composer da caixa por pessoa. A
+  // resposta sai pela caixa do grupo; o "para" e quem escreveu aquela mensagem.
+  const [replyToEmailId, setReplyToEmailId] = useState<string | null>(null);
+  const [senderIdentities, setSenderIdentities] = useState<
+    Array<{ email: string; displayName: string | null }>
+  >([]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    fetchStats().then((stats) => {
+      setSenderIdentities(stats.senderIdentities ?? []);
+    });
+  }, []);
 
   function refetch() {
     fetchConversationEmails(conversation.id).then(setData);
@@ -236,16 +250,45 @@ export default function ConversationDetail({
           onOpenHtml={setHtmlPreviewEmail}
           onMarkRead={handleMarkRead}
           onDelete={handleDelete}
+          onReply={setReplyToEmailId}
           onSent={refetch}
           onOpenCompose={onOpenCompose}
         />
       </div>
+
+      {replyToEmailId &&
+        (() => {
+          const alvo = data.emails.find((e) => e.id === replyToEmailId);
+          const quem =
+            (alvo?.personId ? senderById.get(alvo.personId) : null) ??
+            (alvo?.type === "received" && alvo.fromAddress
+              ? { email: alvo.fromAddress, name: null }
+              : null) ??
+            conversation.participants[0] ??
+            null;
+          return (
+            <ReplyComposer
+              emailId={replyToEmailId}
+              personName={quem?.name ?? null}
+              personEmail={quem?.email ?? ""}
+              recipients={[conversation.inbox]}
+              senderIdentities={senderIdentities}
+              internalDomains={internalDomains}
+              onClose={() => setReplyToEmailId(null)}
+              onSent={refetch}
+            />
+          );
+        })()}
 
       <EmailHtmlModal
         email={htmlPreviewEmail}
         open={htmlPreviewEmail !== null}
         onClose={() => setHtmlPreviewEmail(null)}
         onUpdated={refetch}
+        onReply={(id) => {
+          setHtmlPreviewEmail(null);
+          setReplyToEmailId(id);
+        }}
       />
     </div>
   );

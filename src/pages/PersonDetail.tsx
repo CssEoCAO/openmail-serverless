@@ -555,6 +555,7 @@ export default function PersonDetail({
                   onMarkRead={handleMarkRead}
                   onDelete={handleDelete}
                   onReassign={setReassignEmail}
+                  onReply={setReplyToEmailId}
                   onSent={refetchEmails}
                   onOpenCompose={onOpenCompose}
                 />
@@ -588,7 +589,7 @@ export default function PersonDetail({
           </div>
         )}
 
-        {/* Reply composer (thread mode) */}
+        {/* Reply composer — chat, thread e modal HTML chegam aqui */}
         {replyToEmailId && (
           <ReplyComposer
             emailId={replyToEmailId}
@@ -611,6 +612,10 @@ export default function PersonDetail({
         open={htmlPreviewEmail !== null}
         onClose={() => setHtmlPreviewEmail(null)}
         onUpdated={refetchEmails}
+        onReply={(id) => {
+          setHtmlPreviewEmail(null);
+          setReplyToEmailId(id);
+        }}
       />
 
       <ReassignPersonModal

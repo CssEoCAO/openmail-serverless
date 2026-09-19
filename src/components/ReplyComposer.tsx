@@ -6,6 +6,7 @@ import {
   Clock,
   Reply as ReplyIcon,
   FileText,
+  Save,
   Sparkles,
   ChevronDown,
   ChevronUp,
@@ -25,6 +26,9 @@ import {
   fetchTemplates,
   fetchEmail,
   fetchPersonEmails,
+  fetchDraft,
+  saveDraft,
+  deleteDraft,
   type EmailTemplate,
   type Email,
   type CcEntry,
@@ -35,9 +39,12 @@ import { sanitizeEmailHtml } from "@/lib/sanitize-html";
 import {
   apagarRascunho,
   lerRascunho,
+  notificarRascunhos,
   rascunhoVazio,
   salvarRascunho,
+  type Rascunho,
 } from "@/lib/rascunho";
+import { useSession } from "@/lib/auth-client";
 import {
   proximoHorarioComercial,
   rotuloBrasilia,
@@ -65,7 +72,20 @@ interface ReplyComposerProps {
 
 type Tab = "freeform" | "template";
 
-export default function ReplyComposer({
+export default function ReplyComposer(props: ReplyComposerProps) {
+  const { data: sessao } = useSession();
+  const userId = sessao?.user?.id;
+  if (!userId) return null;
+  return (
+    <ReplyComposerDoUsuario
+      key={`${userId}:${props.emailId}`}
+      {...props}
+      userId={userId}
+    />
+  );
+}
+
+function ReplyComposerDoUsuario({
   emailId,
   personName,
   personEmail,
@@ -74,7 +94,8 @@ export default function ReplyComposer({
   internalDomains = [],
   onClose,
   onSent,
-}: ReplyComposerProps) {
+  userId,
+}: ReplyComposerProps & { userId: string }) {
   const [tab, setTab] = useState<Tab>("freeform");
   const [fromAddress, setFromAddress] = useState(recipients[0] ?? "");
   const [cc, setCc] = useState<CcEntry[]>([]);
@@ -92,42 +113,166 @@ export default function ReplyComposer({
   // Compact tray vs. full-viewport. Toggled by the maximize button.
   const [fullscreen, setFullscreen] = useState(false);
 
-  // --- rascunho automatico -------------------------------------------------
-  // Restaura UMA vez por mensagem. O ref e o que impede o efeito de reescrever
-  // por cima do que o usuario acabou de digitar caso ele volte a rodar.
-  const rascunhoRestaurado = useRef<string | null>(null);
-  useEffect(() => {
-    if (rascunhoRestaurado.current === emailId) return;
-    rascunhoRestaurado.current = emailId;
-    const r = lerRascunho(emailId);
-    if (!r) return;
-    // So restaura o remetente se ele AINDA pode enviar: a lista de identidades
-    // muda (revogar acesso, remover identidade), e um rascunho de semana passada
-    // reporia um "De:" que hoje falha no envio.
-    if (r.fromAddress && recipients.includes(r.fromAddress)) {
-      setFromAddress(r.fromAddress);
-    }
+  // --- rascunho ------------------------------------------------------------
+  // O servidor e a verdade; o localStorage (por usuario) e so backup do que
+  // ainda nao foi salvo la. Sem autosave remoto: quem grava no servidor e o
+  // botao "Salvar rascunho", uma gravacao por vez, e o selo compara o snapshot
+  // atual ao ultimo confirmado. Assim nao existe PUT antes do GET, PUT fora de
+  // ordem, nem rascunho ressuscitando depois do envio.
+  type Conteudo = Omit<Rascunho, "em">;
+  const snapshot = (c: Conteudo) =>
+    JSON.stringify({
+      fromAddress: c.fromAddress,
+      cc: c.cc,
+      bodyHtml: c.bodyHtml,
+      bodyText: c.bodyText,
+    });
+  const conteudo: Conteudo = { fromAddress, cc, bodyHtml, bodyText };
+  const conteudoJson = snapshot(conteudo);
+  // "carregando" bloqueia o editor e o Salvar ate o GET responder;
+  // "indisponivel" = GET falhou: Salvar segue bloqueado (nao sobrescrever um
+  // remoto que nao conseguimos ler), o texto fica na tela e no backup local, e
+  // ha um "tentar de novo".
+  const [remoto, setRemoto] = useState<
+    "carregando" | "pronto" | "indisponivel"
+  >("carregando");
+  const [tentativa, setTentativa] = useState(0);
+  /** Snapshot do ultimo conteudo que o servidor confirmou; null = nao ha rascunho la. */
+  const [confirmado, setConfirmado] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [erroSalvar, setErroSalvar] = useState("");
+  const ocupado = salvando || sending;
+  // Backup local que divergiu do remoto: fica guardado e so entra no editor por
+  // clique — o servidor vence, mas o texto pendente nao se perde.
+  const [backupPendente, setBackupPendente] = useState<Rascunho | null>(null);
+  // Um rascunho (local ou remoto) entrou no editor: o prefill de "reply-all"
+  // com o CC do original nao pode passar por cima dele, nem quando o CC
+  // restaurado e vazio.
+  const restaurouRascunho = useRef(false);
+
+  function aplicar(r: Conteudo) {
+    // Preserve a identidade salva; a guarda de envio explica se ela foi removida.
+    if (r.fromAddress) setFromAddress(r.fromAddress);
     setCc((r.cc as CcEntry[]) ?? []);
     setBodyHtml(r.bodyHtml ?? "");
     setBodyText(r.bodyText ?? "");
-  }, [emailId, recipients]);
+    restaurouRascunho.current = true;
+  }
 
-  // O selo usa o MESMO criterio de "vale guardar" que o salvarRascunho, senao a
-  // tela diria "rascunho salvo" para um composer vazio, que nao gravou nada.
-  const rascunhoAtivo = !rascunhoVazio({ fromAddress, cc, bodyHtml, bodyText });
+  useEffect(() => {
+    if (!userId) return;
+    let cancelado = false;
+    setRemoto("carregando");
+    setErroSalvar("");
+    const local = lerRascunho(userId, emailId);
+    fetchDraft(emailId)
+      .then((servidor) => {
+        if (cancelado) return;
+        if (servidor) {
+          const c: Conteudo = {
+            fromAddress: servidor.fromAddress,
+            cc: servidor.cc,
+            bodyHtml: servidor.bodyHtml,
+            bodyText: servidor.bodyText,
+          };
+          aplicar(c);
+          setConfirmado(snapshot(c));
+          if (local && snapshot(local) !== snapshot(c)) {
+            setBackupPendente(local);
+          } else if (local) {
+            apagarRascunho(userId, emailId);
+          }
+        } else {
+          setConfirmado(null);
+          if (local) aplicar(local);
+        }
+        setRemoto("pronto");
+      })
+      .catch((err) => {
+        if (cancelado) return;
+        console.warn("Failed to load server draft", err);
+        if (local) aplicar(local);
+        setRemoto("indisponivel");
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [emailId, userId, tentativa]);
+
+  const alterado =
+    confirmado !== null
+      ? conteudoJson !== confirmado
+      : !rascunhoVazio(conteudo);
+
+  // Grave após cada edição: trocar de mensagem também pode desmontar o editor.
+  // Um backup divergente só é substituído após a escolha explícita do usuário.
+  useEffect(() => {
+    if (remoto === "carregando" || backupPendente || ocupado) return;
+    if (!alterado) apagarRascunho(userId, emailId);
+    else salvarRascunho(userId, emailId, conteudo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    userId,
+    emailId,
+    remoto,
+    conteudoJson,
+    alterado,
+    backupPendente,
+    ocupado,
+  ]);
+
+  async function salvarNoServidor() {
+    if (ocupado || backupPendente || remoto !== "pronto") return;
+    setSalvando(true);
+    setErroSalvar("");
+    const alvo = conteudoJson;
+    const c = conteudo;
+    try {
+      if (rascunhoVazio(c)) {
+        if (confirmado !== null) await deleteDraft(emailId);
+        setConfirmado(null);
+      } else {
+        await saveDraft(emailId, {
+          fromAddress: c.fromAddress,
+          cc: (c.cc as CcEntry[]).length > 0 ? (c.cc as CcEntry[]) : undefined,
+          bodyHtml: c.bodyHtml,
+          bodyText: c.bodyText,
+        });
+        setConfirmado(alvo);
+      }
+      // O que esta no servidor nao precisa de backup.
+      apagarRascunho(userId, emailId);
+      setBackupPendente(null);
+      notificarRascunhos();
+    } catch (err) {
+      console.warn("Failed to save server draft", err);
+      setErroSalvar(
+        "Não foi possível salvar o rascunho no servidor. O texto continua aqui e no backup deste navegador.",
+      );
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  // Fechar grava o backup local NA HORA, sem esperar o debounce — e o caminho
+  // "fechei e perdi" que o backup existe para cobrir. Nunca grava no servidor.
+  function fechar() {
+    if (ocupado) return;
+    if (!backupPendente && remoto !== "carregando") {
+      if (!alterado) apagarRascunho(userId, emailId);
+      else salvarRascunho(userId, emailId, conteudo);
+    }
+    onClose();
+  }
+
+  // Caixa que recebe mas nao tem identidade de envio (login@…): o rascunho
+  // salva normalmente, o envio fica bloqueado e explicado. O remetente NUNCA e
+  // trocado por baixo do usuario.
+  const identidadeEnvia = senderIdentities.some(
+    (s) => s.email.toLowerCase() === fromAddress.toLowerCase(),
+  );
   // Mesmo modulo do servidor (alias @worker) — ver ComposeModal.
   const rotuloSlot = rotuloBrasilia(proximoHorarioComercial(Date.now()));
-
-  // Grava com folga: escrever no localStorage a cada tecla e desperdicio, e o
-  // risco que isso cobre (fechar a aba) nunca acontece dentro de 600ms.
-  useEffect(() => {
-    if (rascunhoRestaurado.current !== emailId) return;
-    const t = setTimeout(
-      () => salvarRascunho(emailId, { fromAddress, cc, bodyHtml, bodyText }),
-      600,
-    );
-    return () => clearTimeout(t);
-  }, [emailId, fromAddress, cc, bodyHtml, bodyText]);
 
   // Sync the signature trail to the active From inbox.
   useEffect(() => {
@@ -175,7 +320,7 @@ export default function ReplyComposer({
       .then(async (email) => {
         if (cancelled) return;
         setOriginalEmail(email);
-        if (email.cc && email.cc.length > 0) {
+        if (email.cc && email.cc.length > 0 && !restaurouRascunho.current) {
           // Drop our own inbox addresses from the suggested CC list — we
           // don't want to CC ourselves on a reply we're sending.
           const ours = new Set(recipients.map((r) => r.toLowerCase()));
@@ -261,6 +406,8 @@ export default function ReplyComposer({
   }, [tab, templates.length]);
 
   async function handleSend(agendar = false) {
+    if (!identidadeEnvia || ocupado || backupPendente || remoto !== "pronto")
+      return;
     setSending(true);
     setError("");
     const ccPayload = cc.length > 0 ? cc : undefined;
@@ -309,7 +456,15 @@ export default function ReplyComposer({
         to: personEmail,
         origin: "reply",
       });
-      apagarRascunho(emailId);
+      // So aqui, com o envio confirmado, o rascunho deixa de existir. Se o
+      // DELETE falhar o servidor fica com uma copia a mais — melhor que
+      // apagar antes e o envio falhar depois.
+      if (userId) apagarRascunho(userId, emailId);
+      if (confirmado !== null) {
+        deleteDraft(emailId)
+          .catch((err) => console.warn("Failed to discard sent draft", err))
+          .finally(() => notificarRascunhos());
+      }
       onSent();
       onClose();
     } catch {
@@ -337,7 +492,7 @@ export default function ReplyComposer({
     <DialogPrimitive.Root
       open
       modal={false}
-      onOpenChange={(v) => !v && onClose()}
+      onOpenChange={(v) => !v && fechar()}
     >
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="tray-overlay fixed inset-0 z-50" />
@@ -368,6 +523,7 @@ export default function ReplyComposer({
                 onToggle={() => setFullscreen((v) => !v)}
               />
               <DialogPrimitive.Close
+                disabled={ocupado}
                 className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
                 aria-label="Close"
               >
@@ -377,14 +533,19 @@ export default function ReplyComposer({
           </div>
 
           {/* Compact metadata: From / To / Cc. */}
-          <div className="shrink-0 divide-y divide-border/60 border-b border-border bg-bg-subtle/30">
+          <div
+            inert={ocupado || !!backupPendente || remoto === "carregando"}
+            className="shrink-0 divide-y divide-border/60 border-b border-border bg-bg-subtle/30"
+          >
             <TrayMetaRow label="From">
               <select
                 value={fromAddress}
                 onChange={(e) => setFromAddress(e.target.value)}
                 className="w-full bg-transparent py-2 pr-3 text-sm text-text-primary outline-none"
               >
-                {recipients.map((r) => (
+                {Array.from(
+                  new Set([fromAddress, ...recipients].filter(Boolean)),
+                ).map((r) => (
                   <option key={r} value={r}>
                     {getFromLabel(r, senderIdentities)}
                   </option>
@@ -394,6 +555,17 @@ export default function ReplyComposer({
             <TrayMetaRow label="To">
               <span className="block truncate py-2 pr-3 text-sm text-text-primary">
                 {recipientLabel}
+                {originalEmail?.replyTo &&
+                  originalEmail.replyTo.toLowerCase() !==
+                    personEmail.toLowerCase() && (
+                    <span
+                      data-testid="reply-to-hint"
+                      className="ml-2 text-xs font-light text-amber-700"
+                      title="O e-mail original pede resposta para outro endereço (Reply-To). A resposta vai para a pessoa da conversa."
+                    >
+                      Reply-To: {originalEmail.replyTo}
+                    </span>
+                  )}
               </span>
             </TrayMetaRow>
             <TrayMetaRow label="Cc">
@@ -406,8 +578,76 @@ export default function ReplyComposer({
             </TrayMetaRow>
           </div>
 
+          {/* Avisos de rascunho e de envio — valem nas duas abas. */}
+          {!identidadeEnvia && (
+            <div
+              role="status"
+              data-testid="reply-send-unavailable"
+              className="shrink-0 border-b border-amber-300/40 bg-amber-100/40 px-4 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+            >
+              <strong>{fromAddress}</strong> recebe e-mails, mas ainda não tem
+              identidade de envio configurada. Você pode salvar o rascunho;
+              enviar fica indisponível até a identidade existir. O remetente não
+              foi trocado.
+            </div>
+          )}
+          {remoto === "indisponivel" && (
+            <div
+              role="status"
+              data-testid="reply-draft-unavailable"
+              className="flex shrink-0 items-center gap-3 border-b border-amber-300/40 bg-amber-100/40 px-4 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+            >
+              <span className="flex-1">
+                Não foi possível consultar o rascunho no servidor. O que você
+                escrever fica só neste navegador até a consulta funcionar.
+              </span>
+              <button
+                type="button"
+                onClick={() => setTentativa((n) => n + 1)}
+                className="shrink-0 rounded-[6px] border border-current/30 px-2 py-0.5 font-medium hover:bg-amber-200/40"
+              >
+                Tentar de novo
+              </button>
+            </div>
+          )}
+          {backupPendente && (
+            <div
+              role="status"
+              data-testid="reply-backup-pending"
+              className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-bg-subtle/60 px-4 py-2 text-xs text-text-secondary"
+            >
+              <span className="flex-1">
+                Este navegador guardou um texto não salvo, diferente do rascunho
+                do servidor. O do servidor está no editor.
+              </span>
+              <button
+                type="button"
+                data-testid="reply-backup-use"
+                onClick={() => {
+                  aplicar(backupPendente);
+                  setBackupPendente(null);
+                }}
+                className="rounded-[6px] border border-border bg-card px-2 py-0.5 font-medium text-text-primary hover:bg-bg-muted"
+              >
+                Usar texto deste navegador
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (userId) apagarRascunho(userId, emailId);
+                  setBackupPendente(null);
+                }}
+                className="rounded-[6px] px-2 py-0.5 font-medium text-text-tertiary hover:text-text-primary"
+              >
+                Descartar
+              </button>
+            </div>
+          )}
           {/* Body — flex-1, no min-height pin. */}
-          <div className="smooth-scroll flex min-h-0 flex-1 flex-col overflow-y-auto bg-card">
+          <div
+            inert={ocupado || !!backupPendente}
+            className="smooth-scroll flex min-h-0 flex-1 flex-col overflow-y-auto bg-card"
+          >
             {tab === "freeform" ? (
               <div className="flex flex-1 flex-col gap-3 px-4 py-3 sm:px-5">
                 {/* Thread context — what you're replying to */}
@@ -436,14 +676,23 @@ export default function ReplyComposer({
                       setFiles((prev) => [...prev, ...added])
                     }
                   >
-                    <TiptapEditor
-                      content={bodyHtml}
-                      onUpdate={(html, text) => {
-                        setBodyHtml(html);
-                        setBodyText(text);
-                      }}
-                      placeholder="Write your reply…"
-                    />
+                    {remoto === "carregando" ? (
+                      <p
+                        data-testid="reply-draft-loading"
+                        className="py-3 text-sm text-text-tertiary"
+                      >
+                        Consultando rascunho…
+                      </p>
+                    ) : (
+                      <TiptapEditor
+                        content={bodyHtml}
+                        onUpdate={(html, text) => {
+                          setBodyHtml(html);
+                          setBodyText(text);
+                        }}
+                        placeholder="Write your reply…"
+                      />
+                    )}
                     <AttachmentChips
                       files={files}
                       capBytes={ATTACHMENT_CAP_BYTES}
@@ -564,7 +813,7 @@ export default function ReplyComposer({
           </div>
 
           {/* Slim footer — single row, send + cancel + hint. */}
-          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-card px-4 py-2.5 sm:px-5">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border bg-card px-4 py-2.5 sm:px-5">
             <div className="min-w-0 truncate text-[11px] font-light text-text-tertiary">
               {error ? (
                 <span className="text-destructive" role="alert">
@@ -582,19 +831,66 @@ export default function ReplyComposer({
                 </span>
               )}
             </div>
-            {/* Selo de rascunho. Diz o que NAO foi salvo, porque o risco aqui e o
-                usuario supor que o anexo voltou junto com o texto: File nao
-                serializa, entao o rascunho guarda so o que da pra guardar. */}
-            {rascunhoAtivo && (
+            {/* Selo de rascunho: compara o que esta na tela ao ultimo snapshot
+                que o servidor confirmou. Nunca diz "salvo" por conta de um
+                debounce ou de uma gravacao que falhou. Diz tambem o que NAO se
+                salva (anexos), porque o risco e o usuario supor que o PDF voltou. */}
+            {(erroSalvar || confirmado !== null || alterado) && (
               <span
                 data-testid="reply-draft-hint"
-                className="mr-auto text-[11px] font-light text-text-tertiary"
+                data-estado={
+                  erroSalvar
+                    ? "falhou"
+                    : salvando
+                      ? "salvando"
+                      : confirmado !== null && !alterado
+                        ? "salvo"
+                        : "alterado"
+                }
+                className={cn(
+                  "mr-auto text-[11px] font-light",
+                  erroSalvar ? "text-amber-700" : "text-text-tertiary",
+                )}
               >
-                Rascunho salvo neste navegador
-                {files.length > 0 ? " — anexos não são salvos" : ""}
+                {erroSalvar
+                  ? erroSalvar
+                  : salvando
+                    ? "Salvando rascunho…"
+                    : confirmado !== null && !alterado
+                      ? "Rascunho salvo"
+                      : confirmado !== null
+                        ? "Alterações não salvas · backup neste navegador"
+                        : "Não salvo · backup neste navegador"}
+                {files.length > 0 ? " · anexos não são salvos" : ""}
               </span>
             )}
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                data-testid="reply-save-draft"
+                onClick={salvarNoServidor}
+                disabled={
+                  remoto !== "pronto" ||
+                  ocupado ||
+                  !!backupPendente ||
+                  !alterado
+                }
+                title={
+                  remoto === "carregando"
+                    ? "Consultando o rascunho no servidor…"
+                    : remoto === "indisponivel"
+                      ? "Sem acesso ao servidor: não dá para salvar sem antes ler o que há lá"
+                      : undefined
+                }
+                className="inline-flex items-center gap-1.5 rounded-[6px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Save size={12} />
+                {salvando
+                  ? "Salvando…"
+                  : rascunhoVazio(conteudo) && confirmado !== null
+                    ? "Apagar rascunho"
+                    : "Salvar rascunho"}
+              </button>
               <AttachmentPicker
                 onFilesAdded={(added) =>
                   setFiles((prev) => [...prev, ...added])
@@ -603,7 +899,8 @@ export default function ReplyComposer({
               />
               <button
                 type="button"
-                onClick={onClose}
+                onClick={fechar}
+                disabled={ocupado}
                 className="rounded-[6px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
               >
                 Cancel
@@ -612,9 +909,17 @@ export default function ReplyComposer({
                 type="button"
                 data-testid="reply-schedule-button"
                 onClick={() => handleSend(true)}
-                title={`Fica na fila e sai ${rotuloSlot}, em horário comercial`}
+                title={
+                  identidadeEnvia
+                    ? `Fica na fila e sai ${rotuloSlot}, em horário comercial`
+                    : "Esta caixa ainda não tem identidade de envio"
+                }
                 disabled={
-                  sending || totalAttachmentBytes > ATTACHMENT_CAP_BYTES
+                  ocupado ||
+                  remoto !== "pronto" ||
+                  !!backupPendente ||
+                  !identidadeEnvia ||
+                  totalAttachmentBytes > ATTACHMENT_CAP_BYTES
                 }
                 className="inline-flex items-center gap-1.5 rounded-[6px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -625,8 +930,17 @@ export default function ReplyComposer({
                 type="button"
                 onClick={() => handleSend()}
                 data-testid="reply-send-button"
+                title={
+                  identidadeEnvia
+                    ? undefined
+                    : "Esta caixa ainda não tem identidade de envio"
+                }
                 disabled={
-                  sending || totalAttachmentBytes > ATTACHMENT_CAP_BYTES
+                  ocupado ||
+                  remoto !== "pronto" ||
+                  !!backupPendente ||
+                  !identidadeEnvia ||
+                  totalAttachmentBytes > ATTACHMENT_CAP_BYTES
                 }
                 className="inline-flex items-center gap-1.5 rounded-[6px] bg-text-primary px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-text-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
               >

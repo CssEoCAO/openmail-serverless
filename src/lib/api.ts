@@ -412,6 +412,61 @@ export async function replyToEmail(
   });
 }
 
+/** Rascunho de resposta guardado no servidor (um por usuário e mensagem). */
+export interface ReplyDraft {
+  emailId: string;
+  personId: string | null;
+  personEmail: string | null;
+  personName: string | null;
+  /** Assunto da mensagem respondida. */
+  subject: string | null;
+  fromAddress: string;
+  cc: CcEntry[];
+  bodyHtml: string;
+  bodyText: string;
+  /** Unix segundos. */
+  updatedAt: number;
+}
+
+export async function fetchDrafts(): Promise<ReplyDraft[]> {
+  const res = await apiFetch<{ drafts: ReplyDraft[] }>("/api/drafts");
+  return res.drafts;
+}
+
+/** null quando não há rascunho (404). Outros erros propagam. */
+export async function fetchDraft(emailId: string): Promise<ReplyDraft | null> {
+  const res = await fetch(`/api/drafts/${emailId}`, {
+    credentials: "include",
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function saveDraft(
+  emailId: string,
+  data: {
+    fromAddress: string;
+    cc?: CcEntry[];
+    bodyHtml: string;
+    bodyText: string;
+  },
+): Promise<ReplyDraft> {
+  return apiFetch(`/api/drafts/${emailId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteDraft(emailId: string): Promise<void> {
+  const res = await fetch(`/api/drafts/${emailId}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+}
+
 export async function fetchStats(recipient?: string): Promise<Stats> {
   const qs = recipient ? `?recipient=${recipient}` : "";
   return apiFetch(`/api/stats${qs}`);

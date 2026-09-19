@@ -39,6 +39,7 @@ import { suppressionsRouter } from "./routers/suppressions-router";
 import { webhooksRouter } from "./routers/webhooks-router";
 import { unsubscribeRouter } from "./routers/unsubscribe-router";
 import { outboxRouter } from "./routers/outbox-router";
+import { draftsRouter } from "./routers/drafts-router";
 import { bootstrapRouter } from "./routers/bootstrap-router";
 export { NotificationsHub } from "./do/notifications";
 import type { Variables } from "./variables";
@@ -319,6 +320,7 @@ app.use("/api/blocklist", requireAdmin);
 app.use("/api/blocklist/*", requireAdmin);
 app.route("/api/blocklist", blocklistRouter);
 app.route("/api/outbox", outboxRouter);
+app.route("/api/drafts", draftsRouter);
 
 // Admin routes (require admin role)
 app.use("/api/admin/*", requireAdmin);

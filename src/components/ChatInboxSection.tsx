@@ -8,11 +8,14 @@ import {
   ArrowDown,
   Check,
   CheckCheck,
+  Reply,
 } from "lucide-react";
 import type { Email } from "@/lib/api";
 import type { ThreadInboxGroup } from "@/components/ThreadInboxSection";
 import AttachmentList from "@/components/AttachmentList";
 import ChatQuickReply from "@/components/ChatQuickReply";
+import RascunhoPill from "@/components/RascunhoPill";
+import { useRascunhos } from "@/lib/rascunho";
 import CcChips, { RosterDiffNotice } from "@/components/CcChips";
 import EmailHtmlFrame from "@/components/EmailHtmlFrame";
 import { rosterOf, diffRosters } from "@/lib/roster";
@@ -42,6 +45,13 @@ interface ChatInboxSectionProps {
   onMarkRead: (email: Email) => void;
   onDelete: (emailId: string) => void;
   onReassign?: (email: Email) => void;
+  /**
+   * Abre o ReplyComposer para UMA mensagem. Sem isso o chat so tinha o
+   * ChatQuickReply fixo embaixo (que responde ao ultimo recebido) e nenhum
+   * jeito de retomar um rascunho — foi o "nao acho o botao responder".
+   * Opcional porque a pagina de conversa em grupo ainda nao tem composer.
+   */
+  onReply?: (emailId: string) => void;
   onSent: () => void;
   /**
    * Optional handoff to the global compose drawer. When provided, the
@@ -109,6 +119,7 @@ interface BubbleProps {
   onMarkRead: (email: Email) => void;
   onDelete: (emailId: string) => void;
   onReassign?: (email: Email) => void;
+  onReply?: (emailId: string) => void;
 }
 
 function Bubble({
@@ -119,11 +130,13 @@ function Bubble({
   onMarkRead,
   onDelete,
   onReassign,
+  onReply,
 }: BubbleProps) {
   // Resolve the sender label for received bubbles. In a group conversation,
   // each received bubble is from a different person; senderResolver lets
   // the parent supply per-message identity. Falls back to nothing for 1-on-1.
   const senderOverride = senderResolver?.(email) ?? null;
+  const temRascunho = useRascunhos().porEmail.has(email.id);
   const [expanded, setExpanded] = useState(false);
   const isSent = email.type === "sent";
   const isUnread = email.type === "received" && email.isRead === 0;
@@ -295,6 +308,22 @@ function Bubble({
             View original
           </button>
         )}
+        {onReply && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onReply(email.id);
+            }}
+            data-testid="message-reply"
+            className="flex items-center gap-1 hover:text-text-secondary"
+            title={temRascunho ? "Continuar rascunho" : "Responder"}
+          >
+            <Reply size={10} />
+            {temRascunho ? "Continuar rascunho" : "Responder"}
+          </button>
+        )}
+        {temRascunho && <RascunhoPill />}
         <button
           type="button"
           onClick={(e) => {
@@ -367,6 +396,7 @@ export default function ChatInboxSection({
   onMarkRead,
   onDelete,
   onReassign,
+  onReply,
   onSent,
   onOpenCompose,
 }: ChatInboxSectionProps) {
@@ -552,6 +582,7 @@ export default function ChatInboxSection({
                 onMarkRead={onMarkRead}
                 onDelete={onDelete}
                 onReassign={onReassign}
+                onReply={onReply}
               />
             ),
           )}

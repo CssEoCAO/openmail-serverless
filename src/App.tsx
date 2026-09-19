@@ -36,6 +36,7 @@ import MessageLinkPage from "@/pages/MessageLinkPage";
 import UnsubscribePage from "@/pages/UnsubscribePage";
 import BlocklistPage from "@/pages/BlocklistPage";
 import OutboxPage from "@/pages/OutboxPage";
+import RascunhosPage from "@/pages/RascunhosPage";
 
 const queryClient = new QueryClient();
 
@@ -168,6 +169,7 @@ function App() {
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/blocklist" element={<BlocklistPage />} />
                 <Route path="/outbox" element={<OutboxPage />} />
+                <Route path="/rascunhos" element={<RascunhosPage />} />
                 {/* A raiz e' a ESCOLHA da caixa; a lista de mensagens mora sob
                     /inbox. Numa conta que recebe por catch-all em dezenas de
                     dominios, "todas juntas" e' o caso raro — abrir nele escondia

@@ -1,4 +1,6 @@
 import { Paperclip, Users } from "lucide-react";
+import RascunhoPill from "@/components/RascunhoPill";
+import { useRascunhos } from "@/lib/rascunho";
 import { cn } from "@/lib/utils";
 import type { GroupedConversation } from "@/lib/api";
 
@@ -86,6 +88,8 @@ export default function GroupRow({
   compact = false,
 }: GroupRowProps & { compact?: boolean }) {
   const display = groupLabel(group.participants);
+  const { porPessoa } = useRascunhos();
+  const temRascunho = group.participants.some((p) => porPessoa.has(p.id));
   // Show up to 3 avatars in a horizontal stack (each shifted left of the
   // next), with a "+N" pill if the group is bigger. Each circle has a
   // ring matching the row's hover state so the stack reads as one shape.
@@ -203,6 +207,7 @@ export default function GroupRow({
                     aria-label="Has attachment"
                   />
                 )}
+                {temRascunho && <RascunhoPill />}
               </div>
 
               {group.unreadCount > 0 && (
