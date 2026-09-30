@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useParams, useOutletContext, useSearchParams } from "react-router-dom";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useOutletContext,
+  useSearchParams,
+} from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 
 import type { ComposePrefill } from "@/pages/ComposeModal";
@@ -348,6 +354,41 @@ export default function InboxPage() {
     );
   }, [caixaDaRota]);
 
+  // Estado -> URL: abrir/fechar conversa reescreve /inbox/<caixa>[/<pessoa>], entao
+  // recarregar ou copiar o link devolve a mesma tela. So' reage a MUDANCA do id: no
+  // primeiro render a pessoa da rota ainda nao carregou (null) e apagar o /<pessoa>
+  // ali mataria o deep link. `replace` para nao encher o historico a cada clique.
+  const navigate = useNavigate();
+  const location = useLocation();
+  const idAnterior = useRef<string | null>(null);
+  const idSelecionado = selectedPerson?.id ?? null;
+  useEffect(() => {
+    if (idSelecionado === idAnterior.current) return;
+    idAnterior.current = idSelecionado;
+    const base = `/inbox/${encodeURIComponent(caixaDaRota ?? "todas")}`;
+    const alvo = idSelecionado ? `${base}/${idSelecionado}` : base;
+    if (alvo !== location.pathname) {
+      navigate(alvo + location.search, { replace: true });
+    }
+  }, [
+    idSelecionado,
+    caixaDaRota,
+    location.pathname,
+    location.search,
+    navigate,
+  ]);
+
+  // Dropdown de caixa navega em vez de so' filtrar: a rota e' a fonte da caixa.
+  function trocarFiltros(f: InboxFilters) {
+    if (f.recipient !== filters.recipient) {
+      setSelectedPerson(null);
+      navigate(
+        `/inbox/${encodeURIComponent(f.recipient ?? "todas")}${location.search}`,
+      );
+    }
+    setFilters(f);
+  }
+
   const lastProcessedPersonId = useRef<string | null>(null);
 
   useEffect(() => {
@@ -479,7 +520,7 @@ export default function InboxPage() {
         >
           <InboxToolbar
             filters={filters}
-            onFiltersChange={setFilters}
+            onFiltersChange={trocarFiltros}
             inboxes={stats?.inboxes ?? []}
             search={search}
             onSearchChange={setSearch}

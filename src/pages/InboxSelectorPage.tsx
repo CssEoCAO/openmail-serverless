@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { Inbox, Layers, Send, AlertCircle } from "lucide-react";
+import {
+  Link,
+  Navigate,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
+import { Inbox, Layers, Send, AlertCircle, Globe } from "lucide-react";
 import PageHeader, { PageContainer } from "@/components/PageHeader";
 import { fetchStats, type Stats } from "@/lib/api";
 
@@ -23,6 +29,10 @@ function label(row: InboxRow): string {
   return row.displayName || row.email.split("@")[0] || row.email;
 }
 
+function dominioDe(email: string): string {
+  return email.split("@")[1] ?? email;
+}
+
 function lastSeen(epochSeconds: number | null): string {
   if (!epochSeconds) return "nothing yet";
   const days = Math.floor((Date.now() / 1000 - epochSeconds) / 86400);
@@ -38,6 +48,8 @@ export default function InboxSelectorPage() {
   const [error, setError] = useState("");
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  // /d/:dominio mostra so' as caixas daquele dominio; a raiz mostra a arvore toda.
+  const { dominio } = useParams<{ dominio: string }>();
 
   useEffect(() => {
     fetchStats()
@@ -47,13 +59,17 @@ export default function InboxSelectorPage() {
       .catch(() => setError("Could not load your inboxes"));
   }, []);
 
-  const inboxes = stats?.inboxes ?? [];
+  const inboxes = (stats?.inboxes ?? []).filter(
+    (i) => !dominio || dominioDe(i.email) === dominio,
+  );
 
   // `/?q=` and `/?search=` are ALREADY-PUBLISHED deep links (external admin links — see
   // the commit that added them). The root stopped being the list, so they would land on
   // a screen that ignores the query. Forwarding preserves links that exist out there;
   // changing the documented URL would break whoever saved one.
-  const deepLinkSearch = searchParams.get("q") ?? searchParams.get("search");
+  const deepLinkSearch = dominio
+    ? null
+    : (searchParams.get("q") ?? searchParams.get("search"));
 
   // One inbox means there is nothing to choose: skip straight to it. Costs a redirect,
   // saves a pointless click on every single visit.
@@ -76,7 +92,7 @@ export default function InboxSelectorPage() {
   if (error) {
     return (
       <PageContainer>
-        <PageHeader title="Inboxes" />
+        <PageHeader title={dominio ?? "Inboxes"} />
         <p className="text-sm text-text-secondary">{error}</p>
       </PageContainer>
     );
@@ -85,7 +101,7 @@ export default function InboxSelectorPage() {
   if (stats && inboxes.length === 0) {
     return (
       <PageContainer>
-        <PageHeader title="Inboxes" />
+        <PageHeader title={dominio ?? "Inboxes"} />
         <div className="rounded-[8px] bg-card px-5 py-8 text-center ring-1 ring-border">
           <p className="text-sm font-medium text-text-primary">
             No inboxes yet
@@ -109,10 +125,18 @@ export default function InboxSelectorPage() {
   );
   const totalUnread = inboxes.reduce((sum, i) => sum + i.naoLidas, 0);
 
+  // Arvore: dominio -> caixas. Dominio herda a ordem da sua melhor caixa (mais nao
+  // lidas, depois mais recente), entao quem tem coisa nova sobe.
+  const arvore = new Map<string, InboxRow[]>();
+  for (const row of ordered) {
+    const d = dominioDe(row.email);
+    arvore.set(d, [...(arvore.get(d) ?? []), row]);
+  }
+
   return (
     <PageContainer>
       <PageHeader
-        title="Inboxes"
+        title={dominio ?? "Inboxes"}
         subtitle={
           stats
             ? `${inboxes.length} inbox${inboxes.length === 1 ? "" : "es"}${
@@ -122,70 +146,105 @@ export default function InboxSelectorPage() {
         }
       />
 
-      <div className="overflow-hidden rounded-[8px] bg-card ring-1 ring-border">
-        <ul className="divide-y divide-border/60" data-testid="inbox-list">
-          {ordered.map((row) => (
-            <li
-              key={row.email}
-              data-testid="inbox-row"
-              data-inbox={row.email}
-              className="group transition-colors hover:bg-text-primary/[0.02]"
+      <div className="space-y-3" data-testid="inbox-tree">
+        {[...arvore].map(([d, rows]) => {
+          const naoLidas = rows.reduce((sum, r) => sum + r.naoLidas, 0);
+          return (
+            <details
+              key={d}
+              open
+              data-testid="inbox-domain"
+              data-domain={d}
+              className="overflow-hidden rounded-[8px] bg-card ring-1 ring-border"
             >
-              <Link
-                to={`/inbox/${encodeURIComponent(row.email)}`}
-                className="flex items-center gap-3 px-5 py-3.5 text-left"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] bg-bg-muted">
-                  <Inbox size={14} className="text-text-tertiary" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium text-text-primary">
-                      {label(row)}
-                    </p>
-                    {row.naoLidas > 0 && (
-                      <span className="inline-flex shrink-0 items-center rounded-full bg-text-primary px-2 py-0.5 text-[10px] font-medium tabular-nums text-white">
-                        {row.naoLidas}
-                      </span>
-                    )}
-                    {/* Receive-only: saying it here beats letting someone open the
-                        inbox, write the whole reply, and only then find out this
-                        address has no sending identity. */}
-                    {!row.podeEnviar && (
-                      <span
-                        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-bg-muted px-2 py-0.5 text-[10px] font-light text-text-tertiary"
-                        title="This address receives mail but is not configured to send"
-                      >
-                        <AlertCircle size={9} />
-                        receive-only
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 truncate text-xs font-light text-text-tertiary">
-                    {row.email} · {row.total} message
-                    {row.total === 1 ? "" : "s"} · {lastSeen(row.ultima)}
-                  </p>
-                </div>
-                {row.podeEnviar && (
-                  <Send
-                    size={12}
-                    className="shrink-0 text-text-tertiary opacity-0 transition-opacity group-hover:opacity-60"
-                  />
+              <summary className="flex cursor-pointer items-center gap-2 px-5 py-2.5 text-xs font-medium text-text-secondary">
+                <Globe size={12} className="text-text-tertiary" />
+                {dominio ? (
+                  <span>{d}</span>
+                ) : (
+                  <Link
+                    to={`/d/${encodeURIComponent(d)}`}
+                    className="hover:text-text-primary hover:underline"
+                  >
+                    {d}
+                  </Link>
                 )}
-              </Link>
-            </li>
-          ))}
-        </ul>
+                <span className="font-light text-text-tertiary">
+                  {rows.length} inbox{rows.length === 1 ? "" : "es"}
+                  {naoLidas > 0 ? ` · ${naoLidas} unread` : ""}
+                </span>
+              </summary>
+              <ul
+                className="divide-y divide-border/60 border-t border-border/60"
+                data-testid="inbox-list"
+              >
+                {rows.map((row) => (
+                  <li
+                    key={row.email}
+                    data-testid="inbox-row"
+                    data-inbox={row.email}
+                    className="group transition-colors hover:bg-text-primary/[0.02]"
+                  >
+                    <Link
+                      to={`/inbox/${encodeURIComponent(row.email)}`}
+                      className="flex items-center gap-3 px-5 py-3.5 text-left"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] bg-bg-muted">
+                        <Inbox size={14} className="text-text-tertiary" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-medium text-text-primary">
+                            {label(row)}
+                          </p>
+                          {row.naoLidas > 0 && (
+                            <span className="inline-flex shrink-0 items-center rounded-full bg-text-primary px-2 py-0.5 text-[10px] font-medium tabular-nums text-white">
+                              {row.naoLidas}
+                            </span>
+                          )}
+                          {/* Receive-only: saying it here beats letting someone open the
+                            inbox, write the whole reply, and only then find out this
+                            address has no sending identity. */}
+                          {!row.podeEnviar && (
+                            <span
+                              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-bg-muted px-2 py-0.5 text-[10px] font-light text-text-tertiary"
+                              title="This address receives mail but is not configured to send"
+                            >
+                              <AlertCircle size={9} />
+                              receive-only
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 truncate text-xs font-light text-text-tertiary">
+                          {row.email} · {row.total} message
+                          {row.total === 1 ? "" : "s"} · {lastSeen(row.ultima)}
+                        </p>
+                      </div>
+                      {row.podeEnviar && (
+                        <Send
+                          size={12}
+                          className="shrink-0 text-text-tertiary opacity-0 transition-opacity group-hover:opacity-60"
+                        />
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          );
+        })}
       </div>
 
-      <Link
-        to="/inbox/todas"
-        data-testid="see-all-inboxes"
-        className="mt-3 flex items-center justify-center gap-2 rounded-[8px] border border-border bg-card px-5 py-3 text-sm font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
-      >
-        <Layers size={14} />
-        See them all together
-      </Link>
+      {!dominio && (
+        <Link
+          to="/inbox/todas"
+          data-testid="see-all-inboxes"
+          className="mt-3 flex items-center justify-center gap-2 rounded-[8px] border border-border bg-card px-5 py-3 text-sm font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
+        >
+          <Layers size={14} />
+          See them all together
+        </Link>
+      )}
     </PageContainer>
   );
 }

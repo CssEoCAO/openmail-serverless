@@ -19,6 +19,9 @@ function buildCrumbs(
   // dois degraus, entao sem estes dois a tela de caixa unica ficaria sem saida
   // visivel que nao fosse o botao do navegador.
   if (pathname === "/") return [{ label: "Caixas" }];
+  if (pathname.startsWith("/d/") && params.dominio) {
+    return [{ label: "Caixas", href: "/" }, { label: params.dominio }];
+  }
   if (pathname.startsWith("/inbox/")) {
     const bruto = params.inbox;
     const atual =
@@ -33,7 +36,15 @@ function buildCrumbs(
               return bruto;
             }
           })();
-    return [{ label: "Caixas", href: "/" }, { label: atual }];
+    // Caixa aberta: Caixas > dominio > caixa, cada degrau com a sua URL.
+    const dominio = atual.includes("@") ? atual.split("@")[1] : "";
+    return dominio
+      ? [
+          { label: "Caixas", href: "/" },
+          { label: dominio, href: `/d/${encodeURIComponent(dominio)}` },
+          { label: atual },
+        ]
+      : [{ label: "Caixas", href: "/" }, { label: atual }];
   }
 
   if (pathname.startsWith("/templates")) {

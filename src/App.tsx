@@ -174,6 +174,8 @@ function App() {
                     /inbox. Numa conta que recebe por catch-all em dezenas de
                     dominios, "todas juntas" e' o caso raro — abrir nele escondia
                     as caixas atras de um dropdown que ninguem clicava. */}
+                {/* Um dominio: so as caixas dele, no mesmo seletor em arvore. */}
+                <Route path="/d/:dominio" element={<InboxSelectorPage />} />
                 <Route path="/inbox/todas" element={<InboxPage />} />
                 <Route path="/inbox/:inbox" element={<InboxPage />} />
                 {/* Deep link from Web Push notifications — see
