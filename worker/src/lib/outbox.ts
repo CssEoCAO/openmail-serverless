@@ -1,4 +1,6 @@
 import { nanoid } from "nanoid";
+import { reserveSendBudget } from "./resource-budget";
+import { HTTPException } from "hono/http-exception";
 import {
   and,
   eq,
@@ -65,6 +67,50 @@ export type OutboxOutcome =
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = DrizzleD1Database<any>;
 
+declare const reservationBrand: unique symbol;
+export type OutboxBudgetReservation = { readonly [reservationBrand]: true };
+const reservations = new WeakMap<
+  OutboxBudgetReservation,
+  {
+    db: Db;
+    fromAddress: string;
+    sentEmailId: string;
+    recipients: string;
+  }
+>();
+
+function budgetRecipients(to: string, cc?: CcRecipient[]): string[] {
+  return [
+    ...new Set(
+      [to, ...(cc ?? []).map((entry) => entry.email)].map((address) =>
+        address.trim().toLowerCase(),
+      ),
+    ),
+  ].sort();
+}
+
+/** Request-local capability: cannot be forged by a payload, copied or reused.
+ * Reserve before attachment writes/manual sequence cancellation; only this
+ * exact outbox envelope can consume it, once. Other callers reserve at send. */
+export async function reserveOutboxBudget(
+  db: Db,
+  fromAddress: string,
+  to: string,
+  cc: CcRecipient[] | undefined,
+  sentEmailId: string,
+): Promise<OutboxBudgetReservation> {
+  const recipients = budgetRecipients(to, cc);
+  await reserveSendBudget(db, fromAddress, recipients.length);
+  const ticket = Object.freeze({}) as OutboxBudgetReservation;
+  reservations.set(ticket, {
+    db,
+    fromAddress,
+    sentEmailId,
+    recipients: JSON.stringify(recipients),
+  });
+  return ticket;
+}
+
 async function concreteProviderForSend(
   db: Db,
   sender: EmailSender,
@@ -126,6 +172,8 @@ export interface OutboxSendParams {
   sender: EmailSender;
   /** Pre-generated id of the sent_emails row the caller will write. */
   sentEmailId: string;
+  /** Internal, request-local admission capability. Never accepted from HTTP input. */
+  budgetReservation?: OutboxBudgetReservation;
   /** Set for sequence-step sends. */
   sequenceEmailId?: string | null;
   /** Bare lowercase inbox address (scoping key; re-formatted on retry). */
@@ -212,6 +260,23 @@ export async function sendViaOutbox(
   }
   const now = Math.floor(Date.now() / 1000);
   const provider = await concreteProviderForSend(db, sender, fromAddress);
+  if (params.budgetReservation !== undefined) {
+    const ticket = reservations.get(params.budgetReservation);
+    if (
+      !ticket ||
+      ticket.db !== db ||
+      ticket.fromAddress !== fromAddress ||
+      ticket.sentEmailId !== sentEmailId ||
+      ticket.recipients !== JSON.stringify(budgetRecipients(to, effectiveCc))
+    ) {
+      throw new HTTPException(400, {
+        message: "Invalid outbox budget reservation",
+      });
+    }
+    reservations.delete(params.budgetReservation);
+  } else {
+    await reserveSendBudget(db, fromAddress, 1 + effectiveCc.length);
+  }
   const concreteSender =
     sender.provider === "routed"
       ? createEmailSenderForProvider(env, provider)

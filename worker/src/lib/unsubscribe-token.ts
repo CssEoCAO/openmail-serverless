@@ -48,7 +48,11 @@ export async function signToken(
   if (!hasSigningSecret(secret)) {
     throw new Error("UNSUBSCRIBE_SECRET is not configured");
   }
-  const payload = JSON.stringify({ e: email.toLowerCase(), v: 1 });
+  const payload = JSON.stringify({
+    e: email.toLowerCase(),
+    v: 2,
+    p: "unsubscribe",
+  });
   const payloadBytes = encoder.encode(payload);
   const key = await hmacKey(secret);
   const sig = new Uint8Array(
@@ -85,8 +89,76 @@ export async function verifyToken(
 
   try {
     const decoded = JSON.parse(new TextDecoder().decode(payloadBytes));
-    if (typeof decoded?.e !== "string" || decoded?.v !== 1) return null;
+    if (
+      typeof decoded?.e !== "string" ||
+      !(decoded?.v === 1 || (decoded?.v === 2 && decoded?.p === "unsubscribe"))
+    )
+      return null;
     return { email: decoded.e };
+  } catch {
+    return null;
+  }
+}
+
+export async function signUndoToken(
+  email: string,
+  suppressionId: string,
+  secret: string,
+): Promise<string> {
+  if (!hasSigningSecret(secret))
+    throw new Error("UNSUBSCRIBE_SECRET is not configured");
+  const payload = encoder.encode(
+    JSON.stringify({
+      e: email,
+      id: suppressionId,
+      v: 2,
+      p: "undo",
+      exp: Math.floor(Date.now() / 1000) + 300,
+    }),
+  );
+  const sig = new Uint8Array(
+    await crypto.subtle.sign("HMAC", await hmacKey(secret), payload),
+  );
+  return `${b64urlEncode(payload)}.${b64urlEncode(sig)}`;
+}
+
+export async function verifyUndoToken(
+  token: string,
+  secret: string | undefined,
+): Promise<{ email: string; suppressionId: string } | null> {
+  if (
+    !hasSigningSecret(secret) ||
+    typeof token !== "string" ||
+    token.length > MAX_UNSUBSCRIBE_TOKEN_LENGTH
+  )
+    return null;
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
+  const payload = b64urlDecode(parts[0]);
+  const signature = b64urlDecode(parts[1]);
+  if (
+    !payload ||
+    !signature ||
+    !(await crypto.subtle.verify(
+      "HMAC",
+      await hmacKey(secret),
+      signature,
+      payload,
+    ))
+  )
+    return null;
+  try {
+    const d = JSON.parse(new TextDecoder().decode(payload));
+    if (
+      d.v !== 2 ||
+      d.p !== "undo" ||
+      typeof d.e !== "string" ||
+      typeof d.id !== "string" ||
+      !Number.isInteger(d.exp) ||
+      d.exp <= Math.floor(Date.now() / 1000)
+    )
+      return null;
+    return { email: d.e, suppressionId: d.id };
   } catch {
     return null;
   }

@@ -39,7 +39,7 @@ export async function handleEmail(
     return;
   }
 
-  const db = drizzle(env.DB, { schema, logger: true });
+  const db = drizzle(env.DB, { schema });
   const parsed = await parseEmail(message);
   const now = Math.floor(Date.now() / 1000);
 

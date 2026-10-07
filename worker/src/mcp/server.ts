@@ -200,6 +200,7 @@ export function buildMcpServer(ctx: McpContext): McpServer {
           .optional()
           .describe("Only messages for this inbox address."),
         ...pagination,
+        limit: z.number().int().min(1).max(10).optional(),
       },
     },
     guard(ctx, SCOPE_READ, async (input) =>
@@ -211,7 +212,7 @@ export function buildMcpServer(ctx: McpContext): McpServer {
             q: input.q,
             recipient: input.recipient,
             page: input.page ?? 1,
-            limit: input.limit ?? 50,
+            limit: input.limit ?? 10,
           },
           allowed,
         ),

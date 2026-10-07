@@ -249,8 +249,9 @@ export interface ConversationDetail {
 /** Fetch the full chronological timeline for a group conversation. */
 export async function fetchConversationEmails(
   conversationId: string,
+  page = 1,
 ): Promise<ConversationDetail> {
-  return apiFetch(`/api/conversations/${conversationId}/emails`);
+  return apiFetch(`/api/conversations/${conversationId}/emails?page=${page}`);
 }
 
 export async function fetchPersonEmails(

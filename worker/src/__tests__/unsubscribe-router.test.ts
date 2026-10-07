@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { exports } from "cloudflare:workers";
 import { applyMigrations, cleanDb, getDb } from "./helpers";
-import { signToken } from "../lib/unsubscribe-token";
+import { signToken, signUndoToken } from "../lib/unsubscribe-token";
 import { suppressions } from "../db/suppressions.schema";
 
 // Matches the binding in vitest.config.test.ts.
@@ -78,7 +78,7 @@ describe("public unsubscribe endpoints", () => {
         note: null,
         createdAt: Math.floor(Date.now() / 1000),
       });
-    const token = await signToken("alice@example.com", SECRET);
+    const token = await signUndoToken("alice@example.com", "s1", SECRET);
     const r = await exports.default.fetch(
       `http://localhost/api/unsubscribe/undo?token=${encodeURIComponent(token)}`,
       { method: "POST" },
@@ -93,13 +93,13 @@ describe("public unsubscribe endpoints", () => {
     expect(rows).toHaveLength(0);
   });
 
-  it("undo is idempotent if no row exists", async () => {
+  it("a normal unsubscribe token cannot undo even when no row exists", async () => {
     const token = await signToken("nobody@example.com", SECRET);
     const r = await exports.default.fetch(
       `http://localhost/api/unsubscribe/undo?token=${encodeURIComponent(token)}`,
       { method: "POST" },
     );
-    expect(r.status).toBe(200);
+    expect(r.status).toBe(401);
   });
 
   it("an unsubscribe token cannot remove an admin manual suppression", async () => {
@@ -118,8 +118,7 @@ describe("public unsubscribe endpoints", () => {
       `http://localhost/api/unsubscribe/undo?token=${encodeURIComponent(token)}`,
       { method: "POST" },
     );
-    expect(r.status).toBe(200);
-    expect((await r.json()).status).toBe("suppressed");
+    expect(r.status).toBe(401);
     expect(await getDb().query.suppressions.findMany()).toHaveLength(1);
   });
 
@@ -161,12 +160,13 @@ describe("public unsubscribe endpoints", () => {
   it("POST /unsubscribe/undo (bare, no /api prefix) deletes the row", async () => {
     const token = await signToken("alice@example.com", SECRET);
     // Insert first
-    await exports.default.fetch(
-      `http://localhost/unsubscribe?token=${encodeURIComponent(token)}`,
+    const optout = await exports.default.fetch(
+      `http://localhost/unsubscribe?token=${encodeURIComponent(token)}&source=user-link`,
       { method: "POST" },
     );
+    const undoToken = (await optout.json()).undoToken;
     const r = await exports.default.fetch(
-      `http://localhost/unsubscribe/undo?token=${encodeURIComponent(token)}`,
+      `http://localhost/unsubscribe/undo?token=${encodeURIComponent(undoToken)}`,
       { method: "POST" },
     );
     expect(r.status).toBe(200);

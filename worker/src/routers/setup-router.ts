@@ -4,6 +4,7 @@ import { users } from "../db/auth.schema";
 import { appSettings } from "../db/app-settings.schema";
 import { createAuth } from "../auth";
 import { json200Response } from "../lib/helpers";
+import { hashKey } from "../lib/crypto";
 import type { Variables } from "../variables";
 
 export const setupRouter = new OpenAPIHono<{
@@ -41,6 +42,7 @@ const SetupRequestSchema = z.object({
   name: z.string().min(1).max(100),
   email: z.string().email(),
   password: z.string().min(8).max(128),
+  bootstrapToken: z.string().max(128).optional(),
 });
 
 const SetupResponseSchema = z.object({
@@ -58,19 +60,24 @@ async function countUsers(db: Variables["db"]): Promise<number> {
 
 const SETUP_CLAIM_KEY = "__setup_claim";
 
-async function claimSetup(db: Variables["db"]): Promise<string | null> {
+async function claimSetup(
+  db: Variables["db"],
+  token: string,
+): Promise<string | null> {
   const now = Math.floor(Date.now() / 1000);
   const claim = `claim:${now}:${crypto.randomUUID()}`;
-  const inserted = await db
-    .insert(appSettings)
-    .values({
-      key: SETUP_CLAIM_KEY,
-      value: claim,
-      updatedAt: now,
-      updatedBy: null,
-    })
-    .onConflictDoNothing()
-    .returning({ key: appSettings.key });
+  const tokenHash = await hashKey(token);
+  // Authorization and winner selection share one atomic statement. Only an
+  // operator with D1 access can provision this short-lived authorization.
+  const inserted = await db.all<{ key: string }>(sql`
+    INSERT INTO app_settings (key, value, updated_at, updated_by)
+    SELECT ${SETUP_CLAIM_KEY}, ${claim}, ${now}, NULL
+    WHERE EXISTS (SELECT 1 FROM app_settings
+      WHERE key = '__setup_authorization' AND value = ${tokenHash}
+        AND updated_at > ${now})
+      AND NOT EXISTS (SELECT 1 FROM users)
+    ON CONFLICT(key) DO NOTHING RETURNING key
+  `);
   if (inserted.length > 0) return claim;
   // Never recover this claim by age. createUser is a separate durable side
   // effect, so an expired lease cannot prove a previous Worker did not create
@@ -156,7 +163,7 @@ setupRouter.openapi(createRouteDef, async (c) => {
 
   let setupClaim: string | null;
   try {
-    setupClaim = await claimSetup(db);
+    setupClaim = await claimSetup(db, c.req.valid("json").bootstrapToken ?? "");
   } catch (err) {
     if (String(err).includes("no such table: app_settings")) {
       return c.json(MIGRATION_REQUIRED_RESPONSE, 503);
@@ -164,7 +171,13 @@ setupRouter.openapi(createRouteDef, async (c) => {
     throw err;
   }
   if (!setupClaim) {
-    return c.json({ error: "Setup is already in progress or completed" }, 403);
+    return c.json(
+      {
+        error:
+          "A valid operator bootstrap token is required, or setup is already in progress",
+      },
+      403,
+    );
   }
 
   const { name, email, password } = c.req.valid("json");
@@ -211,6 +224,9 @@ setupRouter.openapi(createRouteDef, async (c) => {
   if (finalized.length === 0) {
     throw new Error("Setup claim was lost after administrator creation");
   }
+  await db
+    .delete(appSettings)
+    .where(eq(appSettings.key, "__setup_authorization"));
 
   return c.json({ success: true }, 200);
 });

@@ -25,7 +25,7 @@ purify.addHook("afterSanitizeAttributes", (node) => {
 // Inserted right after <head> so the email's own <style> still wins.
 const FRAME_HEAD =
   '<meta charset="utf-8">' +
-  "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src * data: blob:; style-src 'unsafe-inline'; font-src * data:\">" +
+  "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src 'self' data: blob:; style-src 'unsafe-inline'; font-src data:\">" +
   '<meta name="viewport" content="width=device-width">' +
   "<style>" +
   "html,body{margin:0}" +
@@ -36,6 +36,7 @@ const FRAME_HEAD =
 export function buildEmailFrameDoc(
   html: string,
   attachments: Attachment[] = [],
+  allowRemoteImages = false,
 ): string {
   // `cid:` references point at inline attachments; the inline route serves
   // them with the session cookie (the frame keeps the app's origin).
@@ -67,7 +68,10 @@ export function buildEmailFrameDoc(
     ADD_ATTR: ["target"],
   });
 
+  const head = allowRemoteImages
+    ? FRAME_HEAD.replace("img-src 'self'", "img-src 'self' https:")
+    : FRAME_HEAD;
   return clean.includes("<head>")
-    ? clean.replace("<head>", "<head>" + FRAME_HEAD)
-    : `<!doctype html><html><head>${FRAME_HEAD}</head><body>${clean}</body></html>`;
+    ? clean.replace("<head>", "<head>" + head)
+    : `<!doctype html><html><head>${head}</head><body>${clean}</body></html>`;
 }
