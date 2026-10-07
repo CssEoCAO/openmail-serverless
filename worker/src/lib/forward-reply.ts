@@ -17,6 +17,7 @@ import { escapeHtml } from "./interpolate";
 import { MAX_ATTACHMENTS } from "./multipart-send";
 import { attemptOutboxRow } from "./outbox";
 import { surfaceReplyTo } from "./queries/emails";
+import { reserveSendBudget } from "./resource-budget";
 import { sanitizeFilename } from "./sanitize-filename";
 
 /** 60-byte local part: nanoid + a 128-bit MAC, bound to the current destination. */
@@ -202,6 +203,7 @@ export async function handleForwardReply(
   ) {
     return reject("Forwarded reply content exceeds the storage limit");
   }
+  await reserveSendBudget(db, identity.email, 1);
   await cancelSequencesForPerson(db, email.personId);
   const now = Math.floor(Date.now() / 1000);
   const files = parsed.attachments.map((file) => {

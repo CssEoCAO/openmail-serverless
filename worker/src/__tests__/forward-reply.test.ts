@@ -21,6 +21,7 @@ import { outboxEmails } from "../db/outbox-emails.schema";
 import { senderIdentities } from "../db/sender-identities.schema";
 import { sentEmails } from "../db/sent-emails.schema";
 import { emails } from "../db/emails.schema";
+import { appSettings } from "../db/app-settings.schema";
 import { applyMigrations, cleanDb, getDb } from "./helpers";
 
 const bindings = {
@@ -328,6 +329,32 @@ describe("replying to a forwarded message", () => {
     );
     expect(send).not.toHaveBeenCalled();
     expect(await getDb().select().from(attachments)).toHaveLength(0);
+  });
+
+  it("enforces the inbox sending budget before storing attachments or queuing a reply", async () => {
+    const { send, replyAddress } = await startForward();
+    await getDb()
+      .insert(appSettings)
+      .values({
+        key: `__budget:send:${inbox}:86400`,
+        value: "1000",
+        updatedAt: Math.floor(Date.now() / 86_400_000) * 86400,
+      });
+    const upload = vi.spyOn(bindings.R2, "put");
+    await expect(
+      receive(
+        replyAddress,
+        personal,
+        "over-budget",
+        attachmentHeaders,
+        attachmentBody,
+      ),
+    ).rejects.toMatchObject({ status: 429 });
+    expect(send).not.toHaveBeenCalled();
+    expect(upload).not.toHaveBeenCalled();
+    expect(await getDb().select().from(attachments)).toHaveLength(0);
+    expect(await getDb().select().from(sentEmails)).toHaveLength(0);
+    expect(await getDb().select().from(outboxEmails)).toHaveLength(0);
   });
 
   it("relays only the authored HTML, removing Gmail attribution and forwarded content", async () => {
