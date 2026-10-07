@@ -55,24 +55,29 @@ export interface ParsedAttachment {
 export function trimQuotedText(text: string): string {
   const lines = text.split("\n");
   let cutIndex = lines.length;
+  const quoteHeader = /^(On .+ wrote|Em .+ escreveu):$/i;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
 
     // Line starts with ">" — quoted content
     if (line.startsWith(">")) {
-      // Check if previous non-empty line is a quote header like "On ... wrote:"
-      if (i > 0 && /^On .+ wrote:$/i.test(lines[i - 1].trim())) {
-        cutIndex = i - 1;
-      } else {
-        cutIndex = i;
-      }
+      // Preserve bottom/interleaved replies: truncating here would lose authored text.
+      if (
+        lines
+          .slice(i)
+          .some((line) => line.trim() && !line.trim().startsWith(">"))
+      )
+        return text.trimEnd();
+      let header = i - 1;
+      while (header >= 0 && !lines[header].trim()) header--;
+      cutIndex =
+        header >= 0 && quoteHeader.test(lines[header].trim()) ? header : i;
       break;
     }
 
     // Gmail/Apple-style separator
     if (
-      /^On .+ wrote:$/i.test(line) ||
       /^-{2,}\s*Original Message\s*-{2,}$/i.test(line) ||
       /^-{2,}\s*Forwarded message\s*-{2,}$/i.test(line) ||
       line === "________________________________________"
@@ -93,20 +98,34 @@ export function trimQuotedText(text: string): string {
  * - Generic: elements with class containing "quote" or "moz-cite-prefix"
  */
 export function trimQuotedHtml(html: string): string {
+  // ponytail: marker-based trimming; keep bottom replies intact. Use a DOM parser
+  // if removing quotes interleaved with authored HTML becomes necessary.
+  const cut = (value: string, marker: RegExp) => {
+    const at = value.search(marker);
+    if (at < 0) return value;
+    const tail = value.slice(at);
+    const end = tail.toLowerCase().lastIndexOf("</blockquote>");
+    const after = end < 0 ? "" : tail.slice(end + "</blockquote>".length);
+    const visible = after.replace(/<[^>]*>/g, "").replace(/&nbsp;/gi, " ");
+    return visible.trim() ? value : value.slice(0, at);
+  };
   // Gmail quote block
-  let trimmed = html.replace(/<div\s+class="gmail_quote"[\s\S]*$/i, "");
+  let trimmed = cut(
+    html,
+    /<div\b[^>]*\bclass\s*=\s*["'][^"']*\bgmail_quote\b[^"']*["']/i,
+  );
 
   // Yahoo quote header + blockquote
-  trimmed = trimmed.replace(/<div\s+id="yahoo_quoted_[\s\S]*$/i, "");
+  trimmed = cut(trimmed, /<div\s+id="yahoo_quoted_/i);
 
   // Outlook-style "Original Message" separator and everything after
-  trimmed = trimmed.replace(
-    /<div\s[^>]*style="border:none;border-top:solid #[A-Fa-f0-9]+ 1\.0pt[\s\S]*$/i,
-    "",
+  trimmed = cut(
+    trimmed,
+    /<div\s[^>]*style="border:none;border-top:solid #[A-Fa-f0-9]+ 1\.0pt/i,
   );
 
   // Generic blockquote at the end (Apple Mail, Thunderbird)
-  trimmed = trimmed.replace(/<div\s+class="moz-cite-prefix"[\s\S]*$/i, "");
+  trimmed = cut(trimmed, /<div\s+class="moz-cite-prefix"/i);
 
   return trimmed.trimEnd();
 }

@@ -15,6 +15,7 @@ function params(
   over: Partial<BuildForwardMessageParams> = {},
 ): BuildForwardMessageParams {
   return {
+    replyAddress: "reply+signed@acme.com",
     inbox: "support@acme.com",
     forwardTo: "boss@outlook.com",
     inboxDisplayName: "Acme Support",
@@ -115,9 +116,9 @@ describe("buildForwardMessage — envelope rewriting", () => {
     expect(message.from).toContain("jane@example.com (via Acme Support)");
   });
 
-  it("sets Reply-To to the original sender so replies reach them", () => {
+  it("sets Reply-To to the signed relay so replies use the inbox identity", () => {
     const { message } = ok();
-    expect(message.headers?.["Reply-To"]).toBe("jane@example.com");
+    expect(message.headers?.["Reply-To"]).toBe("reply+signed@acme.com");
   });
 
   it("addresses the forward to the configured destination, lowercased", () => {

@@ -126,7 +126,10 @@ How the forwarded copy looks:
   (`"Jane Customer (via Acme Support)" <support@acme.com>`). It cannot keep the
   original `From:` — sending as `jane@example.com` from your infrastructure would
   fail SPF and DMARC and get filtered harder than the block being avoided.
-- **Reply-To** the original sender, so replying reaches the customer.
+- **Reply-To** a signed `reply+...` address on the inbox domain. Reply from the
+  configured personal mailbox and saasmail sends it as the original inbox,
+  preserving the conversation and recording it in Sent. New forwards include
+  this address; copies delivered before this change keep their old Reply-To.
 - Original `From` / `Date` / `Subject` / `Cc` and the SPF/DKIM/DMARC verdicts are
   restated in a header block at the top of the body.
 - Attachments are included, up to your provider's size ceiling; anything too large
@@ -140,6 +143,22 @@ and duplicate deliveries are never forwarded. There is no retry — failures are
 logged. Loops are prevented three ways: an inbox can't forward to itself, can't
 forward to another inbox on the same instance, and any message already carrying the
 `X-SaaSMail-Forwarded-For` header is never forwarded again.
+
+Replies require catch-all routing to this Worker on the inbox domain and the
+existing `BETTER_AUTH_SECRET`. The signed address is bound to the stored message,
+inbox and current forwarding destination. Both the envelope sender and visible
+From must match that destination, with an aligned Cloudflare DMARC pass. Turning
+forwarding off or changing its destination invalidates old reply addresses.
+Automatic replies and messages without a Message-ID are rejected. Personal To/Cc
+and Reply-To cannot override recipients: the reply goes only to the original
+message's Reply-To (or sender), with the original inbox as From and Reply-To.
+
+Replies use the existing durable outbox, including retry and failure status.
+Concurrent deliveries with the same Message-ID produce one sent record and one
+outbox job. Attachments are persisted before delivery; oversized replies are
+rejected as a whole. Quoted history is trimmed where recognizable; ambiguous
+bottom replies retain their context to avoid discarding the authored answer.
+No additional database migration, secret or provider is needed.
 
 ### Email Templates
 

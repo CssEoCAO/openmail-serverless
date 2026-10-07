@@ -1,4 +1,5 @@
 import { createEmailSender } from "./email-sender";
+import { forwardReplyAddress } from "./forward-reply";
 import { encodeDisplayName, sanitizeHeaderValue } from "./format-from-address";
 import type {
   SendEmailAttachment,
@@ -31,7 +32,7 @@ import type {
  * `From:` — sending as `customer@example.com` from our infrastructure fails SPF
  * and has no DKIM signature for that domain, so it fails DMARC and gets filtered
  * harder than the block we're routing around. Instead we send as the inbox, put
- * the real sender in `Reply-To`, and restate the original envelope in a header
+ * a signed conversation reply alias in `Reply-To`, and restate the original envelope in a header
  * block at the top of the body, the same way "forward as new message" works in
  * any mail client.
  */
@@ -51,7 +52,7 @@ export const FORWARD_LOOP_HEADER = "X-SaaSMail-Forwarded-For";
 export const FORWARD_ORIGINAL_MESSAGE_ID_HEADER =
   "X-SaaSMail-Original-Message-Id";
 
-/** The real sender, preserved as a header as well as in Reply-To. */
+/** The real sender, preserved as a trace header. */
 export const FORWARD_ORIGINAL_FROM_HEADER = "X-SaaSMail-Original-From";
 
 export type ForwardSkipReason =
@@ -65,6 +66,8 @@ export type BuildForwardResult =
   | { ok: false; reason: ForwardSkipReason };
 
 export interface BuildForwardMessageParams {
+  /** Signed alias that relays a personal reply through the original inbox. */
+  replyAddress: string;
   /** Canonical (lowercased) inbox address the mail arrived at. */
   inbox: string;
   /** Configured destination, or null when forwarding is off for this inbox. */
@@ -139,7 +142,7 @@ export function buildForwardMessage(
   );
 
   // Send AS the inbox so the message authenticates on our own domain, but make
-  // the real sender obvious in the From display name and replyable via Reply-To.
+  // the real sender obvious in the From display name.
   const inboxLabel = params.inboxDisplayName || inbox;
   const fromLabel = params.from.name
     ? `${params.from.name} (via ${inboxLabel})`
@@ -196,6 +199,7 @@ export function buildForwardMessage(
   const htmlHeaderBlock = [
     `<div style="font:13px/1.5 -apple-system,Segoe UI,sans-serif;color:#555;border-left:3px solid #ddd;padding:8px 12px;margin:0 0 16px">`,
     `<div style="font-weight:600;margin-bottom:6px">Forwarded by saasmail</div>`,
+    `<div>Ao responder este e-mail, sua resposta será enviada por ${escapeHtml(inbox)}.</div>`,
     ...headerLines.map(
       ([k, v]) =>
         `<div><span style="color:#888">${escapeHtml(k)}:</span> ${escapeHtml(v)}</div>`,
@@ -208,6 +212,7 @@ export function buildForwardMessage(
 
   const textHeaderBlock = [
     "---------- Forwarded by saasmail ----------",
+    `Ao responder este e-mail, sua resposta será enviada por ${inbox}.`,
     ...headerLines.map(([k, v]) => `${k}: ${v}`),
     ...noteLines,
     "",
@@ -243,7 +248,8 @@ export function buildForwardMessage(
       // redirect and mail people who never opted into it. They appear in the
       // header block only.
       headers: {
-        "Reply-To": sanitizeHeaderValue(params.from.address),
+        "Reply-To": sanitizeHeaderValue(params.replyAddress),
+        "X-Auto-Response-Suppress": "All",
         [FORWARD_LOOP_HEADER]: inbox,
         [FORWARD_ORIGINAL_FROM_HEADER]: sanitizeHeaderValue(
           params.from.address,
@@ -263,8 +269,9 @@ export function buildForwardMessage(
 
 export interface ForwardInboundParams extends Omit<
   BuildForwardMessageParams,
-  "knownInboxes" | "maxAttachmentBytes"
+  "knownInboxes" | "maxAttachmentBytes" | "replyAddress"
 > {
+  emailId: string;
   knownInboxes: string[];
 }
 
@@ -293,6 +300,12 @@ export function forwardInbound(
         const sender = createEmailSender(env);
         const built = buildForwardMessage({
           ...params,
+          replyAddress: await forwardReplyAddress(
+            params.emailId,
+            params.inbox,
+            params.forwardTo!,
+            env.BETTER_AUTH_SECRET,
+          ),
           maxAttachmentBytes: sender.maxAttachmentBytes(),
         });
 

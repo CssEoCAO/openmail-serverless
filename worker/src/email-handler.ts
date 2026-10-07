@@ -21,6 +21,7 @@ import { sanitizeFilename } from "./lib/sanitize-filename";
 import { buildWebhookPayload, deliverWebhook } from "./lib/webhook-delivery";
 import { forwardInbound } from "./lib/inbound-forward";
 import { fitsD1EmailTextBudget } from "./lib/email-limits";
+import { handleForwardReply } from "./lib/forward-reply";
 
 const MAX_ATTACHMENTS = 50;
 const MAX_TOTAL_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25 MB
@@ -39,8 +40,9 @@ export async function handleEmail(
     return;
   }
 
-  const db = drizzle(env.DB, { schema, logger: true });
+  const db = drizzle(env.DB, { schema });
   const parsed = await parseEmail(message);
+  if (await handleForwardReply(db, env, ctx, message, parsed)) return;
   const now = Math.floor(Date.now() / 1000);
 
   // Canonicalize inbox addresses to lowercase before storage so casing
@@ -485,6 +487,7 @@ export async function handleEmail(
     (r) => r.email.trim().toLowerCase() === recipientCanonical,
   );
   forwardInbound(env, ctx, {
+    emailId,
     inbox: recipientCanonical,
     forwardTo: inboxIdentity?.forwardTo ?? null,
     inboxDisplayName: inboxIdentity?.displayName ?? null,

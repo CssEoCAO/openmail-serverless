@@ -34,9 +34,26 @@ describe("trimQuotedText", () => {
     expect(trimQuotedText("")).toBe("");
   });
 
+  it("removes Portuguese reply attribution only when followed by a quoted block", () => {
+    expect(
+      trimQuotedText(
+        "Resolvido.\n\nEm 07/10, Pessoa escreveu:\n\n> Mensagem anterior",
+      ),
+    ).toBe("Resolvido.");
+    const authored =
+      "Bom dia.\nEm resposta ao que o senhor escreveu:\nO prazo e 30 dias.";
+    expect(trimQuotedText(authored)).toBe(authored);
+  });
+
   it("handles text that is entirely quoted", () => {
     const text = "> This is all quoted\n> Second line";
     expect(trimQuotedText(text)).toBe("");
+  });
+
+  it("preserves a reply written below the quoted email", () => {
+    const text =
+      "Em 07/10, Pessoa escreveu:\n> Original\n\nMinha resposta esta aqui.";
+    expect(trimQuotedText(text)).toBe(text);
   });
 });
 
@@ -52,6 +69,14 @@ describe("trimQuotedHtml", () => {
     expect(trimQuotedHtml(html)).toBe("<p>Thanks!</p>");
   });
 
+  it("removes Gmail quotes with additional classes and attributes", () => {
+    expect(
+      trimQuotedHtml(
+        '<p>Thanks!</p><div dir="ltr" class="gmail_quote gmail_quote_container">Old content</div>',
+      ),
+    ).toBe("<p>Thanks!</p>");
+  });
+
   it("removes Mozilla cite prefix", () => {
     const html =
       '<p>Got it.</p><div class="moz-cite-prefix">On 2024-01-01 wrote:</div><blockquote>Quoted</blockquote>';
@@ -60,6 +85,12 @@ describe("trimQuotedHtml", () => {
 
   it("handles empty HTML", () => {
     expect(trimQuotedHtml("")).toBe("");
+  });
+
+  it("preserves authored HTML after a quoted block", () => {
+    const html =
+      '<div class="gmail_quote"><blockquote>Original</blockquote></div><p>Resposta abaixo.</p>';
+    expect(trimQuotedHtml(html)).toBe(html);
   });
 
   it("preserves HTML with no quote markers", () => {

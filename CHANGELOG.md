@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Replies to new forwarded messages can be sent from the configured personal
+  mailbox through the original inbox identity, with conversation history,
+  attachments, authenticated signed reply addresses and outbox deduplication.
+
 ### Security
 
 - Global blocklist operations and sequence-definition mutations now require an admin. Members retain read access to sequence options and inbox-scoped enrollment, and `GET /api/people/grouped` now applies that same inbox scope to every aggregate and filter so a shared contact cannot reveal another inbox's address, counts, unread state, or attachments.
