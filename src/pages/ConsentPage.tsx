@@ -37,9 +37,21 @@ export default function ConsentPage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<"allowed" | "denied" | null>(null);
   const [clientName, setClientName] = useState<string | null>(null);
+  const [clientUri, setClientUri] = useState<string | null>(null);
 
   const clientId = searchParams.get("client_id");
   const scopes = (searchParams.get("scope") ?? "").split(" ").filter(Boolean);
+  const redirectUri = searchParams.get("redirect_uri") ?? "";
+  const normalizedOrigin = (value: string) => {
+    try {
+      const url = new URL(value);
+      return url.origin === "null"
+        ? `${url.protocol}//${url.host}${url.pathname}`
+        : url.origin;
+    } catch {
+      return "Invalid or missing destination";
+    }
+  };
 
   // Show the registered application name rather than an opaque client id —
   // a user cannot make a meaningful trust decision about a random string.
@@ -52,9 +64,12 @@ export default function ConsentPage() {
         const res = (await authClient.$fetch(
           `/oauth2/public-client?client_id=${encodeURIComponent(clientId)}`,
           { method: "GET" },
-        )) as { data?: { name?: string; client_name?: string } };
+        )) as {
+          data?: { name?: string; client_name?: string; client_uri?: string };
+        };
         const name = res.data?.name ?? res.data?.client_name;
         if (!cancelled && name) setClientName(name);
+        if (!cancelled) setClientUri(res.data?.client_uri ?? null);
       } catch {
         // Fall back to the client id.
       }
@@ -141,6 +156,28 @@ export default function ConsentPage() {
               {clientId}
             </p>
           )}
+        </div>
+
+        <div className="mb-4 rounded-md bg-amber-500/10 p-3 text-xs text-amber-100 ring-1 ring-amber-400/30">
+          <p className="font-semibold">Unverified application</p>
+          <p>
+            The name and website are supplied by the application. They do not
+            verify its publisher.
+          </p>
+          <p className="mt-2 break-all">
+            Authorization destination: {normalizedOrigin(redirectUri)}
+          </p>
+          <p className="mt-1 break-all">
+            Application website:{" "}
+            {clientUri ? normalizedOrigin(clientUri) : "Not provided"}
+          </p>
+          {clientUri &&
+            normalizedOrigin(clientUri) !== normalizedOrigin(redirectUri) && (
+              <p className="mt-2">
+                The website and authorization destination differ. Confirm both
+                before continuing.
+              </p>
+            )}
         </div>
 
         {error && (

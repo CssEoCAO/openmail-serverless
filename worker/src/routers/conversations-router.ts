@@ -6,6 +6,7 @@ import { attachments } from "../db/attachments.schema";
 import { people } from "../db/people.schema";
 import { json200Response } from "../lib/helpers";
 import { parseCc } from "../lib/queries/emails";
+import { inboxFilter } from "../lib/inbox-permissions";
 import { EmailSchema } from "./emails-router";
 import type { Variables } from "../variables";
 
@@ -29,15 +30,18 @@ const ConversationEmailsResponseSchema = z.object({
   emails: z.array(EmailSchema),
 });
 
-// GET /api/conversations/{id}/emails — full timeline for a group conversation.
+// GET /api/conversations/{id}/emails — bounded page, chronological within page.
 const listConversationEmailsRoute = createRoute({
   method: "get",
   path: "/{id}/emails",
   tags: ["Conversations"],
   description:
-    "List all emails in a group conversation, oldest first, with participants metadata. Each email includes attachment metadata when present.",
+    "List a page of up to 10 messages, newest page first and chronological within each page, with participants and attachment metadata.",
   request: {
     params: z.object({ id: z.string() }),
+    query: z.object({
+      page: z.coerce.number().int().min(1).max(100000).default(1),
+    }),
   },
   responses: {
     ...json200Response(
@@ -51,6 +55,23 @@ conversationsRouter.openapi(listConversationEmailsRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
   const allowed = c.get("allowedInboxes")!;
+  const { page } = c.req.valid("query");
+  const receivedWhere = and(
+    eq(emails.conversationId, id),
+    inboxFilter(allowed, emails.recipient),
+  );
+  const sentWhere = and(
+    eq(sentEmails.conversationId, id),
+    inboxFilter(allowed, sentEmails.fromAddress),
+  );
+  const keys = await db.all<{ id: string; type: string }>(sql`
+    SELECT ${emails.id} AS id, 'received' AS type, ${emails.receivedAt} AS timestamp
+    FROM ${emails} WHERE ${receivedWhere}
+    UNION ALL
+    SELECT ${sentEmails.id} AS id, 'sent' AS type, ${sentEmails.sentAt} AS timestamp
+    FROM ${sentEmails} WHERE ${sentWhere}
+    ORDER BY timestamp DESC, id DESC, type DESC LIMIT 10 OFFSET ${(page - 1) * 10}
+  `);
 
   // Pull all received + sent emails for this conversation.
   const received = await db
@@ -66,7 +87,15 @@ conversationsRouter.openapi(listConversationEmailsRoute, async (c) => {
       timestamp: emails.receivedAt,
     })
     .from(emails)
-    .where(eq(emails.conversationId, id));
+    .where(
+      and(
+        receivedWhere,
+        inArray(
+          emails.id,
+          keys.filter((k) => k.type === "received").map((k) => k.id),
+        ),
+      ),
+    );
 
   const sent = await db
     .select({
@@ -81,15 +110,23 @@ conversationsRouter.openapi(listConversationEmailsRoute, async (c) => {
       timestamp: sentEmails.sentAt,
     })
     .from(sentEmails)
-    .where(eq(sentEmails.conversationId, id));
+    .where(
+      and(
+        sentWhere,
+        inArray(
+          sentEmails.id,
+          keys.filter((k) => k.type === "sent").map((k) => k.id),
+        ),
+      ),
+    );
 
-  if (received.length === 0 && sent.length === 0) {
+  if (received.length === 0 && sent.length === 0 && page === 1) {
     return c.json({ error: "Conversation not found" }, 404);
   }
 
   // Scope check: at least one email in this conversation must reference an
   // inbox the caller is allowed to see. Admin sees everything.
-  if (!allowed.isAdmin) {
+  if (!allowed.isAdmin && keys.length > 0) {
     const allowedSet = new Set(allowed.inboxes);
     const inScope =
       received.some((e) => allowedSet.has(e.recipient)) ||

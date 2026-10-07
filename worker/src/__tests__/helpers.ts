@@ -84,6 +84,7 @@ export async function applyMigrations() {
     `CREATE INDEX IF NOT EXISTS outbox_sent_email_idx ON outbox_emails(sent_email_id)`,
     `CREATE INDEX IF NOT EXISTS outbox_sequence_email_idx ON outbox_emails(sequence_email_id)`,
     `CREATE TRIGGER IF NOT EXISTS push_subscriptions_user_cap BEFORE INSERT ON push_subscriptions WHEN (SELECT COUNT(*) FROM push_subscriptions WHERE user_id = NEW.user_id) >= 10 BEGIN SELECT RAISE(ABORT, 'push subscription limit'); END`,
+    `CREATE TRIGGER IF NOT EXISTS oauth_clients_cap BEFORE INSERT ON oauth_clients WHEN (SELECT COUNT(*) FROM oauth_clients) >= 500 BEGIN SELECT RAISE(ABORT, 'OAuth client capacity reached'); END`,
   ];
 
   for (const sql of statements) {

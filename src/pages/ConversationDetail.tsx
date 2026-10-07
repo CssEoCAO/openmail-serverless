@@ -51,19 +51,21 @@ export default function ConversationDetail({
 }: ConversationDetailProps) {
   const [data, setData] = useState<ConversationDetailData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [conversation.id]);
   const [htmlPreviewEmail, setHtmlPreviewEmail] = useState<Email | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   function refetch() {
-    fetchConversationEmails(conversation.id).then(setData);
+    fetchConversationEmails(conversation.id, page).then(setData);
   }
 
   useEffect(() => {
     setLoading(true);
-    fetchConversationEmails(conversation.id)
+    fetchConversationEmails(conversation.id, page)
       .then(setData)
       .finally(() => setLoading(false));
-  }, [conversation.id]);
+  }, [conversation.id, page]);
 
   useEffect(() => {
     if (refreshKey) refetch();
@@ -172,6 +174,18 @@ export default function ConversationDetail({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 items-center justify-between px-4 py-2 text-sm">
+        <button disabled={page === 1} onClick={() => setPage(page - 1)}>
+          Newer messages
+        </button>
+        <span>Page {page}</span>
+        <button
+          disabled={data.emails.length < 10}
+          onClick={() => setPage(page + 1)}
+        >
+          Older messages
+        </button>
+      </div>
       {/* Conversation header — overlapping avatars + comma-separated names */}
       <div className="shrink-0 border-b border-border bg-card px-4 pb-2.5 pt-3">
         <div className="flex items-center justify-between gap-3">

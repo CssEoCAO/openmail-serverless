@@ -23,6 +23,7 @@ import { generateMessageId } from "./message-id";
 import type { ParsedFile } from "./multipart-send";
 import {
   finalizeSuccessfulOutbox,
+  reserveOutboxBudget,
   sendViaOutbox,
   type OutboxOutcome,
 } from "./outbox";
@@ -340,6 +341,14 @@ export async function sendEmail(
   }
   const formattedFrom = await formatFromAddress(db, fromAddress);
   const internalDomains = await fetchInternalDomains(db);
+  const id = nanoid();
+  const budgetReservation = await reserveOutboxBudget(
+    db,
+    fromAddress,
+    to,
+    cc,
+    id,
+  );
   // A direct/manual attempt supersedes an active drip. Cancel before the
   // durable outbox/provider boundary so a Worker crash after acceptance can
   // never leave the automated sequence running alongside the manual message.
@@ -360,7 +369,6 @@ export async function sendEmail(
         }))
       : undefined;
 
-  const id = nanoid();
   // Persist retry material before the first provider attempt. If the inline
   // call is transient, the outbox processor can immediately reload every
   // attachment instead of retrying a stripped-down message.
@@ -378,6 +386,7 @@ export async function sendEmail(
       env,
       sender,
       sentEmailId: id,
+      budgetReservation,
       fromAddress,
       from: formattedFrom,
       to,
@@ -683,6 +692,14 @@ export async function replyToEmail(
     fromAddress,
     externalsReply,
   );
+  const id = nanoid();
+  const budgetReservation = await reserveOutboxBudget(
+    db,
+    fromAddress,
+    toAddress,
+    cc,
+    id,
+  );
   // Fail closed before transport: a manual reply supersedes an existing drip
   // even if the provider later rejects or queues the attempt for retry.
   await cancelSequencesForEmails(db, externalsReply);
@@ -692,7 +709,6 @@ export async function replyToEmail(
   // with transactional: true. That bypasses the suppression list AND skips
   // the unsubscribe footer / List-Unsubscribe header (this is a reply, not
   // a bulk send).
-  const id = nanoid();
   const attachmentIds = await persistSentAttachments(db, env, id, files, now);
   // Agendar e' decidido AQUI, no servidor, e nao aceita instante vindo do cliente: um
   // horario do browser poderia cair de madrugada, no passado, ou em minuto quebrado (o
@@ -707,6 +723,7 @@ export async function replyToEmail(
       env,
       sender,
       sentEmailId: id,
+      budgetReservation,
       fromAddress,
       from: formattedFrom,
       to: toAddress,

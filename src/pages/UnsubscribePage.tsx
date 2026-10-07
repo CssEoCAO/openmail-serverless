@@ -26,6 +26,7 @@ export default function UnsubscribePage() {
   const token = params.get("token") ?? "";
   const [state, setState] = useState<State>({ kind: "loading" });
   const [undoLoading, setUndoLoading] = useState(false);
+  const [undoToken, setUndoToken] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -37,9 +38,14 @@ export default function UnsubscribePage() {
     fetch(url, { method: "POST" })
       .then(async (r) => {
         if (!r.ok) throw new Error("invalid");
-        const body = (await r.json()) as { email: string; status: string };
+        const body = (await r.json()) as {
+          email: string;
+          status: string;
+          undoToken?: string;
+        };
         if (cancelled) return;
         setState({ kind: "suppressed", email: body.email });
+        setUndoToken(body.undoToken ?? null);
       })
       .catch(() => {
         if (cancelled) return;
@@ -51,12 +57,15 @@ export default function UnsubscribePage() {
   }, [token]);
 
   async function handleResubscribe() {
-    if (!token) return;
+    if (!undoToken) return;
     setUndoLoading(true);
     try {
-      const url = `/api/unsubscribe/undo?token=${encodeURIComponent(token)}`;
+      const url = `/api/unsubscribe/undo?token=${encodeURIComponent(undoToken)}`;
       const r = await fetch(url, { method: "POST" });
-      if (!r.ok) return;
+      if (!r.ok) {
+        setUndoToken(null);
+        return;
+      }
       const body = (await r.json()) as { email: string; status: string };
       setState({ kind: "subscribed", email: body.email });
     } catch {
@@ -121,7 +130,7 @@ export default function UnsubscribePage() {
                   type="button"
                   variant="outline"
                   onClick={handleResubscribe}
-                  disabled={undoLoading}
+                  disabled={undoLoading || !undoToken}
                 >
                   {undoLoading ? "Updating…" : "Re-subscribe"}
                 </Button>

@@ -21,7 +21,7 @@ export const OAUTH_SCOPES = [
 ];
 
 export function createAuth(env?: CloudflareBindings) {
-  const db = env ? drizzle(env.DB, { schema, logger: true }) : ({} as any);
+  const db = env ? drizzle(env.DB, { schema }) : ({} as any);
   const baseURL = env?.BASE_URL || "http://localhost:8080";
 
   // Fail closed rather than silently signing with better-auth's published

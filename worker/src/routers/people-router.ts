@@ -748,7 +748,7 @@ peopleRouter.openapi(bulkMarkReadRoute, async (c) => {
   const recipientScope = (() => {
     if (recipient) {
       if (!isInboxAllowed(allowed, recipient)) {
-        return null; // not permitted
+        return []; // denied is an empty scope, never an unrestricted one
       }
       return [recipient];
     }

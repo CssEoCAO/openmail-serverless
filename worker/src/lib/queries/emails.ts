@@ -154,6 +154,32 @@ export async function listPersonEmails(
   const recvScope = inboxFilter(allowed, emails.recipient);
   if (recvScope) receivedConditions.push(recvScope);
 
+  const sentConditions: any[] = [eq(sentEmails.personId, personId)];
+  if (q) sentConditions.push(like(sentEmails.subject, `%${escapeLike(q)}%`));
+  if (recipient) sentConditions.push(eq(sentEmails.fromAddress, recipient));
+  const sentScope = inboxFilter(allowed, sentEmails.fromAddress);
+  if (sentScope) sentConditions.push(sentScope);
+  if (
+    !Number.isSafeInteger(page) ||
+    page < 1 ||
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > 10
+  )
+    throw new RangeError("Invalid timeline page (maximum 10 messages)");
+  // Page only keys in SQL. No body or attachment from another page is read
+  // into the Worker, including for large offsets and mixed sent/received mail.
+  const keys = await db.all<{ id: string; type: string }>(sql`
+    SELECT ${emails.id} AS id, 'received' AS type, ${emails.receivedAt} AS timestamp
+    FROM ${emails} WHERE ${and(...receivedConditions)}
+    UNION ALL
+    SELECT ${sentEmails.id} AS id, 'sent' AS type, ${sentEmails.sentAt} AS timestamp
+    FROM ${sentEmails} WHERE ${and(...sentConditions)}
+    ORDER BY timestamp DESC, id DESC, type DESC LIMIT ${limit} OFFSET ${offset}
+  `);
+  const recvKeys = keys.filter((k) => k.type === "received").map((k) => k.id);
+  const sentKeys = keys.filter((k) => k.type === "sent").map((k) => k.id);
+
   const received = await db
     .select({
       id: emails.id,
@@ -166,19 +192,8 @@ export async function listPersonEmails(
       recipient: emails.recipient,
     })
     .from(emails)
-    .where(and(...receivedConditions))
+    .where(and(...receivedConditions, inArray(emails.id, recvKeys)))
     .orderBy(desc(emails.receivedAt));
-
-  // Build conditions for sent emails
-  const sentConditions: any[] = [eq(sentEmails.personId, personId)];
-  if (q) {
-    sentConditions.push(like(sentEmails.subject, `%${escapeLike(q)}%`));
-  }
-  if (recipient) {
-    sentConditions.push(eq(sentEmails.fromAddress, recipient));
-  }
-  const sentScope = inboxFilter(allowed, sentEmails.fromAddress);
-  if (sentScope) sentConditions.push(sentScope);
 
   const sent = await db
     .select({
@@ -193,7 +208,7 @@ export async function listPersonEmails(
       status: sentEmails.status,
     })
     .from(sentEmails)
-    .where(and(...sentConditions))
+    .where(and(...sentConditions, inArray(sentEmails.id, sentKeys)))
     .orderBy(desc(sentEmails.sentAt));
 
   const personRow = await db
@@ -237,7 +252,13 @@ export async function listPersonEmails(
     })),
   ].sort((a, b) => b.timestamp - a.timestamp);
 
-  const paginated = merged.slice(offset, offset + limit);
+  const keyOrder = new Map(
+    keys.map((key, index) => [`${key.type}:${key.id}`, index]),
+  );
+  const paginated = merged.sort(
+    (a, b) =>
+      keyOrder.get(`${a.type}:${a.id}`)! - keyOrder.get(`${b.type}:${b.id}`)!,
+  );
 
   // Get attachment counts for received emails
   const receivedIds = paginated

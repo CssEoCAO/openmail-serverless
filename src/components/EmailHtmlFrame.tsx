@@ -29,9 +29,10 @@ export default function EmailHtmlFrame({
   const ref = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(0);
   const [expanded, setExpanded] = useState(false);
+  const [imagesFor, setImagesFor] = useState<string | null>(null);
   const doc = useMemo(
-    () => buildEmailFrameDoc(html, attachments),
-    [html, attachments],
+    () => buildEmailFrameDoc(html, attachments, imagesFor === html),
+    [html, attachments, imagesFor],
   );
 
   useEffect(() => {
@@ -69,6 +70,7 @@ export default function EmailHtmlFrame({
 
   return (
     <div className={className}>
+      {imagesFor !== html && <button type="button" className="px-3 py-1.5 text-xs text-accent hover:underline" onClick={() => setImagesFor(html)}>Carregar imagens externas</button>}
       <div className="relative">
         <iframe
           ref={ref}

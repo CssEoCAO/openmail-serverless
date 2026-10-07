@@ -20,6 +20,7 @@ export default function OnboardingPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [bootstrapToken, setBootstrapToken] = useState("");
   const [error, setError] = useState("");
   const [migrationRequired, setMigrationRequired] =
     useState<SetupStatusResponse | null>(null);
@@ -55,7 +56,7 @@ export default function OnboardingPage() {
       const res = await fetch("/api/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, bootstrapToken }),
       });
       if (!res.ok) {
         const data = (await res
@@ -66,7 +67,6 @@ export default function OnboardingPage() {
           setMigrationRequired(data);
           setStatus("migration-required");
         }
-        if (res.status === 403) setStatus("unavailable");
         return;
       }
       const result = await signIn.emailAndPassword({ email, password });
@@ -148,6 +148,26 @@ export default function OnboardingPage() {
           </p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <label
+              htmlFor="bootstrap-token"
+              className="text-xs font-medium text-white/50"
+            >
+              Operator bootstrap token
+            </label>
+            <input
+              id="bootstrap-token"
+              type="password"
+              autoComplete="off"
+              required
+              value={bootstrapToken}
+              onChange={(e) => setBootstrapToken(e.target.value)}
+              className={INPUT_CLASS}
+            />
+            <p className="text-xs text-white/50">
+              Ask the operator for the temporary setup token.
+            </p>
+          </div>
           <div className="space-y-1.5">
             <label
               htmlFor="onboarding-name"

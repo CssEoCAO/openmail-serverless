@@ -9,6 +9,8 @@ import {
 } from "./helpers";
 import { users } from "../db/auth.schema";
 import { appSettings } from "../db/app-settings.schema";
+import { hashKey } from "../lib/crypto";
+const BOOTSTRAP = "test-operator-bootstrap-token-not-a-production-secret";
 
 describe("setup router", () => {
   beforeAll(async () => {
@@ -17,6 +19,13 @@ describe("setup router", () => {
 
   beforeEach(async () => {
     await cleanDb();
+    await getDb()
+      .insert(appSettings)
+      .values({
+        key: "__setup_authorization",
+        value: await hashKey(BOOTSTRAP),
+        updatedAt: Math.floor(Date.now() / 1000) + 900,
+      });
   });
 
   describe("GET /api/setup/status", () => {
@@ -63,6 +72,7 @@ describe("setup router", () => {
         method: "POST",
         body: JSON.stringify({
           name: "Admin User",
+          bootstrapToken: BOOTSTRAP,
           email: "admin@example.com",
           password: "securepassword123",
         }),
@@ -116,6 +126,7 @@ describe("setup router", () => {
           method: "POST",
           body: JSON.stringify({
             name: "Admin",
+            bootstrapToken: BOOTSTRAP,
             email,
             password: "securepassword123",
           }),

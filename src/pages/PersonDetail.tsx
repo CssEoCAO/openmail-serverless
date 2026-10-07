@@ -126,6 +126,8 @@ export default function PersonDetail({
   const navigate = useNavigate();
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [person.id]);
   const [enrollModalOpen, setEnrollModalOpen] = useState(false);
   const [enrollmentInfo, setEnrollmentInfo] =
     useState<PersonEnrollmentInfo | null>(null);
@@ -179,7 +181,7 @@ export default function PersonDetail({
   }
 
   function refetchEmails() {
-    fetchPersonEmails(person.id).then((res) => {
+    fetchPersonEmails(person.id, { page }).then((res) => {
       setEmails(res.emails);
       setInboxModeMap(
         new Map(res.inboxes.map((i) => [i.email, i.displayMode])),
@@ -192,7 +194,7 @@ export default function PersonDetail({
     setReplyToEmailId(null);
     setExpandedOlder({});
     setActiveInbox(null);
-    fetchPersonEmails(person.id)
+    fetchPersonEmails(person.id, { page })
       .then((res) => {
         setEmails(res.emails);
         setInboxModeMap(
@@ -200,7 +202,7 @@ export default function PersonDetail({
         );
       })
       .finally(() => setLoading(false));
-  }, [person.id]);
+  }, [person.id, page]);
 
   useEffect(() => {
     if (refreshKey) refetchEmails();
@@ -411,6 +413,15 @@ export default function PersonDetail({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 items-center justify-between px-4 py-2 text-sm">
+        <button disabled={page === 1} onClick={() => setPage(page - 1)}>
+          Newer messages
+        </button>
+        <span>Page {page}</span>
+        <button disabled={emails.length < 10} onClick={() => setPage(page + 1)}>
+          Older messages
+        </button>
+      </div>
       {/* Person header — name + email + meta on a single visual block */}
       <div className="shrink-0 border-b border-border bg-card px-4 pb-2.5 pt-3">
         <div className="flex items-center justify-between gap-3">
