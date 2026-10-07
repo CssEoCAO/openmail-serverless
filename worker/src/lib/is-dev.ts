@@ -7,21 +7,19 @@
  * BASE_URL. Requiring both keeps an accidentally deployed toggle from
  * disabling the passkey boundary on a hosted instance.
  *
- * Demo deploys (see `isDemoMode`) also bypass the passkey gate so preview
- * instances can be explored without registering a WebAuthn credential.
+ * Demo mode skips outbound effects, but only loopback may skip passkeys.
  */
 export function isDevEnvironment(env: CloudflareBindings | undefined): boolean {
-  if (isDemoMode(env)) return true;
   if (!env) return false;
 
   const runtime = env as CloudflareBindings & {
     DISABLE_PASSKEY_GATE?: string;
   };
-  if (runtime.DISABLE_PASSKEY_GATE !== "true") return false;
+  if (runtime.DISABLE_PASSKEY_GATE !== "true" && !isDemoMode(env)) return false;
 
   // A forgotten deploy-time toggle must not disable the production passkey
   // boundary. The explicit bypass is accepted only for loopback development;
-  // hosted demos use the separate DEMO_MODE switch above.
+  // hosted demos keep the passkey boundary.
   try {
     const host = new URL(env.BASE_URL).hostname.toLowerCase();
     return host === "localhost" || host === "127.0.0.1" || host === "[::1]";

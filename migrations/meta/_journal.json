@@ -267,6 +267,13 @@
       "when": 1789831791023,
       "tag": "0037_reply_drafts",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1791383542500,
+      "tag": "0038_security_oauth_client_cap",
+      "breakpoints": true
     }
   ]
 }

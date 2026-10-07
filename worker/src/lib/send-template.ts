@@ -15,6 +15,7 @@ import { renderTemplate, type TemplateVariables } from "./interpolate";
 import { generateMessageId } from "./message-id";
 import {
   finalizeSuccessfulOutbox,
+  reserveOutboxBudget,
   sendViaOutbox,
   type OutboxOutcome,
 } from "./outbox";
@@ -151,6 +152,13 @@ export async function sendTemplate(
     .where(eq(people.email, to))
     .limit(1);
   const personId = existingPerson[0]?.id ?? null;
+  const budgetReservation = await reserveOutboxBudget(
+    db,
+    fromAddress,
+    to,
+    undefined,
+    id,
+  );
   if (personId) {
     await cancelSequencesForPerson(db, personId);
   }
@@ -159,6 +167,7 @@ export async function sendTemplate(
     env,
     sender,
     sentEmailId: id,
+    budgetReservation,
     fromAddress,
     from: formattedFrom,
     to,

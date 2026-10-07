@@ -1,4 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
+import { reserveBudget } from "./resource-budget";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { nanoid } from "nanoid";
 import { people } from "../db/people.schema";
@@ -184,6 +185,13 @@ export async function enrollPersonInSequence(
       message: "At least one step must remain after skipping",
     };
   }
+  await reserveBudget(
+    db,
+    "sequence-enroll:all",
+    activeSteps.length,
+    2000,
+    86400,
+  );
   const slugs = Array.from(
     new Set(activeSteps.map((step) => step.templateSlug)),
   );

@@ -139,8 +139,8 @@ const listPersonEmailsRoute = createRoute({
         .string()
         .optional()
         .openapi({ description: "Filter by recipient address" }),
-      page: z.coerce.number().optional().default(1),
-      limit: z.coerce.number().optional().default(50),
+      page: z.coerce.number().int().min(1).max(100000).optional().default(1),
+      limit: z.coerce.number().int().min(1).max(10).optional().default(10),
     }),
   },
   responses: {

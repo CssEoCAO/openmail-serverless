@@ -1,14 +1,14 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import { cors } from "hono/cors";
-import { logger } from "hono/logger";
 import { bodyLimit } from "hono/body-limit";
 import { injectDb } from "./db/middleware";
 import { createAuth } from "./auth";
 import { apiKeys } from "./db/api-keys.schema";
-import { users } from "./db/auth.schema";
-import { eq } from "drizzle-orm";
+import { users, sessions } from "./db/auth.schema";
+import { eq, sql } from "drizzle-orm";
 import { hashKey } from "./lib/crypto";
+import { reserveBudget } from "./lib/resource-budget";
 import { handleEmail } from "./email-handler";
 import { peopleRouter } from "./routers/people-router";
 import { emailsRouter } from "./routers/emails-router";
@@ -103,7 +103,11 @@ app.use("/mcp", mcpBodyLimit);
 
 // Middleware
 app.use("*", injectDb);
-app.use("*", logger());
+app.use("*", async (c, next) => {
+  await next();
+  // URLs may contain OAuth/unsubscribe credentials. Log only bounded metadata.
+  console.log("[request]", c.req.method, c.res.status);
+});
 // `exposeHeaders` is required so browser-based MCP clients (e.g. Claude.ai
 // connectors) can read the `WWW-Authenticate` challenge on a 401 to discover
 // the OAuth protected-resource metadata URL, plus the `Mcp-Session-Id` header
@@ -138,37 +142,27 @@ function isPasskeyExemptPath(path: string): boolean {
   return path === "/api/user/passkeys";
 }
 
-// Block email+password sign-in for users who have already registered a
-// passkey. Runs BEFORE the catch-all BetterAuth handler so we get first look
-// at the request. The body is read via a clone so BetterAuth can still parse
-// the original.
+// Apply the passkey policy only AFTER Better Auth proves the password. Failed
+// logins retain exactly Better Auth's response and password-hash work, so an
+// anonymous caller cannot enumerate accounts or their authentication method.
 app.post("/api/auth/sign-in/email", async (c, next) => {
   if (isDevEnvironment(c.env)) return next();
-
-  let email: string | undefined;
-  try {
-    const body = (await c.req.raw.clone().json()) as { email?: string };
-    email = body.email?.toLowerCase();
-  } catch {
-    // Malformed body — let BetterAuth surface the error.
-    return next();
-  }
-  if (!email) return next();
-
+  const response = await createAuth(c.env).handler(c.req.raw);
+  if (!response.ok) return response;
+  const login = (await response.clone().json()) as {
+    user?: { id?: string };
+    token?: string;
+  };
+  if (!login.user?.id || !login.token) return response;
   const db = c.get("db");
-  const userRows = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1);
-  if (userRows.length === 0) return next();
-
   const pkRows = await db
     .select({ id: passkeys.id })
     .from(passkeys)
-    .where(eq(passkeys.userId, userRows[0].id))
+    .where(eq(passkeys.userId, login.user.id))
     .limit(1);
   if (pkRows.length > 0) {
+    // Do not release the created session or its Set-Cookie headers.
+    await db.delete(sessions).where(eq(sessions.token, login.token));
     return c.json(
       {
         error:
@@ -178,7 +172,7 @@ app.post("/api/auth/sign-in/email", async (c, next) => {
       403,
     );
   }
-  return next();
+  return response;
 });
 
 // BetterAuth's admin plugin exposes user creation, role changes, password
@@ -198,6 +192,35 @@ app.use("/api/auth/admin/*", async (c, next) => {
 });
 
 // BetterAuth handler
+app.post(
+  "/api/auth/oauth2/register",
+  bodyLimit({ maxSize: 16 * 1024 }),
+  async (c, next) => {
+    const db = c.get("db");
+    // Fixed shards bound storage while retaining a per-origin budget. Only the
+    // edge-provided address is used; forwarded headers are attacker supplied.
+    const hash = await hashKey(c.req.header("cf-connecting-ip") ?? "unknown");
+    await reserveBudget(db, "dcr:all", 1, 100, 86400);
+    await reserveBudget(
+      db,
+      `dcr:origin:${parseInt(hash.slice(0, 4), 16) % 128}`,
+      1,
+      5,
+      60,
+    );
+    // Only abandoned anonymous registrations are disposable. Managed clients
+    // retain their owner even before any consent or token has been issued.
+    await db.run(sql`DELETE FROM oauth_clients WHERE id IN (
+    SELECT id FROM oauth_clients WHERE created_at < ${Date.now() - 7 * 86400_000} AND user_id IS NULL
+      AND NOT EXISTS (SELECT 1 FROM oauth_consents WHERE client_id = oauth_clients.client_id)
+      AND NOT EXISTS (SELECT 1 FROM oauth_refresh_tokens WHERE client_id = oauth_clients.client_id)
+      AND NOT EXISTS (SELECT 1 FROM oauth_access_tokens WHERE client_id = oauth_clients.client_id)
+      LIMIT 100
+  )`);
+    return next();
+  },
+);
+
 app.all("/api/auth/*", (c) => {
   const auth = createAuth(c.env);
   return auth.handler(c.req.raw);
@@ -377,7 +400,22 @@ app.doc("/doc", {
 
 // SPA fallback
 app.all("*", async (c) => {
-  return c.env.ASSETS.fetch(c.req.raw);
+  const response = await c.env.ASSETS.fetch(c.req.raw);
+  if (!response.headers.get("Content-Type")?.includes("text/html"))
+    return response;
+  const headers = new Headers(response.headers);
+  headers.set(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' https: data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+  );
+  headers.set("X-Frame-Options", "DENY");
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("Referrer-Policy", "no-referrer");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 });
 
 export default {
