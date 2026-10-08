@@ -22,10 +22,10 @@ import { cn } from "@/lib/utils";
 
 /** Round delay-hours into a friendlier string for the step timeline. */
 function formatDelay(hours: number): string {
-  if (hours <= 0) return "immediately";
-  if (hours < 24) return `${hours}h`;
+  if (hours <= 0) return "na hora";
+  if (hours < 24) return `${hours} h`;
   const days = Math.round((hours / 24) * 10) / 10;
-  return days === 1 ? "1 day" : `${days} days`;
+  return days === 1 ? "1 dia" : `${String(days).replace(".", ",")} dias`;
 }
 
 function totalDelayLabel(steps: { delayHours: number }[]): string {
@@ -35,12 +35,12 @@ function totalDelayLabel(steps: { delayHours: number }[]): string {
 
 function relativeTime(ts: number): string {
   const diff = Date.now() / 1000 - ts;
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 60) return "agora há pouco";
+  if (diff < 3600) return `há ${Math.floor(diff / 60)} min`;
+  if (diff < 86400) return `há ${Math.floor(diff / 3600)} h`;
   const days = Math.floor(diff / 86400);
-  if (days < 30) return `${days}d ago`;
-  return new Date(ts * 1000).toLocaleDateString();
+  if (days < 30) return `há ${days} d`;
+  return new Date(ts * 1000).toLocaleDateString("pt-BR");
 }
 
 type Status = "active" | "completed" | "cancelled";
@@ -50,26 +50,30 @@ const STATUS_META: Record<
   {
     label: string;
     chipClass: string;
-    color: string;
+    textClass: string;
+    barClass: string;
     Icon: React.ElementType;
   }
 > = {
   active: {
-    label: "Active",
-    chipClass: "bg-emerald-50 ring-emerald-200/60 dark:bg-emerald-500/10",
-    color: "#047857",
+    label: "Em andamento",
+    chipClass: "bg-success-subtle text-success ring-success/30",
+    textClass: "text-success",
+    barClass: "bg-success",
     Icon: Clock,
   },
   completed: {
-    label: "Completed",
-    chipClass: "bg-violet/10 ring-violet/20",
-    color: "#7c5cfc",
+    label: "Concluída",
+    chipClass: "bg-primary-soft text-primary-ink ring-primary/20",
+    textClass: "text-primary-ink",
+    barClass: "bg-primary",
     Icon: CheckCircle2,
   },
   cancelled: {
-    label: "Cancelled",
-    chipClass: "bg-bg-muted ring-border",
-    color: "#6b7280",
+    label: "Cancelada",
+    chipClass: "bg-bg-muted text-text-tertiary ring-border",
+    textClass: "text-text-tertiary",
+    barClass: "bg-text-tertiary",
     Icon: XCircle,
   },
 };
@@ -86,7 +90,6 @@ function StatusBadge({ status }: { status: string }) {
         "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1",
         meta.chipClass,
       )}
-      style={{ color: meta.color }}
     >
       <meta.Icon size={10} />
       {meta.label}
@@ -112,7 +115,7 @@ export default function SequenceDetailPage() {
   }, [id]);
 
   async function handleCancel(enrollmentId: string) {
-    if (!confirm("Cancel this enrollment? Pending steps won't be sent.")) {
+    if (!confirm("Cancelar esta inscrição? As etapas pendentes não saem.")) {
       return;
     }
     await cancelEnrollment(enrollmentId);
@@ -141,7 +144,7 @@ export default function SequenceDetailPage() {
   if (loading || !sequence) {
     return (
       <PageContainer>
-        <p className="pt-10 text-sm text-text-tertiary">Loading…</p>
+        <p className="pt-10 text-sm text-text-tertiary">Carregando…</p>
       </PageContainer>
     );
   }
@@ -153,17 +156,17 @@ export default function SequenceDetailPage() {
         className="-mt-1 mb-1 inline-flex items-center gap-1 text-xs font-medium text-text-tertiary transition-colors hover:text-text-primary"
       >
         <ArrowLeft size={12} />
-        Sequences
+        Sequências
       </Link>
 
       <PageHeader
         title={sequence.name}
         subtitle={
           <>
-            {sequence.steps.length} step
-            {sequence.steps.length === 1 ? "" : "s"} · spans{" "}
-            {totalDelayLabel(sequence.steps)} · {enrollments.length} enrollment
-            {enrollments.length === 1 ? "" : "s"}
+            {sequence.steps.length}{" "}
+            {sequence.steps.length === 1 ? "etapa" : "etapas"} · dura{" "}
+            {totalDelayLabel(sequence.steps)} · {enrollments.length}{" "}
+            {enrollments.length === 1 ? "inscrição" : "inscrições"}
           </>
         }
         action={
@@ -173,7 +176,7 @@ export default function SequenceDetailPage() {
             className="inline-flex items-center gap-1.5 rounded-[6px] border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
           >
             <Pencil size={12} />
-            Edit sequence
+            Editar sequência
           </button>
         }
       />
@@ -184,8 +187,8 @@ export default function SequenceDetailPage() {
           <div className="border-b border-border px-5 py-4">
             <SectionHeader
               icon={ListOrdered}
-              title="Steps"
-              subtitle="The journey every enrollment follows. Delays are measured from the previous step."
+              title="Etapas"
+              subtitle="O caminho de toda inscrição. O intervalo conta a partir da etapa anterior."
             />
           </div>
           <ol className="relative space-y-0">
@@ -203,8 +206,8 @@ export default function SequenceDetailPage() {
                       className="absolute left-[34px] top-12 h-[calc(100%-2.5rem)] w-px bg-border"
                     />
                   )}
-                  <span className="relative z-10 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet/10 text-[11px] font-semibold tabular-nums">
-                    <span style={{ color: "#7c5cfc" }}>{idx + 1}</span>
+                  <span className="relative z-10 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[11px] font-semibold tabular-nums">
+                    <span className="text-primary-ink">{idx + 1}</span>
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-text-primary">
@@ -212,8 +215,8 @@ export default function SequenceDetailPage() {
                     </p>
                     <p className="mt-0.5 text-xs font-light text-text-tertiary">
                       {idx === 0
-                        ? "Sends right when someone is enrolled."
-                        : `Sends ${formatDelay(step.delayHours)} after step ${idx}.`}
+                        ? "Sai assim que a pessoa é inscrita."
+                        : `Sai ${formatDelay(step.delayHours)} depois da etapa ${idx}.`}
                     </p>
                   </div>
                 </li>
@@ -227,22 +230,18 @@ export default function SequenceDetailPage() {
           <div className="border-b border-border px-5 py-4">
             <SectionHeader
               icon={Users}
-              title={`Enrollments (${enrollments.length})`}
-              subtitle="Every contact who has been enrolled into this sequence."
+              title={`Inscrições (${enrollments.length})`}
+              subtitle="Todo contato que já entrou nesta sequência."
             />
           </div>
 
           {enrollments.length === 0 ? (
             <div className="px-5 py-10 text-center">
-              <span className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-violet/10">
-                <Users size={16} style={{ color: "#7c5cfc" }} />
-              </span>
               <p className="text-sm font-medium text-text-primary">
-                No enrollments yet
+                Nenhuma inscrição ainda
               </p>
               <p className="mt-1 text-xs font-light text-text-tertiary">
-                Open a contact's profile and pick this sequence to enroll them,
-                or call the API.
+                Abra a conversa de um contato e use "Sequência", ou chame a API.
               </p>
             </div>
           ) : (
@@ -282,8 +281,8 @@ function EnrollmentGroup({
   return (
     <div>
       <div className="flex items-center gap-2 bg-bg-subtle/40 px-5 py-2">
-        <meta.Icon size={11} style={{ color: meta.color }} />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
+        <meta.Icon size={11} className={meta.textClass} />
+        <h3 className="text-xs font-medium text-text-tertiary">
           {meta.label} · {rows.length}
         </h3>
       </div>
@@ -314,7 +313,7 @@ function EnrollmentGroup({
                   <StatusBadge status={enr.status} />
                 </div>
                 <p className="truncate text-xs font-light text-text-tertiary">
-                  {enr.personEmail} · enrolled {relativeTime(enr.enrolledAt)}
+                  {enr.personEmail} · inscrito {relativeTime(enr.enrolledAt)}
                 </p>
               </div>
 
@@ -330,11 +329,11 @@ function EnrollmentGroup({
                   </div>
                   <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-bg-muted">
                     <div
-                      className="h-full rounded-full transition-all"
-                      style={{
-                        width: `${Math.max(progress * 100, 2)}%`,
-                        backgroundColor: STATUS_META[status].color,
-                      }}
+                      className={cn(
+                        "h-full rounded-full transition-all",
+                        STATUS_META[status].barClass,
+                      )}
+                      style={{ width: `${Math.max(progress * 100, 2)}%` }}
                     />
                   </div>
                 </div>
@@ -344,10 +343,10 @@ function EnrollmentGroup({
                 <button
                   type="button"
                   onClick={() => onCancel(enr.id)}
-                  aria-label="Cancel"
+                  aria-label="Cancelar inscrição"
                   className="shrink-0 rounded-[6px] border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:bg-destructive/10 hover:text-destructive"
                 >
-                  Cancel
+                  Cancelar
                 </button>
               )}
             </li>

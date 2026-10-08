@@ -6,6 +6,10 @@
   "account_id": "<your-cloudflare-account-id>",
   "compatibility_date": "2026-04-14",
   "compatibility_flags": ["nodejs_compat"],
+  // Optional: run the Worker next to the D1 primary when your users are far from
+  // it. Every D1 query is a round trip and the inbox routes make 6-11 of them.
+  // Pick the cloud region closest to the database location (WNAM: aws:us-west-1).
+  // "placement": { "region": "aws:us-west-1" },
   // Uncomment and configure if using a custom domain:
   // "routes": [
   //   {

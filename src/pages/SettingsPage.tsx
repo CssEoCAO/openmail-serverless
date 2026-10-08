@@ -4,6 +4,7 @@ import {
   isPushSubscribed,
   enablePush,
   disablePush,
+  motivoPush,
 } from "@/lib/push";
 import PageHeader, { PageContainer } from "@/components/PageHeader";
 import {
@@ -29,8 +30,8 @@ export default function SettingsPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Settings"
-        subtitle="Manage notifications, display preferences, and (admin only) app branding."
+        title="Configurações"
+        subtitle="Notificações, preferências de leitura e (só administrador) o nome do app."
       />
 
       <div className="max-w-3xl space-y-8">
@@ -76,7 +77,7 @@ function NotificationsSection() {
     try {
       const result = await enablePush();
       if (!result.ok) {
-        setError(result.reason);
+        setError(motivoPush("reason" in result ? result.reason : ""));
         return;
       }
       await refresh();
@@ -109,31 +110,31 @@ function NotificationsSection() {
   return (
     <section className="space-y-3">
       <h2 className="text-base font-semibold text-text-primary">
-        Notifications
+        Notificações
       </h2>
 
       {!supported ? (
         <p className="text-sm text-text-secondary">
-          Your browser does not support push notifications.
+          Este navegador não aceita notificações push.
         </p>
       ) : pushEnabled === null ? (
-        <p className="text-sm text-text-secondary">Loading…</p>
+        <p className="text-sm text-text-tertiary">Carregando…</p>
       ) : pushEnabled === false ? (
         <p className="text-sm text-text-secondary">
-          Push notifications are not configured on this saasmail deployment.
+          As notificações push não estão configuradas nesta instalação.
         </p>
       ) : (
         <div className="space-y-5">
           <div className="rounded-[8px] bg-card p-5 ring-1 ring-border">
             <h3 className="text-sm font-semibold text-text-primary">
-              This browser
+              Este navegador
             </h3>
             <p className="mt-1 text-xs font-light text-text-secondary">
               {subscribedHere
-                ? "Push is on for this browser."
-                : "Push is off for this browser."}
+                ? "Notificações ligadas neste navegador."
+                : "Notificações desligadas neste navegador."}
             </p>
-            {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+            {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
             <div className="mt-3">
               {subscribedHere ? (
                 <button
@@ -141,15 +142,15 @@ function NotificationsSection() {
                   disabled={busy || !vapidPublicKey}
                   onClick={onDisable}
                 >
-                  Disable
+                  Desligar
                 </button>
               ) : (
                 <button
-                  className="rounded-[6px] bg-text-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-text-primary/90"
+                  className="rounded-[6px] bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
                   disabled={busy || !vapidPublicKey}
                   onClick={onEnable}
                 >
-                  Enable
+                  Ligar
                 </button>
               )}
             </div>
@@ -157,13 +158,13 @@ function NotificationsSection() {
 
           <div className="overflow-hidden rounded-[8px] bg-card ring-1 ring-border">
             <div className="border-b border-border px-5 py-3">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-text-tertiary">
-                All subscribed browsers
+              <h3 className="text-xs font-medium text-text-tertiary">
+                Navegadores com notificação
               </h3>
             </div>
             {subs.length === 0 ? (
               <p className="px-5 py-4 text-xs font-light text-text-tertiary">
-                None yet.
+                Nenhum ainda.
               </p>
             ) : (
               <ul className="divide-y divide-border/60 text-xs">
@@ -174,12 +175,13 @@ function NotificationsSection() {
                   >
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium text-text-primary">
-                        {s.userAgent ?? "Unknown browser"}
+                        {s.userAgent ?? "Navegador desconhecido"}
                       </div>
                       <div className="text-xs font-light text-text-tertiary">
-                        added {new Date(s.createdAt * 1000).toLocaleString()}
+                        ativado em{" "}
+                        {new Date(s.createdAt * 1000).toLocaleString("pt-BR")}
                         {s.lastUsedAt
-                          ? ` · last used ${new Date(s.lastUsedAt * 1000).toLocaleString()}`
+                          ? ` · último uso ${new Date(s.lastUsedAt * 1000).toLocaleString("pt-BR")}`
                           : ""}
                       </div>
                     </div>
@@ -188,7 +190,7 @@ function NotificationsSection() {
                       disabled={busy}
                       onClick={() => onRevoke(s.id)}
                     >
-                      Revoke
+                      Remover
                     </button>
                   </li>
                 ))}
@@ -235,19 +237,17 @@ function DisplayPreferencesSection() {
 
   return (
     <section className="space-y-3">
-      <h2 className="text-base font-semibold text-text-primary">
-        Display preferences
-      </h2>
+      <h2 className="text-base font-semibold text-text-primary">Leitura</h2>
 
       <div className="rounded-[8px] bg-card p-5 ring-1 ring-border">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h3 className="text-sm font-medium text-text-primary">
-              Hide signatures in chat
+              Esconder assinaturas no modo chat
             </h3>
             <p className="mt-1 text-xs font-light text-text-secondary">
-              Strip the signature block from chat-mode bubbles to keep the feed
-              clean.
+              Tira o bloco de assinatura dos balões do modo chat, para a
+              conversa ficar limpa.
             </p>
           </div>
           <button
@@ -257,11 +257,11 @@ function DisplayPreferencesSection() {
             role="switch"
             data-testid="hide-signatures-toggle"
             className={`flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors ${
-              hideSignatures ? "bg-text-primary" : "bg-bg-muted"
+              hideSignatures ? "bg-primary" : "bg-bg-muted"
             }`}
           >
             <span
-              className={`h-4 w-4 rounded-full bg-white shadow transition-transform ${
+              className={`h-4 w-4 rounded-full bg-card shadow transition-transform ${
                 hideSignatures ? "translate-x-4" : "translate-x-0"
               }`}
             />
@@ -302,16 +302,16 @@ function AppBrandingSection() {
         const data = (await res.json().catch(() => ({}))) as {
           error?: string;
         };
-        setError(data.error || "Failed to update brand name.");
+        setError(data.error || "Não deu para salvar o nome.");
         return;
       }
       const data = (await res.json()) as { brandName: string };
-      setSuccess(`Saved. The wordmark now reads "${data.brandName}".`);
+      setSuccess(`Salvo. O app agora se chama "${data.brandName}".`);
       // Push the new value into the live BrandingProvider so the top-nav
       // wordmark updates without a page reload.
       await refreshBranding();
     } catch {
-      setError("Failed to update brand name.");
+      setError("Não deu para salvar o nome.");
     } finally {
       setBusy(false);
     }
@@ -320,11 +320,11 @@ function AppBrandingSection() {
   async function onSave() {
     const trimmed = value.trim();
     if (!trimmed) {
-      setError("App name can't be empty.");
+      setError("O nome não pode ficar vazio.");
       return;
     }
     if (trimmed.length > 40) {
-      setError("App name must be 40 characters or fewer.");
+      setError("O nome pode ter até 40 caracteres.");
       return;
     }
     await patch({ brandName: trimmed });
@@ -336,21 +336,19 @@ function AppBrandingSection() {
 
   return (
     <section className="space-y-3">
-      <h2 className="text-base font-semibold text-text-primary">
-        App branding
-      </h2>
+      <h2 className="text-base font-semibold text-text-primary">Nome do app</h2>
 
       <div className="rounded-[8px] bg-card p-5 ring-1 ring-border">
         <p className="text-xs font-light text-text-secondary">
-          The app name appears in the top-nav wordmark, the login screen, and
-          invitation emails. Defaults to <code>saasmail</code>.
+          Aparece na lateral, na tela de login, na aba do navegador e nos
+          e-mails de convite.
         </p>
         <div className="mt-4 space-y-2">
           <label
             htmlFor="branding-app-name"
-            className="text-xs font-medium uppercase tracking-wider text-text-tertiary"
+            className="text-xs font-medium text-text-secondary"
           >
-            App name
+            Nome
           </label>
           <input
             id="branding-app-name"
@@ -359,18 +357,18 @@ function AppBrandingSection() {
             onChange={(e) => setValue(e.target.value)}
             maxLength={40}
             disabled={busy}
-            className="h-10 w-full max-w-sm rounded-[6px] border border-border bg-bg-subtle px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-text-primary/30"
+            className="mt-1.5 h-9 w-full max-w-sm rounded-[6px] border border-border bg-card px-3 text-sm text-text-primary focus:border-primary focus:outline-none"
           />
         </div>
 
         {error && (
-          <p className="mt-3 text-xs text-red-600" role="alert">
+          <p className="mt-3 text-xs text-destructive" role="alert">
             {error}
           </p>
         )}
         {success && (
           <p
-            className="mt-3 text-xs text-emerald-600"
+            className="mt-3 text-xs text-success"
             data-testid="branding-success"
           >
             {success}
@@ -382,17 +380,17 @@ function AppBrandingSection() {
             type="button"
             onClick={onSave}
             disabled={busy}
-            className="rounded-[6px] bg-text-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-text-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-[6px] bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {busy ? "Saving…" : "Save"}
+            {busy ? "Salvando…" : "Salvar"}
           </button>
           <button
             type="button"
             onClick={onReset}
             disabled={busy}
-            className="text-xs font-light text-text-secondary hover:text-text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+            className="text-xs text-text-secondary hover:text-text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Reset to default
+            Voltar ao padrão
           </button>
         </div>
       </div>

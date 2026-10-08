@@ -13,8 +13,8 @@ import { cn } from "@/lib/utils";
 
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1).replace(".", ",")} KB`;
+  return `${(n / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
 }
 
 type Kind =
@@ -137,7 +137,7 @@ export default function AttachmentList({
               href={preview ? inline : download}
               target={preview ? "_blank" : undefined}
               rel="noreferrer"
-              title={preview ? "Open" : "Download"}
+              title={preview ? "Abrir" : "Baixar"}
               className="flex min-w-0 flex-1 items-center gap-2.5"
             >
               {kind === "image" ? (
@@ -164,7 +164,7 @@ export default function AttachmentList({
             <a
               href={download}
               download={att.filename}
-              title="Download"
+              title="Baixar"
               className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
             >
               <Download size={14} />

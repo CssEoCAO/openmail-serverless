@@ -74,7 +74,7 @@ export default function ReassignPersonModal({
     if (!email) return;
     const trimmed = toEmail.trim();
     if (!trimmed) {
-      setError("Enter an email address.");
+      setError("Informe um endereço de e-mail.");
       return;
     }
     setSubmitting(true);
@@ -87,7 +87,9 @@ export default function ReassignPersonModal({
       onDone(result);
       onClose();
     } catch {
-      setError("Couldn't reassign this message. Check the address and retry.");
+      setError(
+        "Não deu para mover a mensagem. Confira o endereço e tente de novo.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -95,19 +97,19 @@ export default function ReassignPersonModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="w-full max-w-md rounded-xl border border-border bg-white ring-1 ring-gray-200 p-6">
+      <div className="w-full max-w-md rounded-[12px] border border-border bg-card p-6 shadow-xl">
         <h2 className="mb-1 text-lg font-semibold text-text-primary">
-          Reassign message
+          Mover mensagem
         </h2>
         <p className="mb-4 text-sm text-text-secondary">
-          Attribute this message to a different person so replies reach them.
-          Currently under{" "}
+          Atribui esta mensagem a outra pessoa, para as respostas chegarem a
+          ela. Hoje está com{" "}
           <span className="font-medium text-text-primary">{currentSender}</span>
           .
         </p>
 
         <label className="mb-1 block text-xs font-medium text-text-secondary">
-          Person's email
+          E-mail da pessoa
         </label>
         <input
           type="email"
@@ -120,17 +122,17 @@ export default function ReassignPersonModal({
           onKeyDown={(e) => {
             if (e.key === "Enter") void handleSubmit();
           }}
-          placeholder="real.person@example.com"
-          className="mb-1 w-full rounded-md border border-border bg-white ring-1 ring-gray-200 px-3 py-2 text-sm text-text-primary"
+          placeholder="pessoa@exemplo.com"
+          className="mb-1 h-9 w-full rounded-[6px] border border-border bg-card px-3 text-sm text-text-primary focus:border-primary focus:outline-none"
         />
         {prefilledFromReplyTo && (
           <p className="mb-3 text-[11px] text-text-tertiary">
-            Pre-filled from the message's Reply-To.
+            Preenchido com o Reply-To da mensagem.
           </p>
         )}
 
         <label className="mb-1 mt-3 block text-xs font-medium text-text-secondary">
-          Name <span className="text-text-tertiary">(optional)</span>
+          Nome <span className="text-text-tertiary">(opcional)</span>
         </label>
         <input
           type="text"
@@ -139,25 +141,25 @@ export default function ReassignPersonModal({
           onKeyDown={(e) => {
             if (e.key === "Enter") void handleSubmit();
           }}
-          placeholder="Jane Doe"
-          className="w-full rounded-md border border-border bg-white ring-1 ring-gray-200 px-3 py-2 text-sm text-text-primary"
+          placeholder="Maria Silva"
+          className="h-9 w-full rounded-[6px] border border-border bg-card px-3 text-sm text-text-primary focus:border-primary focus:outline-none"
         />
 
-        {error && <p className="mt-3 text-xs text-red-400">{error}</p>}
+        {error && <p className="mt-3 text-xs text-destructive">{error}</p>}
 
         <div className="mt-5 flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-muted"
+            className="rounded-[6px] border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-muted"
           >
-            Cancel
+            Cancelar
           </button>
           <button
             onClick={handleSubmit}
             disabled={submitting || !toEmail.trim()}
-            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
+            className="rounded-[6px] bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
           >
-            {submitting ? "Reassigning..." : "Reassign"}
+            {submitting ? "Movendo…" : "Mover"}
           </button>
         </div>
       </div>

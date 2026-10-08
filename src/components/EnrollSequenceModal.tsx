@@ -92,7 +92,7 @@ export default function EnrollSequenceModal({
       onEnrolled();
       onClose();
     } catch (err: any) {
-      alert(err.message || "Failed to enroll person.");
+      alert(err.message || "Não deu para inscrever a pessoa.");
     } finally {
       setSubmitting(false);
     }
@@ -104,16 +104,16 @@ export default function EnrollSequenceModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="w-full max-w-lg rounded-xl border border-border bg-white ring-1 ring-gray-200 p-6">
+      <div className="w-full max-w-lg rounded-[12px] border border-border bg-card p-6 shadow-xl">
         <h2 className="mb-1 text-lg font-semibold text-text-primary">
-          Add to Sequence
+          Inscrever em sequência
         </h2>
         <p className="mb-4 text-sm text-text-secondary">
           {personName ?? personEmail}
         </p>
 
         {loading ? (
-          <p className="text-text-secondary">Loading sequences...</p>
+          <p className="text-sm text-text-tertiary">Carregando sequências…</p>
         ) : (
           <>
             <select
@@ -123,24 +123,25 @@ export default function EnrollSequenceModal({
                 setSkipSteps([]);
                 setDelayOverrides({});
               }}
-              className="mb-4 w-full rounded-md border border-border bg-white ring-1 ring-gray-200 px-3 py-2 text-sm text-text-primary"
+              className="mb-4 w-full rounded-md border border-border bg-card ring-1 ring-border px-3 py-2 text-sm text-text-primary"
             >
-              <option value="">Select a sequence...</option>
+              <option value="">Escolha uma sequência…</option>
               {sequences.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name} ({s.steps.length} steps)
+                  {s.name} ({s.steps.length}{" "}
+                  {s.steps.length === 1 ? "etapa" : "etapas"})
                 </option>
               ))}
             </select>
 
             <div className="mb-4">
               <p className="mb-2 text-xs font-medium text-text-secondary">
-                Send From
+                Enviar como
               </p>
               <select
                 value={fromAddress}
                 onChange={(e) => setFromAddress(e.target.value)}
-                className="w-full rounded-md border border-border bg-white ring-1 ring-gray-200 px-3 py-2 text-sm text-text-primary"
+                className="w-full rounded-md border border-border bg-card ring-1 ring-border px-3 py-2 text-sm text-text-primary"
               >
                 {recipients.map((r) => (
                   <option key={r} value={r}>
@@ -153,7 +154,7 @@ export default function EnrollSequenceModal({
             {selectedSequence && (
               <div className="mb-4">
                 <p className="mb-2 text-xs font-medium text-text-secondary">
-                  Steps
+                  Etapas
                 </p>
                 <div className="space-y-2">
                   {selectedSequence.steps.map((step, idx) => {
@@ -184,17 +185,17 @@ export default function EnrollSequenceModal({
                           onChange={(e) =>
                             setDelay(step.order, parseInt(e.target.value) || 0)
                           }
-                          className="w-16 rounded border border-border bg-white ring-1 ring-gray-200 px-1 py-0.5 text-xs text-text-primary"
+                          className="w-16 rounded border border-border bg-card ring-1 ring-border px-1 py-0.5 text-xs text-text-primary"
                           disabled={skipped}
                         />
-                        <span className="text-xs text-text-tertiary">hrs</span>
+                        <span className="text-xs text-text-tertiary">h</span>
                       </div>
                     );
                   })}
                 </div>
                 {activeStepCount === 0 && (
-                  <p className="mt-1 text-xs text-red-400">
-                    At least one step must be selected.
+                  <p className="mt-1 text-xs text-destructive">
+                    Marque pelo menos uma etapa.
                   </p>
                 )}
               </div>
@@ -202,30 +203,30 @@ export default function EnrollSequenceModal({
 
             <div className="mb-4">
               <p className="mb-2 text-xs font-medium text-text-secondary">
-                Custom Variables
+                Variáveis
               </p>
               {variables.map((v, idx) => (
                 <div key={idx} className="mb-1 flex items-center gap-2">
                   <input
                     type="text"
-                    placeholder="key"
+                    placeholder="chave"
                     value={v.key}
                     onChange={(e) => updateVariable(idx, "key", e.target.value)}
-                    className="w-28 rounded border border-border bg-white ring-1 ring-gray-200 px-2 py-1 text-xs text-text-primary"
+                    className="w-28 rounded border border-border bg-card ring-1 ring-border px-2 py-1 text-xs text-text-primary"
                   />
                   <input
                     type="text"
-                    placeholder="value"
+                    placeholder="valor"
                     value={v.value}
                     onChange={(e) =>
                       updateVariable(idx, "value", e.target.value)
                     }
-                    className="flex-1 rounded border border-border bg-white ring-1 ring-gray-200 px-2 py-1 text-xs text-text-primary"
+                    className="flex-1 rounded border border-border bg-card ring-1 ring-border px-2 py-1 text-xs text-text-primary"
                   />
                   <button
                     type="button"
                     onClick={() => removeVariable(idx)}
-                    className="text-xs text-red-400"
+                    className="text-xs text-destructive"
                   >
                     &times;
                   </button>
@@ -234,25 +235,25 @@ export default function EnrollSequenceModal({
               <button
                 type="button"
                 onClick={addVariable}
-                className="text-xs text-accent hover:underline"
+                className="text-xs font-medium text-primary-ink hover:underline"
               >
-                + Add variable
+                + Adicionar variável
               </button>
             </div>
 
             <div className="flex justify-end gap-3">
               <button
                 onClick={onClose}
-                className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-muted"
+                className="rounded-[6px] border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-muted"
               >
-                Cancel
+                Cancelar
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={!selectedId || submitting || activeStepCount === 0}
-                className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
+                className="rounded-[6px] bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
               >
-                {submitting ? "Enrolling..." : "Enroll"}
+                {submitting ? "Inscrevendo…" : "Inscrever"}
               </button>
             </div>
           </>

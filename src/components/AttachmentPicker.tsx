@@ -68,9 +68,9 @@ export default function AttachmentPicker({
         onClick={() => inputRef.current?.click()}
         className={
           buttonClassName ??
-          "inline-flex items-center gap-1 rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+          "inline-flex items-center gap-1 rounded p-1 text-text-tertiary hover:bg-bg-muted hover:text-text-secondary"
         }
-        aria-label="Attach files"
+        aria-label="Anexar arquivos"
       >
         {buttonLabel ?? <Paperclip className="h-4 w-4" />}
       </button>

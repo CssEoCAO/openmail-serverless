@@ -30,10 +30,10 @@ import { cn } from "@/lib/utils";
 
 /** Round delay-hours into a friendlier string for the summary line. */
 function formatDelay(hours: number): string {
-  if (hours <= 0) return "immediately";
-  if (hours < 24) return `${hours}h`;
+  if (hours <= 0) return "na hora";
+  if (hours < 24) return `${hours} h`;
   const days = Math.round((hours / 24) * 10) / 10;
-  return days === 1 ? "1 day" : `${days} days`;
+  return days === 1 ? "1 dia" : `${String(days).replace(".", ",")} dias`;
 }
 
 /** Cumulative offset from the enrollment start, e.g. "day 3" for the
@@ -45,10 +45,10 @@ function formatCumulative(steps: SequenceStep[], idx: number): string {
       (acc, s) => acc + (Number.isFinite(s.delayHours) ? s.delayHours : 0),
       0,
     );
-  if (total === 0) return "Day 0 · sends right away";
-  if (total < 24) return `+${total}h after enrollment`;
+  if (total === 0) return "Dia 0 · sai na hora";
+  if (total < 24) return `${total} h depois da inscrição`;
   const days = Math.round((total / 24) * 10) / 10;
-  return `Day ${days}`;
+  return `Dia ${String(days).replace(".", ",")}`;
 }
 
 export default function SequenceEditorPage() {
@@ -79,7 +79,7 @@ export default function SequenceEditorPage() {
           setSteps(seq.steps);
         }
       } catch {
-        if (!cancelled) setError("Failed to load sequence.");
+        if (!cancelled) setError("Não deu para carregar a sequência.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -126,7 +126,7 @@ export default function SequenceEditorPage() {
       }
       navigate("/sequences");
     } catch {
-      setError("Failed to save sequence.");
+      setError("Não deu para salvar a sequência.");
     } finally {
       setSaving(false);
     }
@@ -141,7 +141,7 @@ export default function SequenceEditorPage() {
   if (loading) {
     return (
       <PageContainer>
-        <p className="pt-10 text-sm text-text-tertiary">Loading…</p>
+        <p className="pt-10 text-sm text-text-tertiary">Carregando…</p>
       </PageContainer>
     );
   }
@@ -153,15 +153,15 @@ export default function SequenceEditorPage() {
         className="-mt-1 mb-1 inline-flex items-center gap-1 text-xs font-medium text-text-tertiary transition-colors hover:text-text-primary"
       >
         <ArrowLeft size={12} />
-        Sequences
+        Sequências
       </Link>
 
       <PageHeader
-        title={isEditing ? name || "Edit sequence" : "New sequence"}
+        title={isEditing ? name || "Editar sequência" : "Nova sequência"}
         subtitle={
           isEditing
             ? `${totalSteps} step${totalSteps === 1 ? "" : "s"} · spans ${formatDelay(totalHours)}`
-            : "Build a multi-step drip — saasmail schedules each email automatically."
+            : "Monte as etapas; cada e-mail sai sozinho na hora marcada."
         }
         action={
           <div className="flex items-center gap-2">
@@ -170,7 +170,7 @@ export default function SequenceEditorPage() {
               onClick={() => navigate("/sequences")}
               className="rounded-[6px] border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
             >
-              Cancel
+              Cancelar
             </button>
             <button
               type="button"
@@ -178,13 +178,9 @@ export default function SequenceEditorPage() {
               disabled={
                 saving || !name.trim() || steps.some((s) => !s.templateSlug)
               }
-              className="rounded-[6px] bg-text-primary px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-text-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-[6px] bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {saving
-                ? "Saving…"
-                : isEditing
-                  ? "Save changes"
-                  : "Create sequence"}
+              {saving ? "Salvando…" : isEditing ? "Salvar" : "Criar sequência"}
             </button>
           </div>
         }
@@ -193,7 +189,7 @@ export default function SequenceEditorPage() {
       {error && (
         <div
           role="alert"
-          className="mb-4 rounded-[8px] border border-red-200 bg-red-50 px-4 py-2.5 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+          className="mb-4 rounded-[8px] border border-destructive/40 bg-destructive-subtle px-4 py-2.5 text-xs text-destructive dark:border-destructive/40/30 dark:bg-destructive-subtle dark:text-red-300"
         >
           {error}
         </div>
@@ -204,16 +200,16 @@ export default function SequenceEditorPage() {
         <section className="rounded-[8px] bg-card p-5 ring-1 ring-border">
           <SectionHeader
             icon={Sparkles}
-            title="Details"
-            subtitle="Give the sequence a clear name — it shows up in the enroll picker."
+            title="Identificação"
+            subtitle="Um nome claro: é ele que aparece na hora de inscrever alguém."
           />
 
           <div className="mt-4">
-            <Field label="Sequence name" hint="Visible to admins only.">
+            <Field label="Nome da sequência" hint="Só administradores veem.">
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Welcome onboarding"
+                placeholder="Boas-vindas"
                 required
                 className={FORM_INPUT_CLASS}
               />
@@ -226,14 +222,15 @@ export default function SequenceEditorPage() {
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
             <SectionHeader
               icon={ListOrdered}
-              title="Steps"
+              title="Etapas"
               subtitle={
                 <>
-                  {totalSteps} step{totalSteps === 1 ? "" : "s"} · spans{" "}
+                  {totalSteps} {totalSteps === 1 ? "etapa" : "etapas"} · dura{" "}
                   <span className="font-medium text-text-secondary">
                     {formatDelay(totalHours)}
                   </span>{" "}
-                  end-to-end. Delay is measured from the previous step.
+                  do começo ao fim. O intervalo conta a partir da etapa
+                  anterior.
                 </>
               }
             />
@@ -256,14 +253,14 @@ export default function SequenceEditorPage() {
                     className="text-text-tertiary/60"
                     aria-hidden
                   />
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet/10 text-[11px] font-semibold tabular-nums">
-                    <span style={{ color: "#7c5cfc" }}>{idx + 1}</span>
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[11px] font-semibold tabular-nums">
+                    <span className="text-primary-ink">{idx + 1}</span>
                   </span>
                 </div>
 
                 <div className="grid min-w-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
                   <Field
-                    label="Template"
+                    label="Modelo"
                     hint={
                       <span className="text-text-tertiary/80">
                         {formatCumulative(steps, idx)}
@@ -280,7 +277,7 @@ export default function SequenceEditorPage() {
                       className={cn(FORM_INPUT_CLASS, "appearance-none pr-8")}
                     >
                       <option value="" disabled>
-                        Select a template…
+                        Escolha um modelo…
                       </option>
                       {templates.map((t) => (
                         <option key={t.slug} value={t.slug}>
@@ -291,11 +288,11 @@ export default function SequenceEditorPage() {
                   </Field>
 
                   <Field
-                    label="Delay"
+                    label="Intervalo"
                     hint={
                       idx === 0
-                        ? "Set 0 so step 1 fires on enrollment."
-                        : "Hours after the previous step."
+                        ? "Zero: a etapa 1 sai na inscrição."
+                        : "Horas depois da etapa anterior."
                     }
                     className="sm:w-40"
                   >
@@ -313,8 +310,8 @@ export default function SequenceEditorPage() {
                         }
                         className={cn(FORM_INPUT_CLASS, "pr-12 tabular-nums")}
                       />
-                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-medium uppercase tracking-wider text-text-tertiary">
-                        hrs
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-text-tertiary">
+                        h
                       </span>
                     </div>
                   </Field>
@@ -324,11 +321,11 @@ export default function SequenceEditorPage() {
                   type="button"
                   onClick={() => removeStep(step.order)}
                   disabled={steps.length <= 1}
-                  aria-label="Remove step"
+                  aria-label="Remover etapa"
                   className="inline-flex h-8 shrink-0 items-center gap-1.5 self-end rounded-[6px] px-2.5 text-xs font-medium text-text-secondary transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40 sm:self-auto"
                 >
                   <Trash2 size={12} />
-                  Remove
+                  Remover
                 </button>
               </li>
             ))}
@@ -341,7 +338,7 @@ export default function SequenceEditorPage() {
               className="inline-flex items-center gap-1.5 rounded-[6px] border border-dashed border-border bg-card px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-text-primary/30 hover:bg-bg-muted hover:text-text-primary"
             >
               <Plus size={12} />
-              Add step
+              Adicionar etapa
             </button>
           </div>
         </section>
@@ -465,18 +462,18 @@ function ApiReferenceCard({
         <div className="min-w-0">
           <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-primary">
             <Code2 size={13} className="text-text-tertiary" />
-            Enroll via API
+            Inscrever pela API
           </h2>
           <p className="mt-0.5 text-xs font-light text-text-secondary">
-            Programmatically enroll a contact — pass{" "}
+            Inscreva um contato por programa: mande{" "}
             <code className="rounded bg-bg-muted px-1 py-0.5 font-mono text-[10px]">
               personEmail
             </code>{" "}
-            (looked up or created) or{" "}
+            (achado ou criado) ou{" "}
             <code className="rounded bg-bg-muted px-1 py-0.5 font-mono text-[10px]">
               personId
             </code>{" "}
-            (existing).
+            (já existente).
           </p>
         </div>
         <ChevronDown
@@ -490,14 +487,14 @@ function ApiReferenceCard({
 
       {open && (
         <div className="space-y-5 border-t border-border px-5 py-5">
-          <Field label="Endpoint">
+          <Field label="Rota">
             <CodeBlock value={`POST ${endpoint}`} oneLine />
           </Field>
 
           {perTemplate.length > 0 && (
             <Field
-              label="Template variables"
-              hint="All variables must be supplied in `variables` or the API returns 400."
+              label="Variáveis dos modelos"
+              hint="Todas precisam ir em `variables`, senão a API devolve 400."
             >
               <ul className="space-y-1.5 text-xs">
                 {perTemplate.map((tv) => (
@@ -512,8 +509,7 @@ function ApiReferenceCard({
                     {tv.vars.map((v) => (
                       <code
                         key={v}
-                        className="rounded-full bg-violet/10 px-2 py-0.5 text-[11px] font-mono"
-                        style={{ color: "#7c5cfc" }}
+                        className="rounded-full bg-primary-soft px-2 py-0.5 font-mono text-[11px] text-primary-ink"
                       >
                         {`{{${v}}}`}
                       </code>
@@ -524,7 +520,7 @@ function ApiReferenceCard({
             </Field>
           )}
 
-          <Field label="Example request">
+          <Field label="Exemplo de requisição">
             <CodeBlock value={curl} />
           </Field>
         </div>

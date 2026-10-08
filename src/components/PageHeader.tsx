@@ -7,11 +7,7 @@ interface PageHeaderProps {
   className?: string;
 }
 
-/**
- * Consistent page header used across dashboard pages.
- * Big extrabold title + optional subtitle + optional right-side action.
- * Mobile-compact, desktop-expansive — matches the Inbox page treatment.
- */
+/** Cabeçalho das páginas de ferramentas e administração: título, explicação e ação. */
 export default function PageHeader({
   title,
   subtitle,
@@ -21,16 +17,14 @@ export default function PageHeader({
   return (
     <div
       className={cn(
-        "mb-3 flex items-center justify-between gap-3 pt-3 sm:mb-4 sm:pt-4",
+        "mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3",
         className,
       )}
     >
-      <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3">
-        <h1 className="shrink-0 text-xl font-extrabold tracking-tight text-text-primary sm:text-2xl">
-          {title}
-        </h1>
+      <div className="min-w-0">
+        <h1 className="text-xl font-semibold text-text-primary">{title}</h1>
         {subtitle && (
-          <p className="min-w-0 max-w-2xl truncate text-xs font-light text-text-tertiary sm:text-sm">
+          <p className="mt-1 max-w-2xl text-sm text-text-tertiary">
             {subtitle}
           </p>
         )}
@@ -46,18 +40,20 @@ interface PageContainerProps {
 }
 
 /**
- * Standard width-capped, padded container for dashboard pages.
- * Caps at 1600px on desktop so the chrome lines up with the inbox + nav.
+ * Página fora da caixa: rola dentro do casco (a lateral fica parada) e limita a
+ * largura de leitura.
  */
 export function PageContainer({ children, className }: PageContainerProps) {
   return (
-    <div
-      className={cn(
-        "mx-auto w-full max-w-[1600px] flex-1 px-4 pb-12 md:px-6",
-        className,
-      )}
-    >
-      {children}
+    <div className="smooth-scroll min-h-0 flex-1 overflow-y-auto">
+      <div
+        className={cn(
+          "mx-auto w-full max-w-[1200px] px-4 pb-12 pt-6 md:px-8",
+          className,
+        )}
+      >
+        {children}
+      </div>
     </div>
   );
 }

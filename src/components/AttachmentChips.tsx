@@ -27,22 +27,22 @@ export default function AttachmentChips({
       {files.map((f, idx) => (
         <span
           key={`${f.name}-${idx}`}
-          className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
+          className="inline-flex items-center gap-1 rounded-full bg-bg-muted px-2 py-0.5 text-xs text-text-secondary"
         >
           <span className="max-w-[180px] truncate">{f.name}</span>
-          <span className="text-gray-500">· {formatBytes(f.size)}</span>
+          <span className="text-text-tertiary">· {formatBytes(f.size)}</span>
           <button
             type="button"
             onClick={() => onRemove(idx)}
             className="ml-0.5 rounded hover:bg-gray-200"
-            aria-label={`Remove ${f.name}`}
+            aria-label={`Remover ${f.name}`}
           >
             <X className="h-3 w-3" />
           </button>
         </span>
       ))}
       <span
-        className={`ml-auto text-xs ${over ? "text-red-600 font-medium" : "text-gray-500"}`}
+        className={`ml-auto text-xs ${over ? "text-destructive font-medium" : "text-text-tertiary"}`}
       >
         {formatBytes(total)} / {formatBytes(capBytes)}
       </span>

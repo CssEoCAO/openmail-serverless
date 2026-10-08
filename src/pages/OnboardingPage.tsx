@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signIn } from "@/lib/auth-client";
-import { WordmarkLarge } from "@/components/Wordmark";
+import {
+  CartaoPublico,
+  ErroPublico,
+  botaoPrimario,
+  campoPublico,
+  rotuloPublico,
+} from "@/components/Publico";
 import { useBranding } from "@/lib/branding";
 
 type Status = "checking" | "available" | "unavailable" | "migration-required";
@@ -62,183 +68,127 @@ export default function OnboardingPage() {
         const data = (await res
           .json()
           .catch(() => ({}))) as SetupStatusResponse;
-        setError(data.error || "Setup failed");
+        setError(data.error || "Não deu para criar a conta.");
         if (res.status === 503 && data.code === "DATABASE_MIGRATION_REQUIRED") {
           setMigrationRequired(data);
           setStatus("migration-required");
         }
         return;
       }
-      const result = await signIn.emailAndPassword({ email, password });
+      const result = await signIn.email({ email, password });
       if (result.error) {
         navigate("/login", { replace: true });
         return;
       }
       window.location.href = passkeyRequired ? "/setup-passkey" : "/";
     } catch {
-      setError("Setup failed");
+      setError("Não deu para criar a conta.");
     } finally {
       setLoading(false);
     }
   }
 
   if (status === "checking") {
-    return <p className="text-sm text-white/60">Loading…</p>;
+    return <p className="text-sm text-text-tertiary">Carregando…</p>;
   }
 
   if (status === "migration-required") {
     return (
-      <div className="flex w-full max-w-sm flex-col items-center gap-8">
-        <WordmarkLarge />
-        <div className="w-full rounded-2xl bg-white/10 p-8 shadow-2xl ring-1 ring-white/20 backdrop-blur-xl">
-          <h2 className="text-xl font-extrabold tracking-tight text-white">
-            Database migration required
-          </h2>
-          <p className="mt-3 text-sm font-light text-white/60">
-            {migrationRequired?.error ||
-              "The production database has not been initialized yet."}
-          </p>
-          <div className="mt-5 rounded-md bg-white/5 px-3 py-2 text-xs font-medium text-white ring-1 ring-white/15">
-            {migrationRequired?.command || "yarn db:migrate:prod"}
-          </div>
-          <p className="mt-4 text-xs font-light text-white/40">
-            For a guided first deploy, run{" "}
-            <code className="rounded bg-white/10 px-1 py-0.5 text-white/70">
-              /saasmail-onboarding
-            </code>{" "}
-            in Claude Code, then reload this page.
-          </p>
-        </div>
-      </div>
+      <CartaoPublico
+        titulo="Falta preparar o banco"
+        subtitulo={
+          migrationRequired?.error ||
+          "O banco de produção ainda não recebeu as migrações."
+        }
+      >
+        <code className="block rounded-[6px] border border-border bg-bg-subtle px-3 py-2 text-xs text-text-primary">
+          {migrationRequired?.command || "yarn db:migrate:prod"}
+        </code>
+        <p className="mt-3 text-xs text-text-tertiary">
+          Rode o comando acima e recarregue esta página.
+        </p>
+      </CartaoPublico>
     );
   }
 
   if (status === "unavailable") {
     return (
-      <div className="flex w-full max-w-sm flex-col items-center gap-8">
-        <WordmarkLarge />
-        <div className="w-full rounded-2xl bg-white/10 p-8 shadow-2xl ring-1 ring-white/20 backdrop-blur-xl">
-          <h2 className="text-xl font-extrabold tracking-tight text-white">
-            Setup complete
-          </h2>
-          <p className="mt-3 text-sm font-light text-white/60">
-            An administrator account already exists. Please sign in instead.
-          </p>
-          <button
-            className="mt-6 w-full rounded-full bg-white py-2.5 text-sm font-medium text-[#0a0a0a] transition-colors hover:bg-white/90"
-            onClick={() => navigate("/login")}
-          >
-            Go to sign in
-          </button>
-        </div>
-      </div>
+      <CartaoPublico
+        titulo="Configuração já feita"
+        subtitulo="Já existe uma conta de administrador. Entre com ela."
+      >
+        <button className={botaoPrimario} onClick={() => navigate("/login")}>
+          Ir para o login
+        </button>
+      </CartaoPublico>
     );
   }
 
   return (
-    <div className="flex w-full max-w-sm flex-col items-center gap-8">
-      <WordmarkLarge />
-      <div className="w-full rounded-2xl bg-white/10 p-8 shadow-2xl ring-1 ring-white/20 backdrop-blur-xl">
-        <div className="mb-6">
-          <h2 className="text-xl font-extrabold tracking-tight text-white">
-            Welcome
-          </h2>
-          <p className="mt-1.5 text-sm font-light text-white/60">
-            Create the first administrator account to get started.
-          </p>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <label
-              htmlFor="bootstrap-token"
-              className="text-xs font-medium text-white/50"
-            >
-              Operator bootstrap token
-            </label>
-            <input
-              id="bootstrap-token"
-              type="password"
-              autoComplete="off"
-              required
-              value={bootstrapToken}
-              onChange={(e) => setBootstrapToken(e.target.value)}
-              className={INPUT_CLASS}
-            />
-            <p className="text-xs text-white/50">
-              Ask the operator for the temporary setup token.
-            </p>
-          </div>
-          <div className="space-y-1.5">
-            <label
-              htmlFor="onboarding-name"
-              className="text-xs font-medium uppercase tracking-wider text-white/50"
-            >
-              Name
-            </label>
-            <input
-              id="onboarding-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              autoComplete="name"
-              className={INPUT_CLASS}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label
-              htmlFor="onboarding-email"
-              className="text-xs font-medium uppercase tracking-wider text-white/50"
-            >
-              Email
-            </label>
-            <input
-              id="onboarding-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-              className={INPUT_CLASS}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label
-              htmlFor="onboarding-password"
-              className="text-xs font-medium uppercase tracking-wider text-white/50"
-            >
-              Password
-            </label>
-            <input
-              id="onboarding-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              autoComplete="new-password"
-              className={INPUT_CLASS}
-            />
-            <p className="text-xs font-light text-white/40">
-              At least 8 characters.
-            </p>
-          </div>
-          {error && (
-            <p className="text-sm text-red-300" role="alert">
-              {error}
-            </p>
-          )}
-          <button
-            type="submit"
-            className="w-full rounded-full bg-white py-2.5 text-sm font-medium text-[#0a0a0a] transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={loading}
-          >
-            {loading ? "Creating account…" : "Create administrator"}
-          </button>
-        </form>
-      </div>
-    </div>
+    <CartaoPublico
+      titulo="Primeiro acesso"
+      subtitulo="Crie a conta de administrador para começar."
+    >
+      <form onSubmit={handleSubmit} className="grid gap-3.5">
+        <label className="grid gap-1.5">
+          <span className={rotuloPublico}>Código de instalação</span>
+          <input
+            id="bootstrap-token"
+            type="password"
+            autoComplete="off"
+            required
+            value={bootstrapToken}
+            onChange={(e) => setBootstrapToken(e.target.value)}
+            className={campoPublico}
+          />
+          <span className="text-xs text-text-tertiary">
+            Código temporário de quem instalou (scripts/prepare-bootstrap.mjs).
+          </span>
+        </label>
+        <label className="grid gap-1.5">
+          <span className={rotuloPublico}>Nome</span>
+          <input
+            id="onboarding-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            autoComplete="name"
+            className={campoPublico}
+          />
+        </label>
+        <label className="grid gap-1.5">
+          <span className={rotuloPublico}>E-mail</span>
+          <input
+            id="onboarding-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+            className={campoPublico}
+          />
+        </label>
+        <label className="grid gap-1.5">
+          <span className={rotuloPublico}>Senha</span>
+          <input
+            id="onboarding-password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={8}
+            autoComplete="new-password"
+            className={campoPublico}
+          />
+          <span className="text-xs text-text-tertiary">
+            Pelo menos 8 caracteres.
+          </span>
+        </label>
+        {error && <ErroPublico>{error}</ErroPublico>}
+        <button type="submit" className={botaoPrimario} disabled={loading}>
+          {loading ? "Criando a conta…" : "Criar administrador"}
+        </button>
+      </form>
+    </CartaoPublico>
   );
 }
-
-const INPUT_CLASS =
-  "h-10 w-full rounded-md border-0 bg-white/5 px-3 text-sm text-white ring-1 ring-white/15 placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-white/40 transition-all";

@@ -43,7 +43,7 @@ export default function TemplatesPage() {
   }, []);
 
   async function handleDelete(slug: string) {
-    if (!confirm("Delete this template?")) return;
+    if (!confirm("Excluir este modelo?")) return;
     await deleteTemplate(slug);
     setTemplates((prev) => prev.filter((t) => t.slug !== slug));
   }
@@ -51,32 +51,29 @@ export default function TemplatesPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Email Templates"
-        subtitle="Reusable HTML email templates with {{variable}} interpolation. Send via the UI or API."
+        title="Modelos de e-mail"
+        subtitle="Modelos HTML reaproveitáveis com {{variável}}. Usados na resposta, nas sequências e pela API."
         action={
           <button
             onClick={() => navigate("/templates/new")}
-            className="inline-flex items-center gap-1.5 rounded-[8px] bg-text-primary px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-text-primary/90"
+            className="inline-flex items-center gap-1.5 rounded-[6px] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             <Plus size={14} />
-            New template
+            Novo modelo
           </button>
         }
       />
 
       <div className="max-w-4xl">
         {loading ? (
-          <p className="text-sm font-light text-text-tertiary">Loading…</p>
+          <p className="text-sm text-text-tertiary">Carregando…</p>
         ) : templates.length === 0 ? (
           <div className="rounded-[8px] bg-card p-10 text-center ring-1 ring-border">
-            <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-violet/10">
-              <FileText size={20} style={{ color: "#7c5cfc" }} />
-            </span>
             <p className="mb-1 text-sm font-medium text-text-primary">
-              No templates yet
+              Nenhum modelo ainda
             </p>
             <p className="text-xs font-light text-text-tertiary">
-              Use the "New template" button above to create your first one.
+              Crie o primeiro pelo botão "Novo modelo".
             </p>
           </div>
         ) : (
@@ -106,9 +103,8 @@ export default function TemplatesPage() {
                           </p>
                           {varCount > 0 && (
                             <span
-                              title={`${varCount} variable${varCount === 1 ? "" : "s"}`}
-                              className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-violet/10 px-1.5 py-0.5 text-[10px] font-mono"
-                              style={{ color: "#7c5cfc" }}
+                              title={`${varCount} ${varCount === 1 ? "variável" : "variáveis"}`}
+                              className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary-soft px-1.5 py-0.5 font-mono text-[11px] text-primary-ink"
                             >
                               <Hash size={9} />
                               {varCount}
@@ -127,11 +123,11 @@ export default function TemplatesPage() {
                         className="inline-flex h-8 items-center gap-1.5 rounded-[6px] px-2.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
                       >
                         <Pencil size={12} />
-                        Edit
+                        Editar
                       </button>
                       <button
                         onClick={() => handleDelete(t.slug)}
-                        aria-label="Delete"
+                        aria-label="Excluir"
                         className="inline-flex h-8 items-center gap-1.5 rounded-[6px] px-2.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
                       >
                         <Trash2 size={12} />

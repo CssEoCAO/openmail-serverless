@@ -57,7 +57,7 @@ export default function CcInput({
   value,
   onChange,
   internalDomains = [],
-  placeholder = "Add CC — Enter to confirm",
+  placeholder = "Adicionar CC (Enter confirma)",
   testId,
 }: CcInputProps) {
   const [draft, setDraft] = useState("");
@@ -108,10 +108,9 @@ export default function CcInput({
             className={cn(
               "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium leading-none",
               internal
-                ? "border-lime-400/40 bg-lime-400/10"
+                ? "border-primary/30 bg-primary-soft text-primary-ink"
                 : "border-border bg-bg-muted/60 text-text-secondary",
             )}
-            style={internal ? { color: "#5b7700" } : undefined}
           >
             {labelOf(c)}
             <button
@@ -120,7 +119,7 @@ export default function CcInput({
                 e.stopPropagation();
                 remove(c.email);
               }}
-              aria-label={`Remove ${c.email}`}
+              aria-label={`Remover ${c.email}`}
               className="rounded-full p-0.5 hover:bg-black/10"
             >
               <X size={9} />

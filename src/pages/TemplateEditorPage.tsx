@@ -52,7 +52,7 @@ function formatHtml(input: string): string {
           /\/>$/.test(trimmed) ||
           /^<(br|hr|img|input|meta|link)\b/i.test(trimmed);
         if (isClosing) acc.indent = Math.max(0, acc.indent - 1);
-        acc.lines.push("  ".repeat(acc.indent) + trimmed);
+        acc.lines.push(" ".repeat(acc.indent) + trimmed);
         if (!isClosing && !isSelfClosing && /^<[^/!]/.test(trimmed))
           acc.indent++;
         return acc;
@@ -107,7 +107,7 @@ export default function TemplateEditorPage() {
         setSubject(t.subject);
         setBodyHtml(t.bodyHtml);
       })
-      .catch(() => setError("Template not found"))
+      .catch(() => setError("Modelo não encontrado"))
       .finally(() => setLoading(false));
   }, [slug]);
 
@@ -123,7 +123,7 @@ export default function TemplateEditorPage() {
       }
       navigate("/templates");
     } catch {
-      setError("Failed to save template");
+      setError("Não deu para salvar o modelo");
     } finally {
       setSaving(false);
     }
@@ -132,7 +132,7 @@ export default function TemplateEditorPage() {
   if (loading) {
     return (
       <PageContainer>
-        <p className="pt-10 text-sm text-text-tertiary">Loading…</p>
+        <p className="pt-10 text-sm text-text-tertiary">Carregando…</p>
       </PageContainer>
     );
   }
@@ -145,16 +145,16 @@ export default function TemplateEditorPage() {
         className="-mt-1 mb-1 inline-flex items-center gap-1 text-xs font-medium text-text-tertiary transition-colors hover:text-text-primary"
       >
         <ArrowLeft size={12} />
-        Templates
+        Modelos
       </Link>
 
       <PageHeader
-        title={isEdit ? name || "Edit template" : "New template"}
+        title={isEdit ? name || "Editar modelo" : "Novo modelo"}
         subtitle={
           isEdit && slugValue ? (
             <span className="font-mono">{slugValue}</span>
           ) : (
-            "Reusable HTML email with {{variable}} interpolation."
+            "E-mail HTML reaproveitável com {{variável}}."
           )
         }
         action={
@@ -164,15 +164,15 @@ export default function TemplateEditorPage() {
               onClick={() => navigate("/templates")}
               className="rounded-[6px] border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
             >
-              Cancel
+              Cancelar
             </button>
             <button
               type="button"
               onClick={() => handleSave()}
               disabled={saving}
-              className="rounded-[6px] bg-text-primary px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-text-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-[6px] bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {saving ? "Saving…" : isEdit ? "Save changes" : "Create template"}
+              {saving ? "Salvando…" : isEdit ? "Salvar" : "Criar modelo"}
             </button>
           </div>
         }
@@ -181,7 +181,7 @@ export default function TemplateEditorPage() {
       {error && (
         <div
           role="alert"
-          className="mb-4 rounded-[8px] border border-red-200 bg-red-50 px-4 py-2.5 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+          className="mb-4 rounded-[6px] border border-destructive/40 bg-destructive-subtle px-4 py-2.5 text-xs text-destructive"
         >
           {error}
         </div>
@@ -192,16 +192,16 @@ export default function TemplateEditorPage() {
         <section className="rounded-[8px] bg-card p-5 ring-1 ring-border">
           <SectionHeader
             icon={Sparkles}
-            title="Details"
-            subtitle="The template's identity. Slug is the stable id used by the API and sequences."
+            title="Identificação"
+            subtitle="O slug é o identificador fixo que a API e as sequências usam."
           />
 
           <div className="mt-4 space-y-4">
-            <Field label="Name" hint="Shown in the template picker.">
+            <Field label="Nome" hint="Aparece na lista de modelos.">
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Welcome email"
+                placeholder="Boas-vindas"
                 required
                 className={FORM_INPUT_CLASS}
               />
@@ -212,16 +212,16 @@ export default function TemplateEditorPage() {
                 label="Slug"
                 hint={
                   isEdit
-                    ? "Slug can't change once a template is created."
-                    : "Lowercase letters, numbers, hyphens."
+                    ? "O slug não muda depois que o modelo existe."
+                    : "Letras minúsculas, números e hífens."
                 }
               >
                 <input
                   value={slugValue}
                   onChange={(e) => setSlugValue(e.target.value)}
-                  placeholder="welcome-email"
+                  placeholder="boas-vindas"
                   pattern="[a-z0-9-]+"
-                  title="Lowercase letters, numbers, and hyphens only"
+                  title="Só letras minúsculas, números e hífens"
                   disabled={isEdit}
                   required
                   className={cn(
@@ -233,22 +233,22 @@ export default function TemplateEditorPage() {
               </Field>
 
               <Field
-                label="Subject line"
+                label="Assunto"
                 hint={
                   <>
                     Use{" "}
                     <code className="rounded bg-bg-muted px-1 py-0.5 font-mono text-[10px]">
                       {`{{variable}}`}
                     </code>{" "}
-                    for placeholders. Plain text here, not HTML — values are
-                    substituted unescaped, unlike the body.
+                    para os campos. Aqui é texto puro, não HTML: os valores
+                    entram sem escape, diferente do corpo.
                   </>
                 }
               >
                 <input
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  placeholder="Welcome, {{name}}!"
+                  placeholder="Boas-vindas, {{nome}}!"
                   required
                   className={FORM_INPUT_CLASS}
                 />
@@ -263,10 +263,10 @@ export default function TemplateEditorPage() {
             <div className="min-w-0">
               <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-primary">
                 <Code2 size={13} className="text-text-tertiary" />
-                Body
+                Corpo
               </h2>
               <p className="mt-0.5 text-xs font-light text-text-secondary">
-                Author HTML on the left, see the rendered email on the right.
+                HTML à esquerda, o e-mail pronto à direita.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -278,7 +278,7 @@ export default function TemplateEditorPage() {
                 className="inline-flex h-7 items-center gap-1.5 rounded-[6px] border border-border bg-card px-2.5 text-[11px] font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Wand2 size={11} />
-                Format
+                Formatar
               </button>
             </div>
           </div>
@@ -293,7 +293,7 @@ export default function TemplateEditorPage() {
             analysis.sections.length > 0) && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-bg-subtle/40 px-5 py-2.5">
               <VarGroup
-                label="Required"
+                label="Obrigatórias"
                 // Section names get their own accurate chip (with the right
                 // sigil) in the Sections group below — showing them again
                 // here as bare `{{name}}` would be a string that never
@@ -301,10 +301,10 @@ export default function TemplateEditorPage() {
                 items={analysis.required
                   .filter((v) => !isSectionName(analysis, v))
                   .map((v) => ({ name: v, label: `{{${v}}}` }))}
-                className="bg-violet/10 text-[#7c5cfc]"
+                className="bg-primary-soft text-primary-ink"
               />
               <VarGroup
-                label="Optional"
+                label="Opcionais"
                 // Same exclusion: an inverted or `?`-marked section lands in
                 // `analysis.optional` too, but its optionality is already
                 // shown correctly (as ^ or #...?) in the Sections chip.
@@ -314,12 +314,12 @@ export default function TemplateEditorPage() {
                 className="bg-bg-muted text-text-secondary"
               />
               <VarGroup
-                label="Sections"
+                label="Seções"
                 items={analysis.sections.map((s) => ({
                   name: s.name,
                   label: sectionChipLabel(s, analysis),
                 }))}
-                className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                className="bg-success-subtle text-success"
               />
             </div>
           )}
@@ -335,7 +335,7 @@ export default function TemplateEditorPage() {
                   viewMode === "code" && "md:col-span-2",
                 )}
               >
-                <PaneLabel>HTML source</PaneLabel>
+                <PaneLabel>HTML</PaneLabel>
                 <div className="min-h-0 flex-1">
                   <HtmlCodeEditor value={bodyHtml} onChange={setBodyHtml} />
                 </div>
@@ -350,13 +350,13 @@ export default function TemplateEditorPage() {
                   viewMode === "preview" && "md:col-span-2",
                 )}
               >
-                <PaneLabel>Preview</PaneLabel>
-                <div className="min-h-0 flex-1 bg-white">
+                <PaneLabel>Prévia</PaneLabel>
+                <div className="min-h-0 flex-1 bg-card">
                   <iframe
-                    title="Email preview"
+                    title="Prévia do e-mail"
                     sandbox="allow-same-origin"
                     srcDoc={previewHtml}
-                    className="h-full w-full"
+                    className="h-full w-full bg-white"
                   />
                 </div>
               </div>
@@ -388,19 +388,19 @@ function ViewToggle({ mode, onChange }: ViewToggleProps) {
         active={mode === "code"}
         onClick={() => onChange("code")}
         icon={Code2}
-        label="Code"
+        label="Código"
       />
       <ToggleButton
         active={mode === "split"}
         onClick={() => onChange("split")}
         icon={Sparkles}
-        label="Split"
+        label="Lado a lado"
       />
       <ToggleButton
         active={mode === "preview"}
         onClick={() => onChange("preview")}
         icon={Eye}
-        label="Preview"
+        label="Prévia"
       />
     </div>
   );
@@ -450,9 +450,7 @@ function VarGroup({
   if (items.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-[10px] font-medium uppercase tracking-wider text-text-tertiary">
-        {label}
-      </span>
+      <span className="text-xs font-medium text-text-tertiary">{label}</span>
       {items.map((item) => (
         <code
           key={item.name}
@@ -474,32 +472,35 @@ const SYNTAX_ROWS: Array<{ tag: string; meaning: string }> = [
   {
     tag: "{{key}}",
     meaning:
-      "Value, HTML-escaped in the body. The subject is plain text, so it's substituted unescaped there.",
+      "Valor, com escape de HTML no corpo. No assunto, que é texto puro, entra sem escape.",
   },
   {
     tag: "{{{key}}}",
-    meaning: "Value, raw. Only for HTML you generated yourself.",
+    meaning: "Valor cru. Só para HTML gerado pelo seu próprio código.",
   },
   {
     tag: "{{key?}}",
-    meaning: "Optional — renders empty instead of failing the send.",
+    meaning: "Opcional: fica vazio em vez de barrar o envio.",
   },
-  { tag: "{{key|nl2br}}", meaning: "Escaped, then newlines become <br>." },
+  {
+    tag: "{{key|nl2br}}",
+    meaning: "Com escape, e as quebras de linha viram <br>.",
+  },
   {
     tag: "{{#key}}…{{/key}}",
-    meaning: "Renders if truthy; repeats for each item in an array.",
+    meaning: "Aparece se tiver valor; repete para cada item de uma lista.",
   },
   {
     tag: "{{#key?}}…{{/key}}",
-    meaning: "Same as {{#key}}, but doesn't fail the send if missing.",
+    meaning: "Igual a {{#key}}, mas não barra o envio se faltar.",
   },
   {
     tag: "{{^key}}…{{/key}}",
-    meaning: "Renders only if the value is missing or empty.",
+    meaning: "Aparece só se o valor faltar ou estiver vazio.",
   },
   {
     tag: "{{.}}",
-    meaning: "The current item, inside a list of plain strings.",
+    meaning: "O item atual, numa lista de textos simples.",
   },
 ];
 
@@ -512,7 +513,7 @@ const LOOP_SNIPPET = `<table>
   {{/items}}
 </table>
 {{^items}}
-  <p>Nothing to show yet.</p>
+  <p>Nada para mostrar ainda.</p>
 {{/items}}`;
 
 const MULTILINE_SNIPPET = `<div style="white-space: pre-line">
@@ -532,10 +533,10 @@ function SyntaxCard() {
         <div className="min-w-0">
           <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-primary">
             <BookOpen size={13} className="text-text-tertiary" />
-            Syntax &amp; styling
+            Sintaxe e estilo
           </h2>
           <p className="mt-0.5 text-xs font-light text-text-secondary">
-            Every tag you can use, and the styles worth knowing about.
+            Todas as marcações e os estilos que valem saber.
           </p>
         </div>
         <ChevronDown
@@ -572,48 +573,47 @@ function SyntaxCard() {
           </div>
 
           <Field
-            label="Lists and empty states"
-            hint="Names inside a section match the item first, then fall back to the top level — so {{currency}} can live outside {{#items}}."
+            label="Listas e estado vazio"
+            hint="Dentro de uma seção o nome procura primeiro no item e depois no nível de cima: {{currency}} pode ficar fora de {{#items}}."
           >
             <CodeBlock value={LOOP_SNIPPET} />
           </Field>
 
           <Field
-            label="Multi-line values"
-            hint="HTML collapses newlines to spaces. Use {{message|nl2br}}, or keep the line breaks with a style on the wrapping block."
+            label="Valores com várias linhas"
+            hint="O HTML junta as quebras de linha em espaços. Use {{message|nl2br}}, ou mantenha as quebras com um estilo no bloco em volta."
           >
             <CodeBlock value={MULTILINE_SNIPPET} />
           </Field>
 
-          <div className="rounded-[6px] border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs font-light text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-            <strong className="font-medium">Escaped by default.</strong> A value
-            containing HTML renders as visible text, so it can't introduce tags
-            into an email signed by your domain. Use{" "}
-            <code className="rounded bg-amber-100 px-1 font-mono dark:bg-amber-500/20">
+          <div className="rounded-[6px] border border-warning-border bg-warning-bg px-3 py-2.5 text-xs text-warning-text">
+            <strong className="font-medium">Escape por padrão.</strong> Valor
+            com HTML aparece como texto, então não injeta marcação num e-mail
+            assinado pelo nosso domínio. Use{" "}
+            <code className="rounded bg-warning-bg px-1 font-mono">
               {`{{{key}}}`}
             </code>{" "}
-            only for HTML your own code produced.
+            só para HTML que o seu próprio código gerou.
             <div className="mt-1.5">
-              Escaping covers <code className="font-mono">{`& < > " '`}</code>{" "}
-              only — it is not a URL check. Keep every attribute quoted (
-              <code className="font-mono">{`href="{{url}}"`}</code>, never{" "}
-              <code className="font-mono">{`href={{url}}`}</code>), and don't
-              put an untrusted value in an{" "}
-              <code className="font-mono">href</code> without checking its
-              scheme: <code className="font-mono">javascript:</code> passes
-              through.
+              O escape cobre só <code className="font-mono">{`& < > " '`}</code>
+              ; não confere URL. Deixe todo atributo entre aspas (
+              <code className="font-mono">{`href="{{url}}"`}</code>, nunca{" "}
+              <code className="font-mono">{`href={{url}}`}</code>) e não ponha
+              valor de fora num <code className="font-mono">href</code> sem
+              conferir o esquema: <code className="font-mono">javascript:</code>{" "}
+              passa.
             </div>
           </div>
 
-          <div className="rounded-[6px] border border-border bg-bg-subtle/50 px-3 py-2.5 text-xs font-light text-text-secondary">
+          <div className="rounded-[6px] border border-border bg-bg-subtle/50 px-3 py-2.5 text-xs text-text-secondary">
             <strong className="font-medium text-text-primary">
-              Adding a variable affects live senders.
+              Variável nova afeta quem já envia.
             </strong>{" "}
-            A new{" "}
+            Um{" "}
             <code className="rounded bg-bg-muted px-1 font-mono">{`{{key}}`}</code>{" "}
-            takes effect the moment you save, and callers that don't send it
-            start failing with 400. Deploy the caller first, or mark it optional
-            with{" "}
+            novo vale assim que você salva, e quem chama sem mandar o valor
+            passa a receber 400. Atualize quem chama antes, ou marque como
+            opcional com{" "}
             <code className="rounded bg-bg-muted px-1 font-mono">{`{{key?}}`}</code>
             .
           </div>
@@ -668,7 +668,7 @@ function ApiReferenceCard({
   const endpoint = `${typeof window !== "undefined" ? window.location.origin : ""}/api/email-templates/${slug || "<slug>"}/send`;
   const curlCommand = `curl -X POST ${endpoint} \\
   -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer <your-api-key>" \\
+  -H "Authorization: Bearer <sua-chave-de-api>" \\
   -d '${curlBody}'`;
 
   const errorBody = JSON.stringify(
@@ -692,11 +692,10 @@ function ApiReferenceCard({
         <div className="min-w-0">
           <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-primary">
             <Code2 size={13} className="text-text-tertiary" />
-            Send via API
+            Enviar pela API
           </h2>
           <p className="mt-0.5 text-xs font-light text-text-secondary">
-            Trigger this template from your backend with a single authenticated
-            POST.
+            Dispare este modelo do seu sistema com um POST autenticado.
           </p>
         </div>
         <ChevronDown
@@ -710,21 +709,20 @@ function ApiReferenceCard({
 
       {open && (
         <div className="space-y-5 border-t border-border px-5 py-5">
-          <Field label="Endpoint" hint="POST to this URL with a JSON body.">
+          <Field label="Rota" hint="POST nesta URL com corpo em JSON.">
             <CodeBlock value={`POST ${endpoint}`} oneLine />
           </Field>
 
           {variables.length > 0 && (
             <Field
-              label="Required variables"
-              hint="All variables must be provided in the request body or the API returns 400."
+              label="Variáveis obrigatórias"
+              hint="Todas precisam ir no corpo da requisição, senão a API devolve 400."
             >
               <div className="flex flex-wrap gap-1.5">
                 {variables.map((v) => (
                   <code
                     key={v}
-                    className="rounded-full bg-violet/10 px-2 py-0.5 text-[11px] font-mono"
-                    style={{ color: "#7c5cfc" }}
+                    className="rounded-full bg-primary-soft px-2 py-0.5 font-mono text-[11px] text-primary-ink"
                   >
                     {chipLabel(v, analysis)}
                   </code>
@@ -733,11 +731,11 @@ function ApiReferenceCard({
             </Field>
           )}
 
-          <Field label="Example request">
+          <Field label="Exemplo de requisição">
             <CodeBlock value={curlCommand} />
           </Field>
 
-          <Field label="Error response (400)">
+          <Field label="Resposta de erro (400)">
             <CodeBlock value={errorBody} />
           </Field>
         </div>

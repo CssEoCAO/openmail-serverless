@@ -1,13 +1,11 @@
 import { useState, useMemo, useRef, useEffect, useLayoutEffect } from "react";
 import {
-  Inbox,
   Link2,
   Maximize2,
   Trash2,
   UserPen,
   ArrowDown,
   Check,
-  CheckCheck,
   Reply,
 } from "lucide-react";
 import type { Email } from "@/lib/api";
@@ -21,6 +19,7 @@ import EmailHtmlFrame from "@/components/EmailHtmlFrame";
 import { rosterOf, diffRosters } from "@/lib/roster";
 import type { ComposePrefill } from "@/pages/ComposeModal";
 import { copyMessageLink, messageDomId } from "@/lib/message-link";
+import { rotuloDia, soHora } from "@/lib/datas";
 import {
   HIDE_SIGNATURES_EVENT,
   readHideSignatures,
@@ -89,24 +88,6 @@ function shouldShowHtmlPreview(email: Email): boolean {
   // Plain text exists but the HTML is significantly richer — render preview.
   const looksMarketingy = /<table|<style|class="/i.test(html);
   return looksMarketingy && html.length > 4000;
-}
-
-function dayLabel(ts: number): string {
-  const d = new Date(ts * 1000);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yesterday = new Date(today.getTime() - 86_400_000);
-  const dDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  if (dDay.getTime() === today.getTime()) return "Today";
-  if (dDay.getTime() === yesterday.getTime()) return "Yesterday";
-  if (now.getTime() - dDay.getTime() < 6 * 86_400_000) {
-    return d.toLocaleDateString([], { weekday: "long" });
-  }
-  return d.toLocaleDateString([], {
-    month: "short",
-    day: "numeric",
-    year: d.getFullYear() === now.getFullYear() ? undefined : "numeric",
-  });
 }
 
 interface BubbleProps {
@@ -181,11 +162,7 @@ function Bubble({
     ? text.slice(0, BUBBLE_TRUNCATE_CHARS).trimEnd() + "…"
     : text;
 
-  const ts = new Date(email.timestamp * 1000);
-  const stamp = ts.toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const stamp = soHora(email.timestamp);
 
   function handleClick() {
     if (isUnread) onMarkRead(email);
@@ -222,7 +199,7 @@ function Bubble({
       {showHtmlPreview ? (
         <div
           data-testid="chat-html-preview"
-          className={`relative w-full max-w-[85%] overflow-hidden rounded-2xl bg-white text-left text-text-primary shadow-sm ring-1 ring-border sm:max-w-[78%] ${
+          className={`relative w-full max-w-[85%] overflow-hidden rounded-[12px] bg-white text-left text-[#181a20] ring-1 ring-border sm:max-w-[78%] ${
             isUnread ? "outline outline-2 outline-violet/40" : ""
           }`}
         >
@@ -234,16 +211,16 @@ function Bubble({
         </div>
       ) : (
         <div
-          className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm sm:max-w-[78%] ${
+          className={`max-w-[85%] rounded-[12px] px-3.5 py-2 text-sm leading-relaxed sm:max-w-[78%] ${
             isSent
-              ? "bg-text-primary text-white"
-              : "bg-white text-text-primary ring-1 ring-border"
+              ? "bg-text-primary text-card dark:bg-primary/25 dark:text-text-primary"
+              : "bg-card text-text-primary ring-1 ring-border"
           } ${isUnread ? "outline outline-2 outline-violet/40" : ""}`}
         >
           {displayText ? (
             <p className="whitespace-pre-wrap break-words">{displayText}</p>
           ) : (
-            <p className="italic opacity-60">(no text content)</p>
+            <p className="italic opacity-60">(sem texto)</p>
           )}
           {text.length > BUBBLE_TRUNCATE_CHARS && (
             <button
@@ -253,10 +230,10 @@ function Bubble({
                 setExpanded(!expanded);
               }}
               className={`mt-1.5 text-xs font-medium underline-offset-2 hover:underline ${
-                isSent ? "text-white/85" : "text-text-secondary"
+                isSent ? "opacity-80" : "text-text-secondary"
               }`}
             >
-              {expanded ? "Show less" : "Show more"}
+              {expanded ? "Mostrar menos" : "Mostrar tudo"}
             </button>
           )}
         </div>
@@ -288,12 +265,13 @@ function Bubble({
         className={`mt-1 flex items-center gap-2 text-[10px] text-text-tertiary ${isSent ? "flex-row-reverse" : ""}`}
       >
         <span>{stamp}</span>
-        {isSent &&
-          (email.deliveredAt ? (
-            <CheckCheck size={11} className="text-text-tertiary" />
-          ) : (
-            <Check size={11} className="text-text-tertiary" />
-          ))}
+        {isSent && email.status !== "failed" && (
+          <Check
+            size={11}
+            className="text-text-tertiary"
+            aria-label="Enviada"
+          />
+        )}
         {email.bodyHtml && (
           <button
             type="button"
@@ -302,10 +280,10 @@ function Bubble({
               onOpenHtml(email);
             }}
             className="flex items-center gap-1 hover:text-text-secondary"
-            title="View original"
+            title="Ver a mensagem original"
           >
             <Maximize2 size={10} />
-            View original
+            Ver original
           </button>
         )}
         {onReply && (
@@ -332,7 +310,7 @@ function Bubble({
           }}
           data-testid="message-copy-link"
           className="flex items-center gap-1 opacity-0 transition-opacity hover:text-text-secondary group-hover:opacity-100"
-          title="Copy link to this message"
+          title="Copiar link desta mensagem"
         >
           <Link2 size={10} />
         </button>
@@ -345,7 +323,7 @@ function Bubble({
             }}
             data-testid="message-reassign"
             className="flex items-center gap-1 opacity-0 transition-opacity hover:text-text-secondary group-hover:opacity-100"
-            title="Reassign to another person"
+            title="Mover para outra pessoa"
           >
             <UserPen size={10} />
           </button>
@@ -356,15 +334,15 @@ function Bubble({
             e.stopPropagation();
             onDelete(email.id);
           }}
-          className="flex items-center gap-1 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
-          title="Delete email"
+          className="flex items-center gap-1 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+          title="Excluir mensagem"
         >
           <Trash2 size={10} />
         </button>
         {isUnread && !isSent && (
           <span
-            className="h-1.5 w-1.5 rounded-full"
-            style={{ backgroundColor: "#7c5cfc" }}
+            className="h-1.5 w-1.5 rounded-full bg-primary"
+            aria-label="Não lida"
           />
         )}
       </div>
@@ -379,7 +357,7 @@ function DaySeparator({ label }: DaySeparatorProps) {
   return (
     <div className="flex items-center gap-2 px-6 py-3">
       <span className="h-px flex-1 bg-border" />
-      <span className="rounded-full bg-bg-muted px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
+      <span className="rounded-full border border-border bg-card px-3 py-0.5 text-[11px] font-medium text-text-tertiary">
         {label}
       </span>
       <span className="h-px flex-1 bg-border" />
@@ -426,7 +404,7 @@ export default function ChatInboxSection({
     let lastEmail: Email | null = null;
     let lastRoster: Email["cc"] = [];
     for (const email of chronological) {
-      const label = dayLabel(email.timestamp);
+      const label = rotuloDia(email.timestamp);
       if (label !== lastDay) {
         out.push({ kind: "day", key: `day-${label}-${email.id}`, label });
         lastDay = label;
@@ -540,15 +518,7 @@ export default function ChatInboxSection({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-bg-subtle/40">
-      {/* Inbox header — sticky at top of section. Slim, just the address. */}
-      <div className="flex shrink-0 items-center gap-1.5 border-b border-border bg-card/80 px-3 py-1.5 backdrop-blur-sm">
-        <Inbox size={11} className="text-text-tertiary" />
-        <span className="text-xs font-medium text-text-secondary">
-          {group.inbox}
-        </span>
-      </div>
-
+    <div className="flex h-full min-h-0 flex-col bg-bg-subtle">
       {/* Scrollable messages area */}
       <div className="relative flex min-h-0 flex-1 flex-col">
         {/* Top fade — hints at scrollable content above */}
@@ -604,12 +574,12 @@ export default function ChatInboxSection({
             onClick={() => scrollToBottom("smooth")}
             className={`absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium shadow-lg transition-all ${
               hasNewBelow
-                ? "bg-text-primary text-white"
+                ? "bg-primary text-primary-foreground"
                 : "bg-card text-text-primary ring-1 ring-border"
             }`}
           >
             <ArrowDown size={12} />
-            {hasNewBelow ? "New messages" : "Jump to latest"}
+            {hasNewBelow ? "Mensagens novas" : "Ir para a mais recente"}
           </button>
         )}
       </div>

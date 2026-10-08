@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Three-pane inbox in Portuguese, and a faster open.** The inbox picker is gone: a sidebar lists the inboxes by domain (unread first; an inbox with nothing unread, no sender identity and no mail in 7 days folds into "+N sem movimento"), `/` is the combined list and the conversation opens beside it (one column plus a drawer below 1024 px). `/d/<domain>` redirects to `/`; `/inbox/<address>`, `/inbox/todas` and the push links keep working. Every screen is in PT-BR and follows the system light/dark preference; received HTML always renders on white. Speed, measured on the production build with the API latency production has today (desktop): open to the list 4.8 s → 2.9 s, reopen 4.8 s → 2.4 s, open a conversation 2.4 s → 1.9 s. Where it came from:
+  - First load ships 242 KB instead of 555 KB: routes load on demand, CodeMirror (template editor) and Tiptap (composer) only when opened, the WebGL shader is gone and Inter is self-hosted (the CSP no longer allows Google Fonts).
+  - `/assets/*` and `/fonts/*` are served `immutable` for a year — the Workers default (`max-age=0`) revalidated every file on every open. A hashed file that no longer exists (tab open across a deploy) answers 404 instead of the SPA's `index.html`, and the app reloads on `vite:preloadError`.
+  - The list and the counters are requested together with the session check instead of after it, `/api/stats` is fetched once per open instead of four times, and server data is cached by React Query (30 s, invalidated by the WebSocket and by actions).
+  - Resting the pointer on a row for 120 ms prefetches that conversation.
+
 - Replies to new forwarded messages can be sent from the configured personal
   mailbox through the original inbox identity, with conversation history,
   attachments, authenticated signed reply addresses and outbox deduplication.

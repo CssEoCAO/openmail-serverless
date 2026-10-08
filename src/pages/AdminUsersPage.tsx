@@ -37,50 +37,22 @@ import {
 import PageHeader, { PageContainer } from "@/components/PageHeader";
 import { SectionHeader } from "@/components/PageForm";
 import { cn } from "@/lib/utils";
+import Monograma from "@/components/Monograma";
 
 function formatDate(ts: number): string {
-  return new Date(ts * 1000).toLocaleDateString();
+  return new Date(ts * 1000).toLocaleDateString("pt-BR");
 }
 
 function relativeTime(ts: number): string {
   const diff = ts - Date.now() / 1000;
   const abs = Math.abs(diff);
-  if (abs < 3600) return diff < 0 ? "just now" : "in <1h";
+  if (abs < 3600) return diff < 0 ? "agora há pouco" : "em menos de 1 h";
   if (abs < 86400)
     return diff < 0
-      ? `${Math.floor(abs / 3600)}h ago`
-      : `in ${Math.floor(abs / 3600)}h`;
+      ? `há ${Math.floor(abs / 3600)} h`
+      : `em ${Math.floor(abs / 3600)} h`;
   const days = Math.floor(abs / 86400);
-  return diff < 0 ? `${days}d ago` : `in ${days}d`;
-}
-
-function avatarColor(seed: string): { bg: string; fg: string } {
-  // Same opaque palette as the group-thread avatars so identity colors
-  // feel consistent across the app.
-  const PALETTE = [
-    { bg: "#efebff", fg: "#5b3ce6" },
-    { bg: "#e4f8ec", fg: "#15803d" },
-    { bg: "#fdebf5", fg: "#be185d" },
-    { bg: "#fef0e4", fg: "#c2410c" },
-    { bg: "#e3f6fe", fg: "#0369a1" },
-    { bg: "#f3e7fe", fg: "#7e22ce" },
-    { bg: "#def5f3", fg: "#0f766e" },
-    { bg: "#fcf3d7", fg: "#a16207" },
-  ];
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) {
-    hash = (hash * 31 + seed.charCodeAt(i)) | 0;
-  }
-  return PALETTE[Math.abs(hash) % PALETTE.length];
-}
-
-function initials(name: string, email: string): string {
-  const source = name.trim() || email;
-  const parts = source
-    .split(/[\s.@]+/)
-    .filter(Boolean)
-    .slice(0, 2);
-  return parts.map((p) => p.charAt(0).toUpperCase()).join("") || "?";
+  return diff < 0 ? `há ${days} d` : `em ${days} d`;
 }
 
 type InviteStatus = "pending" | "used" | "expired";
@@ -92,22 +64,19 @@ function inviteStatus(invite: Invite): InviteStatus {
 
 const INVITE_STATUS_META: Record<
   InviteStatus,
-  { label: string; chipClass: string; color: string }
+  { label: string; chipClass: string }
 > = {
   pending: {
-    label: "Pending",
-    chipClass: "bg-emerald-50 ring-emerald-200/60 dark:bg-emerald-500/10",
-    color: "#047857",
+    label: "Aberto",
+    chipClass: "bg-success-subtle text-success ring-success/30",
   },
   used: {
-    label: "Accepted",
-    chipClass: "bg-violet/10 ring-violet/20",
-    color: "#7c5cfc",
+    label: "Aceito",
+    chipClass: "bg-primary-soft text-primary-ink ring-primary/20",
   },
   expired: {
-    label: "Expired",
-    chipClass: "bg-bg-muted ring-border",
-    color: "#6b7280",
+    label: "Expirado",
+    chipClass: "bg-bg-muted text-text-tertiary ring-border",
   },
 };
 
@@ -174,13 +143,13 @@ export default function AdminUsersPage() {
   }
 
   async function handleDelete(userId: string) {
-    if (!confirm("Delete this user? This can't be undone.")) return;
+    if (!confirm("Excluir este usuário? Não dá para desfazer.")) return;
     await deleteUser(userId);
     await loadData();
   }
 
   async function handleRevoke(inviteId: string) {
-    if (!confirm("Revoke this invitation? This cannot be undone.")) return;
+    if (!confirm("Revogar este convite? Não dá para desfazer.")) return;
     await revokeInvite(inviteId);
     await loadData();
   }
@@ -188,8 +157,8 @@ export default function AdminUsersPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Users"
-        subtitle="Invite teammates, manage roles, and track passkey adoption."
+        title="Usuários"
+        subtitle="Convide pessoas, defina o papel de cada uma e veja quem já tem passkey."
         action={
           <Dialog
             open={inviteDialogOpen}
@@ -204,35 +173,35 @@ export default function AdminUsersPage() {
             }}
           >
             <DialogTrigger asChild>
-              <button className="inline-flex items-center gap-1.5 rounded-[8px] bg-text-primary px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-text-primary/90">
+              <button className="inline-flex items-center gap-1.5 rounded-[6px] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
                 <Plus size={14} />
-                Invite user
+                Convidar
               </button>
             </DialogTrigger>
             <DialogContent className="border-border bg-card text-text-primary ring-1 ring-border">
               <DialogHeader>
                 <DialogTitle className="text-text-primary">
-                  {generatedLink ? "Invitation ready" : "Create invitation"}
+                  {generatedLink ? "Convite pronto" : "Novo convite"}
                 </DialogTitle>
               </DialogHeader>
               {!generatedLink ? (
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <span className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary">
-                      Role
+                    <span className="text-xs font-medium text-text-secondary">
+                      Papel
                     </span>
                     <div className="grid grid-cols-2 gap-2">
                       <RoleButton
                         active={inviteRole === "member"}
                         onClick={() => setInviteRole("member")}
-                        label="Member"
-                        hint="Limited inboxes"
+                        label="Membro"
+                        hint="Só as caixas liberadas"
                       />
                       <RoleButton
                         active={inviteRole === "admin"}
                         onClick={() => setInviteRole("admin")}
-                        label="Admin"
-                        hint="Full access"
+                        label="Administrador"
+                        hint="Acesso total"
                       />
                     </div>
                   </div>
@@ -240,31 +209,31 @@ export default function AdminUsersPage() {
                   <div className="space-y-1.5">
                     <label
                       htmlFor="invite-email"
-                      className="block text-[11px] font-medium uppercase tracking-wider text-text-tertiary"
+                      className="block text-xs font-medium text-text-secondary"
                     >
-                      Email{" "}
-                      <span className="text-text-tertiary/60">— optional</span>
+                      E-mail{" "}
+                      <span className="text-text-tertiary">(opcional)</span>
                     </label>
                     <input
                       id="invite-email"
                       type="email"
                       value={inviteEmail}
                       onChange={(e) => setInviteEmail(e.target.value)}
-                      placeholder="user@example.com"
-                      className="h-10 w-full rounded-[6px] border border-border bg-bg-subtle px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-text-primary/20"
+                      placeholder="pessoa@exemplo.com"
+                      className="h-10 w-full rounded-[6px] border border-border bg-card px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:border-primary focus:outline-none"
                     />
                     <p className="text-[11px] font-light text-text-tertiary">
-                      Lock the invite to one address, or leave blank for any
-                      teammate to accept.
+                      Prende o convite a um endereço; em branco, qualquer pessoa
+                      com o link aceita.
                     </p>
                   </div>
 
                   <div className="space-y-1.5">
                     <label
                       htmlFor="invite-expiry"
-                      className="block text-[11px] font-medium uppercase tracking-wider text-text-tertiary"
+                      className="block text-xs font-medium text-text-secondary"
                     >
-                      Expires in (days)
+                      Vale por (dias)
                     </label>
                     <input
                       id="invite-expiry"
@@ -273,23 +242,23 @@ export default function AdminUsersPage() {
                       max="30"
                       value={inviteExpiry}
                       onChange={(e) => setInviteExpiry(e.target.value)}
-                      className="h-10 w-full rounded-[6px] border border-border bg-bg-subtle px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-text-primary/20"
+                      className="h-10 w-full rounded-[6px] border border-border bg-card px-3 text-sm text-text-primary focus:border-primary focus:outline-none"
                     />
                   </div>
 
                   <button
                     onClick={handleCreateInvite}
                     disabled={inviteLoading}
-                    className="w-full rounded-[8px] bg-text-primary py-2 text-sm font-medium text-white transition-colors hover:bg-text-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="w-full rounded-[6px] bg-primary py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {inviteLoading ? "Creating…" : "Create invite"}
+                    {inviteLoading ? "Criando…" : "Criar convite"}
                   </button>
                 </div>
               ) : (
                 <div className="space-y-3">
                   <p className="text-xs font-light text-text-secondary">
-                    Share this link — it expires in {inviteExpiry} day
-                    {inviteExpiry === "1" ? "" : "s"}.
+                    Mande este link. Ele vale por {inviteExpiry}{" "}
+                    {inviteExpiry === "1" ? "dia" : "dias"}.
                   </p>
                   <div className="flex gap-2">
                     <input
@@ -302,7 +271,7 @@ export default function AdminUsersPage() {
                       className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[6px] border border-border bg-card px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
                     >
                       {copied ? <Check size={12} /> : <Copy size={12} />}
-                      {copied ? "Copied" : "Copy"}
+                      {copied ? "Copiado" : "Copiar"}
                     </button>
                   </div>
                 </div>
@@ -318,25 +287,24 @@ export default function AdminUsersPage() {
           <div className="border-b border-border px-5 py-4">
             <SectionHeader
               icon={Users}
-              title={`Members (${users.length})`}
-              subtitle="Everyone with a login on this saasmail instance."
+              title={`Pessoas (${users.length})`}
+              subtitle="Todo mundo com login nesta caixa."
             />
           </div>
 
           {loading ? (
             <p className="px-5 py-6 text-xs font-light text-text-tertiary">
-              Loading…
+              Carregando…
             </p>
           ) : users.length === 0 ? (
             <EmptyState
               icon={Users}
-              title="No members yet"
-              hint="Invite your first teammate above."
+              title="Ninguém ainda"
+              hint="Convide a primeira pessoa pelo botão acima."
             />
           ) : (
             <ul className="divide-y divide-border/60">
               {users.map((user) => {
-                const color = avatarColor(user.email);
                 const isMe = user.id === session?.user?.id;
                 const isAdmin = user.role === "admin";
                 return (
@@ -344,15 +312,7 @@ export default function AdminUsersPage() {
                     key={user.id}
                     className="flex items-center gap-3 px-5 py-3"
                   >
-                    <span
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
-                      style={{
-                        backgroundColor: color.bg,
-                        color: color.fg,
-                      }}
-                    >
-                      {initials(user.name, user.email)}
-                    </span>
+                    <Monograma nome={user.name} email={user.email} />
 
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -361,12 +321,12 @@ export default function AdminUsersPage() {
                         </p>
                         {isMe && (
                           <span className="inline-flex items-center rounded-full bg-bg-muted px-1.5 py-0.5 text-[10px] font-medium text-text-tertiary">
-                            you
+                            você
                           </span>
                         )}
                       </div>
                       <p className="truncate text-xs font-light text-text-tertiary">
-                        {user.email} · joined {formatDate(user.createdAt)}
+                        {user.email} · desde {formatDate(user.createdAt)}
                       </p>
                     </div>
 
@@ -375,13 +335,13 @@ export default function AdminUsersPage() {
                         active={user.hasPasskey}
                         icon={Fingerprint}
                         labelOn="Passkey"
-                        labelOff="No passkey"
+                        labelOff="Sem passkey"
                       />
                       <UserBadge
                         active={isAdmin}
                         icon={ShieldCheck}
-                        labelOn="Admin"
-                        labelOff="Member"
+                        labelOn="Administrador"
+                        labelOff="Membro"
                       />
                     </div>
 
@@ -389,7 +349,7 @@ export default function AdminUsersPage() {
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button
-                            aria-label="More actions"
+                            aria-label="Mais ações"
                             className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
                           >
                             <MoreHorizontal size={14} />
@@ -408,13 +368,13 @@ export default function AdminUsersPage() {
                             }
                             className="text-xs text-text-secondary focus:bg-bg-muted focus:text-text-primary"
                           >
-                            Make {isAdmin ? "member" : "admin"}
+                            {isAdmin ? "Tornar membro" : "Tornar administrador"}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => handleDelete(user.id)}
                             className="text-xs text-destructive focus:bg-bg-muted"
                           >
-                            Delete user
+                            Excluir usuário
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -431,16 +391,16 @@ export default function AdminUsersPage() {
           <div className="border-b border-border px-5 py-4">
             <SectionHeader
               icon={Mail}
-              title={`Invitations (${invites.length})`}
-              subtitle="Outstanding and historical invites."
+              title={`Convites (${invites.length})`}
+              subtitle="Convites abertos e os antigos."
             />
           </div>
 
           {invites.length === 0 ? (
             <EmptyState
               icon={UserPlus}
-              title="No invitations yet"
-              hint="Create one above to onboard your first teammate."
+              title="Nenhum convite ainda"
+              hint="Crie um pelo botão acima."
             />
           ) : (
             <ul className="divide-y divide-border/60">
@@ -458,32 +418,31 @@ export default function AdminUsersPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="truncate text-sm font-medium text-text-primary">
-                          {invite.email || "Open invite"}
+                          {invite.email || "Convite aberto"}
                         </p>
                         <span
                           className={cn(
                             "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1",
                             meta.chipClass,
                           )}
-                          style={{ color: meta.color }}
                         >
                           {meta.label}
                         </span>
                       </div>
                       <p className="truncate text-xs font-light text-text-tertiary">
-                        {invite.role} ·{" "}
+                        {invite.role === "admin" ? "administrador" : "membro"} ·{" "}
                         {status === "expired"
-                          ? `expired ${formatDate(invite.expiresAt)}`
+                          ? `expirou em ${formatDate(invite.expiresAt)}`
                           : status === "used"
-                            ? `accepted ${invite.usedAt ? formatDate(invite.usedAt) : ""}`
-                            : `expires ${relativeTime(invite.expiresAt)}`}
+                            ? `aceito ${invite.usedAt ? formatDate(invite.usedAt) : ""}`
+                            : `expira ${relativeTime(invite.expiresAt)}`}
                       </p>
                     </div>
                     {status === "pending" && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button
-                            aria-label="More actions"
+                            aria-label="Mais ações"
                             className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
                           >
                             <MoreHorizontal size={14} />
@@ -497,7 +456,7 @@ export default function AdminUsersPage() {
                             onClick={() => handleRevoke(invite.id)}
                             className="text-xs text-destructive focus:bg-bg-muted"
                           >
-                            Revoke invitation
+                            Revogar convite
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -533,7 +492,7 @@ function RoleButton({
       className={cn(
         "rounded-[8px] border px-3 py-2 text-left transition-colors",
         active
-          ? "border-text-primary/30 bg-text-primary/5"
+          ? "border-primary bg-primary-soft"
           : "border-border bg-card hover:bg-bg-muted",
       )}
     >
@@ -568,10 +527,9 @@ function UserBadge({
       className={cn(
         "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1",
         active
-          ? "bg-violet/10 ring-violet/20"
+          ? "bg-primary-soft text-primary-ink ring-primary/20"
           : "bg-bg-muted ring-border text-text-tertiary",
       )}
-      style={active ? { color: "#7c5cfc" } : undefined}
     >
       <Icon size={9} />
       {active ? labelOn : labelOff}
@@ -590,9 +548,6 @@ function EmptyState({
 }) {
   return (
     <div className="px-5 py-10 text-center">
-      <span className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-violet/10">
-        <Icon size={16} style={{ color: "#7c5cfc" }} />
-      </span>
       <p className="text-sm font-medium text-text-primary">{title}</p>
       <p className="mt-1 text-xs font-light text-text-tertiary">{hint}</p>
     </div>

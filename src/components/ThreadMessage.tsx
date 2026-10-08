@@ -2,6 +2,7 @@ import { Send, Inbox as InboxIcon, AlertTriangle, Clock } from "lucide-react";
 import EmailHtmlFrame from "@/components/EmailHtmlFrame";
 import type { Email } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { dataHora } from "@/lib/datas";
 
 interface ThreadMessageProps {
   email: Email;
@@ -27,11 +28,10 @@ export default function ThreadMessage({
   const failedToSend = isSent && email.status === "failed";
   const retrying = isSent && email.status === "retrying";
   const sender = isSent
-    ? `you (${email.fromAddress ?? "—"})`
-    : (email.fromAddress ?? "Unknown");
+    ? `você (${email.fromAddress ?? "—"})`
+    : (email.fromAddress ?? "desconhecido");
   const recipient = isSent ? email.toAddress : email.recipient;
-  const ts = new Date(email.timestamp * 1000);
-  const fullStamp = `${ts.toLocaleDateString([], { month: "short", day: "numeric" })} · ${ts.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  const fullStamp = dataHora(email.timestamp);
 
   return (
     <div
@@ -44,42 +44,41 @@ export default function ThreadMessage({
       <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px]">
         <span
           className={cn(
-            "inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+            "inline-flex items-center gap-1 rounded-[4px] px-1.5 py-0.5 text-[11px] font-semibold",
             failedToSend
-              ? "bg-red-500/10 text-red-500"
+              ? "bg-destructive-subtle text-destructive"
               : retrying
-                ? "bg-amber-500/10 text-amber-600"
+                ? "bg-amber-500/10 text-warning-text"
                 : isSent
                   ? "bg-bg-muted text-text-secondary"
-                  : "bg-violet/10 text-violet",
+                  : "bg-primary-soft text-primary-ink",
           )}
           data-testid={retrying ? "message-retrying-badge" : undefined}
           title={
             retrying
-              ? "The email provider rejected this send; it will be retried automatically. See the Outbox for details."
+              ? "O provedor recusou o envio; vamos tentar de novo sozinhos. Detalhes na Saída."
               : undefined
           }
-          style={!isSent ? { color: "#7c5cfc" } : undefined}
         >
           {failedToSend ? (
             <>
               <AlertTriangle size={9} />
-              Failed to send
+              Não enviada
             </>
           ) : retrying ? (
             <>
               <Clock size={9} />
-              Retrying
+              Tentando de novo
             </>
           ) : isSent ? (
             <>
               <Send size={9} />
-              Sent
+              Enviada
             </>
           ) : (
             <>
               <InboxIcon size={9} />
-              Received
+              Recebida
             </>
           )}
         </span>
@@ -98,7 +97,7 @@ export default function ThreadMessage({
         />
       ) : (
         <pre className="whitespace-pre-wrap break-words font-sans text-[13px] leading-relaxed text-text-secondary">
-          {email.bodyText || "(no text)"}
+          {email.bodyText || "(sem texto)"}
         </pre>
       )}
     </div>

@@ -11,8 +11,8 @@ export default function InboxesPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Inboxes"
-        subtitle="Set display names, choose chat or thread mode, forward mail onward, and assign member access."
+        title="Caixas e envio"
+        subtitle="Nome de exibição, modo de leitura (chat ou fio), provedor de envio, encaminhamento e quem acessa cada caixa."
       />
       <AdminInboxTable />
     </PageContainer>

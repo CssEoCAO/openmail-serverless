@@ -100,7 +100,7 @@ export default function ChatQuickReply({
         await sendEmail({
           to: personEmail,
           fromAddress: inboxAddress,
-          subject: "(no subject)",
+          subject: "(sem assunto)",
           bodyHtml: plainTextToHtml(text),
           bodyText: text,
           ...(files.length > 0
@@ -117,7 +117,7 @@ export default function ChatQuickReply({
       setFiles([]);
       onSent();
     } catch (e) {
-      setError("Failed to send message");
+      setError("Não deu para enviar. Tente de novo.");
       console.error(e);
     } finally {
       setSending(false);
@@ -133,7 +133,7 @@ export default function ChatQuickReply({
   }
 
   return (
-    <div className="border-t border-border bg-card px-4 py-3 sm:px-6">
+    <div className="border-t border-border bg-card px-3 py-2.5 sm:px-4">
       {files.length > 0 && (
         <div className="mb-2">
           <AttachmentChips
@@ -145,7 +145,7 @@ export default function ChatQuickReply({
           />
         </div>
       )}
-      <div className="flex items-end gap-2 rounded-[10px] bg-bg-subtle/60 p-2 ring-1 ring-border focus-within:ring-2 focus-within:ring-text-primary/15">
+      <div className="flex items-end gap-1.5 rounded-[8px] bg-bg-subtle p-1.5 ring-1 ring-border focus-within:ring-primary/60">
         <textarea
           ref={ref}
           value={text}
@@ -153,7 +153,9 @@ export default function ChatQuickReply({
           onKeyDown={handleKeyDown}
           rows={1}
           placeholder={
-            latestReceivedEmailId ? "Type a reply…" : "Type a message…"
+            latestReceivedEmailId
+              ? "Escreva uma resposta…"
+              : "Escreva uma mensagem…"
           }
           className="flex-1 resize-none border-0 bg-transparent px-2 py-1.5 text-sm text-text-primary outline-none placeholder:text-text-tertiary disabled:text-text-tertiary"
         />
@@ -164,9 +166,9 @@ export default function ChatQuickReply({
           <button
             type="button"
             onClick={onOpenCompose}
-            title="Open in full compose (change sender, add CC, attachments…)"
-            aria-label="Open in full compose"
-            className="shrink-0 rounded-[8px] p-2 text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
+            title="Abrir no editor completo (trocar remetente, CC, anexos…)"
+            aria-label="Abrir no editor completo"
+            className="shrink-0 rounded-[6px] p-2 text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
           >
             <Maximize2 size={14} />
           </button>
@@ -175,18 +177,18 @@ export default function ChatQuickReply({
           type="button"
           onClick={handleSend}
           disabled={!canSend}
-          className="shrink-0 rounded-[8px] bg-text-primary px-3.5 py-2 text-xs font-medium text-white shadow-sm transition-colors hover:bg-text-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="shrink-0 rounded-[6px] bg-primary px-3.5 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {sending ? "Sending…" : "Send"}
+          {sending ? "Enviando…" : "Enviar"}
         </button>
       </div>
       <div className="mt-1.5 flex items-center justify-between">
         {error ? (
           <span className="text-xs text-destructive">{error}</span>
         ) : (
-          <span className="text-[11px] font-light text-text-tertiary">
-            Sending from <span className="font-medium">{inboxAddress}</span> ·
-            ⌘/Ctrl + Enter to send
+          <span className="text-[11px] text-text-tertiary">
+            Sai por <span className="font-medium">{inboxAddress}</span> · Ctrl +
+            Enter envia
             {onOpenCompose && (
               <>
                 {" · "}
@@ -195,7 +197,7 @@ export default function ChatQuickReply({
                   onClick={onOpenCompose}
                   className="font-medium text-text-secondary underline-offset-2 hover:text-text-primary hover:underline"
                 >
-                  open in compose
+                  abrir no editor completo
                 </button>
               </>
             )}

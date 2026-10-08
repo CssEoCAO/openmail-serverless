@@ -1,11 +1,12 @@
 {
-  "name": "saasmail · centralized inbox for SaaS teams",
-  "short_name": "saasmail",
-  "description": "One unified timeline per customer. Self-hosted on Cloudflare Workers.",
+  "name": "E-mail",
+  "short_name": "E-mail",
+  "description": "Caixa de e-mail das contas da casa.",
+  "lang": "pt-BR",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0a0a",
-  "theme_color": "#0a0a0a",
+  "background_color": "#f5f5f5",
+  "theme_color": "#f5f5f5",
   "icons": [
     {
       "src": "/favicon/favicon-32x32.png",

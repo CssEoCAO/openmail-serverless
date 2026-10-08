@@ -67,7 +67,7 @@ export default function RascunhosPage() {
                   >
                     <FileText
                       size={14}
-                      className="mt-0.5 shrink-0 text-amber-700"
+                      className="mt-0.5 shrink-0 text-warning-text"
                       aria-hidden
                     />
                     <span className="min-w-0 flex-1">

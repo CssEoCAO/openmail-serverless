@@ -1,73 +1,72 @@
-import { useState, useEffect } from "react";
-import {
-  fetchPersonEnrollment,
-  cancelEnrollment,
-  type PersonEnrollmentInfo,
-} from "@/lib/api";
+import { useState } from "react";
+import { ListOrdered, X } from "lucide-react";
+import { cancelEnrollment, type PersonEnrollmentInfo } from "@/lib/api";
+import { dataHora } from "@/lib/datas";
 
 interface SequenceStatusProps {
-  personId: string;
+  /** Inscrição já carregada pelo PersonDetail (uma chamada só por conversa). */
+  info: PersonEnrollmentInfo;
   onStatusChange: () => void;
 }
 
+/** Sequência em andamento para a pessoa: nome, progresso e cancelar. */
 export default function SequenceStatus({
-  personId,
+  info,
   onStatusChange,
 }: SequenceStatusProps) {
-  const [info, setInfo] = useState<PersonEnrollmentInfo | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [cancelando, setCancelando] = useState(false);
+  if (!info.enrollment) return null;
 
-  useEffect(() => {
-    setLoading(true);
-    fetchPersonEnrollment(personId)
-      .then(setInfo)
-      .finally(() => setLoading(false));
-  }, [personId]);
-
-  if (loading || !info || !info.enrollment) return null;
-
-  // 'suppressed' is a completed-but-not-delivered terminal state — count it
-  // toward the progress display so completed-via-suppression enrollments
-  // don't look stuck.
-  const sent = info.scheduledEmails.filter(
+  // "suppressed" é fim sem entrega: conta como feito, senão a inscrição parece travada.
+  const feitos = info.scheduledEmails.filter(
     (e) => e.status === "sent" || e.status === "suppressed",
   ).length;
   const total = info.scheduledEmails.length;
-  const nextPending = info.scheduledEmails.find(
+  const proximo = info.scheduledEmails.find(
     (e) => e.status === "pending" || e.status === "queued",
   );
 
-  async function handleCancel() {
-    if (!info?.enrollment) return;
-    if (!confirm("Cancel this sequence?")) return;
-    await cancelEnrollment(info.enrollment.id);
-    onStatusChange();
-    setInfo({
-      ...info,
-      enrollment: null,
-      scheduledEmails: [],
-      sequenceName: null,
-    });
+  async function cancelar() {
+    if (!info.enrollment) return;
+    if (
+      !confirm(`Cancelar a sequência "${info.sequenceName}" para esta pessoa?`)
+    )
+      return;
+    setCancelando(true);
+    try {
+      await cancelEnrollment(info.enrollment.id);
+      onStatusChange();
+    } finally {
+      setCancelando(false);
+    }
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-green-800/50 bg-green-900/20 px-3 py-2 text-sm">
-      <div className="flex-1">
-        <p className="font-medium text-green-400">
-          Sequence: {info.sequenceName}
-        </p>
-        <p className="text-xs text-text-secondary">
-          {sent}/{total} sent
-          {nextPending &&
-            ` · Next: ${new Date(nextPending.scheduledAt * 1000).toLocaleString()}`}
-        </p>
-      </div>
+    <span
+      className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-success/30 bg-success-subtle pl-2.5 pr-1 text-xs text-success"
+      title={
+        proximo
+          ? `Próximo envio: ${dataHora(proximo.scheduledAt)}`
+          : "Todos os envios já saíram"
+      }
+    >
+      <ListOrdered size={14} />
+      <span className="max-w-[140px] truncate font-medium">
+        {info.sequenceName}
+      </span>
+      <span className="tabular-nums opacity-80">
+        {feitos}/{total}
+      </span>
       <button
-        onClick={handleCancel}
-        className="text-xs text-red-400 hover:text-red-300"
+        type="button"
+        onClick={cancelar}
+        disabled={cancelando}
+        aria-label="Cancelar sequência"
+        title="Cancelar sequência"
+        className="flex h-6 w-6 items-center justify-center rounded-[4px] hover:bg-success/15 disabled:opacity-50"
       >
-        Cancel
+        <X size={13} />
       </button>
-    </div>
+    </span>
   );
 }

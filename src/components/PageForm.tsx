@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
  */
 
 export const FORM_INPUT_CLASS =
-  "h-10 w-full rounded-[6px] border border-border bg-bg-subtle px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-text-primary/20 disabled:cursor-not-allowed";
+  "h-9 w-full rounded-[6px] border border-border bg-card px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:border-primary focus:outline-none disabled:cursor-not-allowed";
 
 interface SectionHeaderProps {
   icon?: React.ElementType;
@@ -35,9 +35,7 @@ export function SectionHeader({
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
           {subtitle && (
-            <p className="mt-0.5 text-xs font-light text-text-secondary">
-              {subtitle}
-            </p>
+            <p className="mt-0.5 text-xs text-text-tertiary">{subtitle}</p>
           )}
         </div>
       </div>
@@ -56,14 +54,12 @@ interface FieldProps {
 export function Field({ label, hint, children, className }: FieldProps) {
   return (
     <label className={cn("block", className)}>
-      <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-text-tertiary">
+      <span className="mb-1.5 block text-xs font-medium text-text-secondary">
         {label}
       </span>
       {children}
       {hint && (
-        <span className="mt-1.5 block text-[11px] font-light text-text-tertiary">
-          {hint}
-        </span>
+        <span className="mt-1.5 block text-xs text-text-tertiary">{hint}</span>
       )}
     </label>
   );
@@ -73,7 +69,7 @@ export function Field({ label, hint, children, className }: FieldProps) {
 export function PaneLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="shrink-0 border-b border-border bg-bg-subtle/40 px-3 py-1.5">
-      <span className="text-[10px] font-medium uppercase tracking-wider text-text-tertiary">
+      <span className="text-[11px] font-medium text-text-tertiary">
         {children}
       </span>
     </div>
@@ -111,11 +107,11 @@ export function CodeBlock({
       <button
         type="button"
         onClick={copy}
-        aria-label="Copy"
+        aria-label="Copiar"
         className="absolute right-2 top-2 inline-flex h-6 items-center gap-1 rounded-[4px] border border-border bg-card px-1.5 text-[10px] font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
       >
         {copied ? <Check size={10} /> : <Copy size={10} />}
-        {copied ? "Copied" : "Copy"}
+        {copied ? "Copiado" : "Copiar"}
       </button>
     </div>
   );

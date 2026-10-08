@@ -59,7 +59,7 @@ export default function CcChips({
         className,
       )}
     >
-      <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-text-tertiary">
+      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-text-tertiary">
         <Users size={10} />
         Cc
       </span>
@@ -72,10 +72,9 @@ export default function CcChips({
             className={cn(
               "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none",
               internal
-                ? "border-lime-400/40 bg-lime-400/10 text-lime-700"
+                ? "border-primary/30 bg-primary-soft text-primary-ink"
                 : "border-border bg-bg-muted/60 text-text-secondary",
             )}
-            style={internal ? { color: "#5b7700" } : undefined}
           >
             {labelOf(c)}
           </span>
@@ -120,7 +119,7 @@ export function RosterDiffNotice({
               internalDomains={internalDomains}
             />
           ))}
-          <span className="font-light">added</span>
+          <span>entrou</span>
         </span>
       )}
       {joined.length > 0 && left.length > 0 && (
@@ -136,7 +135,7 @@ export function RosterDiffNotice({
               internalDomains={internalDomains}
             />
           ))}
-          <span className="font-light">removed</span>
+          <span>saiu</span>
         </span>
       )}
     </div>
@@ -157,10 +156,9 @@ function ChipPlain({
       className={cn(
         "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none",
         internal
-          ? "border-lime-400/40 bg-lime-400/10"
+          ? "border-primary/30 bg-primary-soft text-primary-ink"
           : "border-border bg-bg-muted/60 text-text-secondary",
       )}
-      style={internal ? { color: "#5b7700" } : undefined}
     >
       {labelOf(entry)}
     </span>

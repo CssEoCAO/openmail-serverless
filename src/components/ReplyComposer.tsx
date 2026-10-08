@@ -401,7 +401,7 @@ function ReplyComposerDoUsuario({
     setTemplatesError("");
     fetchTemplates()
       .then(setTemplates)
-      .catch(() => setTemplatesError("Failed to load templates"))
+      .catch(() => setTemplatesError("Não deu para carregar os modelos."))
       .finally(() => setTemplatesLoading(false));
   }, [tab, templates.length]);
 
@@ -432,7 +432,7 @@ function ReplyComposerDoUsuario({
         });
       } else {
         if (!selectedSlug) {
-          setError("Select a template");
+          setError("Escolha um modelo.");
           setSending(false);
           return;
         }
@@ -468,7 +468,7 @@ function ReplyComposerDoUsuario({
       onSent();
       onClose();
     } catch {
-      setError("Failed to send reply");
+      setError("Não deu para enviar a resposta. Tente de novo.");
     } finally {
       setSending(false);
     }
@@ -507,13 +507,12 @@ function ReplyComposerDoUsuario({
           <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 pl-4">
             <div className="flex min-w-0 items-center gap-2">
               <ReplyIcon
-                size={13}
-                className="shrink-0"
-                style={{ color: "#7c5cfc" }}
+                size={14}
+                className="shrink-0 text-primary"
                 aria-hidden
               />
               <DialogPrimitive.Title className="truncate text-sm font-semibold text-text-primary">
-                Reply · {recipientLabel}
+                Responder · {recipientLabel}
               </DialogPrimitive.Title>
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
@@ -525,7 +524,7 @@ function ReplyComposerDoUsuario({
               <DialogPrimitive.Close
                 disabled={ocupado}
                 className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
-                aria-label="Close"
+                aria-label="Fechar"
               >
                 <X size={14} />
               </DialogPrimitive.Close>
@@ -537,7 +536,7 @@ function ReplyComposerDoUsuario({
             inert={ocupado || !!backupPendente || remoto === "carregando"}
             className="shrink-0 divide-y divide-border/60 border-b border-border bg-bg-subtle/30"
           >
-            <TrayMetaRow label="From">
+            <TrayMetaRow label="De">
               <select
                 value={fromAddress}
                 onChange={(e) => setFromAddress(e.target.value)}
@@ -552,7 +551,7 @@ function ReplyComposerDoUsuario({
                 ))}
               </select>
             </TrayMetaRow>
-            <TrayMetaRow label="To">
+            <TrayMetaRow label="Para">
               <span className="block truncate py-2 pr-3 text-sm text-text-primary">
                 {recipientLabel}
                 {originalEmail?.replyTo &&
@@ -560,7 +559,7 @@ function ReplyComposerDoUsuario({
                     personEmail.toLowerCase() && (
                     <span
                       data-testid="reply-to-hint"
-                      className="ml-2 text-xs font-light text-amber-700"
+                      className="ml-2 text-xs font-light text-warning-text"
                       title="O e-mail original pede resposta para outro endereço (Reply-To). A resposta vai para a pessoa da conversa."
                     >
                       Reply-To: {originalEmail.replyTo}
@@ -583,7 +582,7 @@ function ReplyComposerDoUsuario({
             <div
               role="status"
               data-testid="reply-send-unavailable"
-              className="shrink-0 border-b border-amber-300/40 bg-amber-100/40 px-4 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+              className="shrink-0 border-b border-warning-border bg-warning-bg px-4 py-2 text-xs text-warning-text"
             >
               <strong>{fromAddress}</strong> recebe e-mails, mas ainda não tem
               identidade de envio configurada. Você pode salvar o rascunho;
@@ -595,7 +594,7 @@ function ReplyComposerDoUsuario({
             <div
               role="status"
               data-testid="reply-draft-unavailable"
-              className="flex shrink-0 items-center gap-3 border-b border-amber-300/40 bg-amber-100/40 px-4 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+              className="flex shrink-0 items-center gap-3 border-b border-warning-border bg-warning-bg px-4 py-2 text-xs text-warning-text"
             >
               <span className="flex-1">
                 Não foi possível consultar o rascunho no servidor. O que você
@@ -662,10 +661,10 @@ function ReplyComposerDoUsuario({
                 {!originalEmail && contextError && (
                   <div
                     role="status"
-                    className="rounded-[8px] border border-amber-300/40 bg-amber-100/40 px-4 py-2.5 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+                    className="rounded-[8px] border border-warning-border bg-warning-bg px-4 py-2.5 text-xs text-warning-text"
                   >
-                    Couldn't load the original message — it may have been
-                    deleted. You can still send your reply.
+                    Não deu para carregar a mensagem original; ela pode ter sido
+                    excluída. A resposta ainda pode ser enviada.
                   </div>
                 )}
                 <div className="flex-1">
@@ -690,7 +689,7 @@ function ReplyComposerDoUsuario({
                           setBodyHtml(html);
                           setBodyText(text);
                         }}
-                        placeholder="Write your reply…"
+                        placeholder="Escreva a resposta…"
                       />
                     )}
                     <AttachmentChips
@@ -716,7 +715,7 @@ function ReplyComposerDoUsuario({
               <div className="space-y-4 px-4 py-3 sm:px-5">
                 {templatesLoading ? (
                   <p className="text-sm font-light text-text-tertiary">
-                    Loading templates…
+                    Carregando modelos…
                   </p>
                 ) : templatesError ? (
                   <p className="text-sm text-destructive">{templatesError}</p>
@@ -724,14 +723,14 @@ function ReplyComposerDoUsuario({
                   <>
                     <div>
                       <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-text-tertiary">
-                        Template
+                        Modelo
                       </label>
                       <select
                         value={selectedSlug}
                         onChange={(e) => setSelectedSlug(e.target.value)}
                         className="w-full rounded-[8px] border border-border bg-card px-3 py-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-text-primary/15"
                       >
-                        <option value="">Select a template…</option>
+                        <option value="">Escolha um modelo…</option>
                         {templates.map((t) => (
                           <option key={t.slug} value={t.slug}>
                             {t.name}
@@ -744,14 +743,14 @@ function ReplyComposerDoUsuario({
                       <>
                         <div className="rounded-[8px] bg-bg-subtle/60 p-4 ring-1 ring-border">
                           <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-text-tertiary">
-                            Subject
+                            Assunto
                           </p>
                           <p className="text-sm font-medium text-text-primary">
                             {selectedTemplate.subject}
                           </p>
                           <div className="mt-3 border-t border-border pt-3">
                             <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-text-tertiary">
-                              Body preview
+                              Prévia do corpo
                             </p>
                             <div
                               className="prose prose-sm max-h-48 max-w-none overflow-auto text-sm text-text-secondary"
@@ -767,7 +766,7 @@ function ReplyComposerDoUsuario({
                         {requiredVars.length > 0 && (
                           <div>
                             <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-text-tertiary">
-                              Variables
+                              Variáveis
                             </p>
                             <div className="space-y-2">
                               {requiredVars.map((v) => (
@@ -797,9 +796,9 @@ function ReplyComposerDoUsuario({
                               requiredVars.includes(n),
                             ) && (
                               <p className="mt-2 text-[11px] font-light text-text-tertiary">
-                                Section variables (#) need an array of objects —
-                                this form can only send plain text, so send
-                                those via the API instead.
+                                Variáveis de seção (#) pedem uma lista de
+                                objetos; este formulário só manda texto, então
+                                envie essas pela API.
                               </p>
                             )}
                           </div>
@@ -814,7 +813,7 @@ function ReplyComposerDoUsuario({
 
           {/* Slim footer — single row, send + cancel + hint. */}
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border bg-card px-4 py-2.5 sm:px-5">
-            <div className="min-w-0 truncate text-[11px] font-light text-text-tertiary">
+            <div className="min-w-0 truncate text-[11px] text-text-tertiary">
               {error ? (
                 <span className="text-destructive" role="alert">
                   {error}
@@ -822,12 +821,12 @@ function ReplyComposerDoUsuario({
               ) : (
                 <span className="hidden sm:inline">
                   <kbd className="rounded border border-border bg-bg-muted px-1 font-mono text-[10px]">
-                    ⌘
+                    Ctrl
                   </kbd>
                   <kbd className="ml-1 rounded border border-border bg-bg-muted px-1 font-mono text-[10px]">
                     Enter
                   </kbd>{" "}
-                  to send
+                  envia
                 </span>
               )}
             </div>
@@ -849,7 +848,7 @@ function ReplyComposerDoUsuario({
                 }
                 className={cn(
                   "mr-auto text-[11px] font-light",
-                  erroSalvar ? "text-amber-700" : "text-text-tertiary",
+                  erroSalvar ? "text-warning-text" : "text-text-tertiary",
                 )}
               >
                 {erroSalvar
@@ -903,7 +902,7 @@ function ReplyComposerDoUsuario({
                 disabled={ocupado}
                 className="rounded-[6px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
               >
-                Cancel
+                Cancelar
               </button>
               <button
                 type="button"
@@ -942,10 +941,10 @@ function ReplyComposerDoUsuario({
                   !identidadeEnvia ||
                   totalAttachmentBytes > ATTACHMENT_CAP_BYTES
                 }
-                className="inline-flex items-center gap-1.5 rounded-[6px] bg-text-primary px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-text-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-[6px] bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send size={12} />
-                {sending ? "Sending…" : "Send reply"}
+                {sending ? "Enviando…" : "Enviar resposta"}
               </button>
             </div>
           </div>
@@ -967,13 +966,13 @@ function ModePillToggle({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
         active={tab === "freeform"}
         onClick={() => onTab("freeform")}
         icon={Sparkles}
-        label="Freeform"
+        label="Texto livre"
       />
       <ModePill
         active={tab === "template"}
         onClick={() => onTab("template")}
         icon={FileText}
-        label="Template"
+        label="Modelo"
       />
     </div>
   );
@@ -1037,7 +1036,7 @@ function ThreadContext({
         <div className="flex min-w-0 items-center gap-2">
           <ReplyIcon size={13} className="shrink-0 text-text-tertiary" />
           <span className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
-            Replying to
+            Respondendo a
           </span>
           {original.subject && (
             <span className="truncate text-xs font-medium text-text-secondary">
@@ -1054,12 +1053,12 @@ function ThreadContext({
             {expanded ? (
               <>
                 <ChevronUp size={12} />
-                Hide history
+                Esconder histórico
               </>
             ) : (
               <>
                 <ChevronDown size={12} />
-                Show {olderEmails.length} earlier
+                Mostrar {olderEmails.length} anteriores
               </>
             )}
           </button>

@@ -1,22 +1,16 @@
 import { CheckCheck } from "lucide-react";
 
 interface MarkAllReadButtonProps {
-  /** Number of unread received emails in scope. Renders nothing at 0. */
+  /** Não lidas no escopo; com 0 o botão não aparece. */
   unreadCount: number;
-  /**
-   * What "all" covers, for the tooltip — e.g. `support@example.com` on a
-   * person's inbox tab, or the conversation's inbox on a group thread.
-   * The button label stays the same either way; only the tooltip narrows it.
-   */
+  /** O que "tudo" cobre, para o title: a caixa da aba aberta ou a do grupo. */
   scopeLabel: string;
   onMarkAllRead: () => void;
 }
 
 /**
- * The single mark-all-read affordance. Both thread surfaces (a person's
- * inbox tab and a group conversation) render this in the same slot — the
- * trailing end of the header row — so the control doesn't move depending
- * on which kind of thread is open.
+ * O único "marcar como lida" da conversa. Aba de pessoa e conversa em grupo põem
+ * no mesmo lugar do cabeçalho, para o botão não mudar de posição.
  */
 export default function MarkAllReadButton({
   unreadCount,
@@ -30,12 +24,12 @@ export default function MarkAllReadButton({
       type="button"
       data-testid="mark-all-read"
       onClick={onMarkAllRead}
-      title={`Mark all ${unreadCount} unread in ${scopeLabel} as read`}
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-[6px] border border-border bg-card px-2.5 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
+      title={`Marcar as ${unreadCount} não lidas de ${scopeLabel} como lidas`}
+      className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[6px] border border-border bg-card px-2.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-subtle hover:text-text-primary"
     >
-      <CheckCheck size={13} />
-      Mark all read
-      <span className="ml-0.5 rounded-full bg-text-primary/[0.06] px-1.5 text-[10px] font-bold tabular-nums text-text-secondary">
+      <CheckCheck size={14} />
+      Marcar como lida
+      <span className="rounded-full bg-primary-soft px-1.5 text-[11px] font-semibold tabular-nums text-primary-ink">
         {unreadCount}
       </span>
     </button>

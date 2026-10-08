@@ -48,12 +48,12 @@ async function insertImageFiles(
   let insertPos = pos;
   for (const file of files) {
     if (!file.type.startsWith("image/")) {
-      errMsg = `${file.name} isn't an image`;
+      errMsg = `${file.name} não é uma imagem`;
       continue;
     }
     if (file.size > maxBytes) {
       const mb = (maxBytes / (1024 * 1024)).toFixed(1);
-      errMsg = `${file.name} exceeds the ${mb} MB limit`;
+      errMsg = `${file.name} passa do limite de ${mb} MB`;
       continue;
     }
     try {
@@ -68,7 +68,7 @@ async function insertImageFiles(
       }
       chain.run();
     } catch {
-      errMsg = `Failed to read ${file.name}`;
+      errMsg = `Não deu para ler ${file.name}`;
     }
   }
   return errMsg;
@@ -95,7 +95,7 @@ export default function TiptapEditor({
     extensions: [
       StarterKit,
       Placeholder.configure({
-        placeholder: placeholderText || "Start writing",
+        placeholder: placeholderText || "Escreva aqui",
         emptyEditorClass: "is-editor-empty",
       }),
       ResizableImage.configure({
@@ -176,16 +176,16 @@ export default function TiptapEditor({
           <ToolbarButton
             onClick={() => editor.chain().focus().setParagraph().run()}
             active={editor.isActive("paragraph") && !editor.isActive("heading")}
-            title="Text"
+            title="Texto"
           >
-            Text
+            Texto
           </ToolbarButton>
           <ToolbarButton
             onClick={() =>
               editor.chain().focus().toggleHeading({ level: 1 }).run()
             }
             active={editor.isActive("heading", { level: 1 })}
-            title="Heading 1"
+            title="Título 1"
           >
             H1
           </ToolbarButton>
@@ -194,7 +194,7 @@ export default function TiptapEditor({
               editor.chain().focus().toggleHeading({ level: 2 }).run()
             }
             active={editor.isActive("heading", { level: 2 })}
-            title="Heading 2"
+            title="Título 2"
           >
             H2
           </ToolbarButton>
@@ -203,7 +203,7 @@ export default function TiptapEditor({
               editor.chain().focus().toggleHeading({ level: 3 }).run()
             }
             active={editor.isActive("heading", { level: 3 })}
-            title="Heading 3"
+            title="Título 3"
           >
             H3
           </ToolbarButton>
@@ -213,21 +213,21 @@ export default function TiptapEditor({
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleBold().run()}
             active={editor.isActive("bold")}
-            title="Bold"
+            title="Negrito"
           >
             <span className="font-bold">B</span>
           </ToolbarButton>
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleItalic().run()}
             active={editor.isActive("italic")}
-            title="Italic"
+            title="Itálico"
           >
             <span className="italic">I</span>
           </ToolbarButton>
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleCode().run()}
             active={editor.isActive("code")}
-            title="Inline code"
+            title="Código"
           >
             <span className="font-mono text-[10px]">&lt;/&gt;</span>
           </ToolbarButton>
@@ -237,7 +237,7 @@ export default function TiptapEditor({
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleBulletList().run()}
             active={editor.isActive("bulletList")}
-            title="Bullet list"
+            title="Lista"
           >
             <svg
               width="14"
@@ -276,7 +276,7 @@ export default function TiptapEditor({
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
             active={editor.isActive("orderedList")}
-            title="Numbered list"
+            title="Lista numerada"
           >
             <svg
               width="14"
@@ -324,7 +324,7 @@ export default function TiptapEditor({
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
             active={editor.isActive("blockquote")}
-            title="Quote"
+            title="Citação"
           >
             <svg
               width="14"
@@ -341,13 +341,13 @@ export default function TiptapEditor({
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleCodeBlock().run()}
             active={editor.isActive("codeBlock")}
-            title="Code block"
+            title="Bloco de código"
           >
             <span className="font-mono text-[10px]">{"{ }"}</span>
           </ToolbarButton>
           <ToolbarButton
             onClick={() => editor.chain().focus().setHorizontalRule().run()}
-            title="Divider"
+            title="Linha divisória"
           >
             <svg
               width="14"
@@ -362,7 +362,7 @@ export default function TiptapEditor({
           </ToolbarButton>
           <ToolbarButton
             onClick={() => fileInputRef.current?.click()}
-            title="Insert image"
+            title="Inserir imagem"
           >
             <svg
               width="14"

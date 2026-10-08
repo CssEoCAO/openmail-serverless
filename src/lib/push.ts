@@ -71,7 +71,9 @@ export async function enablePush(): Promise<
     existing ??
     (await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlB64ToUint8Array(cfg.vapidPublicKey),
+      applicationServerKey: urlB64ToUint8Array(
+        cfg.vapidPublicKey,
+      ) as BufferSource,
     }));
 
   const json = sub.toJSON();
@@ -105,4 +107,14 @@ export async function disablePush(): Promise<void> {
       await sub.unsubscribe();
     }
   }
+}
+
+/** Frase para mostrar ao usuário a partir do motivo técnico de enablePush(). */
+export function motivoPush(reason: string): string {
+  if (reason === "unsupported") return "este navegador não aceita notificações";
+  if (reason === "server_not_configured")
+    return "as notificações não estão configuradas no servidor";
+  if (reason === "permission_denied")
+    return "o navegador bloqueou a permissão; libere nas configurações do site";
+  return `o servidor recusou (${reason})`;
 }

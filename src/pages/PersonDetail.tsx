@@ -1,18 +1,17 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { lazy, Suspense, useState, useEffect, useMemo, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ShieldBan } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, ListOrdered, Reply, ShieldBan } from "lucide-react";
 import {
-  fetchPersonEmails,
   markEmailRead,
   markPeopleRead,
   deleteEmail,
   fetchPersonEnrollment,
-  fetchStats,
   addBlock,
   type GroupedPerson,
   type Email,
-  type PersonEnrollmentInfo,
   type InboxDisplayMode,
+  type PersonEmailsResponse,
   type ReassignPersonResult,
 } from "@/lib/api";
 import {
@@ -26,40 +25,44 @@ import EnrollSequenceModal from "@/components/EnrollSequenceModal";
 import ReassignPersonModal from "@/components/ReassignPersonModal";
 import SequenceStatus from "@/components/SequenceStatus";
 import EmailHtmlModal from "@/components/EmailHtmlModal";
-import ReplyComposer from "@/components/ReplyComposer";
 import ThreadInboxSection, {
   type ThreadInboxGroup,
 } from "@/components/ThreadInboxSection";
 import ChatInboxSection from "@/components/ChatInboxSection";
 import MarkAllReadButton from "@/components/MarkAllReadButton";
+import Monograma from "@/components/Monograma";
 import type { ComposePrefill } from "@/pages/ComposeModal";
 import { onEmailSent } from "@/lib/email-events";
 import { showToast } from "@/lib/toast";
+import {
+  chaves,
+  mapearPaginas,
+  useEmailsPessoa,
+  useStats,
+} from "@/lib/queries";
+import { dominioDe } from "@/lib/arvore-caixas";
+import { plural } from "@/lib/datas";
 import { cn } from "@/lib/utils";
+
+// O editor de resposta (Tiptap) só baixa quando alguém clica em Responder.
+const ReplyComposer = lazy(() => import("@/components/ReplyComposer"));
 
 interface PersonDetailProps {
   person: GroupedPerson;
   onEmailRead: (personId: string) => void;
   onEmailDelete: (personId: string, wasUnread: boolean) => void;
-  refreshKey?: number;
-  /**
-   * Called when the user clicks "open in full compose" inside a chat
-   * thread — the chat section computes a prefill (from + to + cc +
-   * subject) so the drawer opens with the reply context applied.
-   */
+  /** "Abrir no editor completo" do chat: a bandeja de escrever já preenchida. */
   onOpenCompose?: (prefill?: ComposePrefill) => void;
-  /**
-   * Called after the sender (or their whole domain) is blocked. The parent
-   * uses this to clear the current selection so the view falls back to
-   * "no mail selected" — the thread is now hidden from the inbox.
-   */
+  /** Remetente (ou domínio) bloqueado: a conversa some da caixa. */
   onBlock?: () => void;
+  /** Voltar à lista (celular). */
+  onBack?: () => void;
 }
 
 function inboxOf(email: Email): string {
   return (
     (email.type === "received" ? email.recipient : email.fromAddress) ??
-    "(unknown)"
+    "(desconhecida)"
   );
 }
 
@@ -75,30 +78,14 @@ function groupEmailsByInbox(emails: Email[]): ThreadInboxGroup[] {
   for (const [inbox, list] of byInbox) {
     const latestReceivedTs =
       list.find((e) => e.type === "received")?.timestamp ?? 0;
-    const latestAnyTs = list[0]?.timestamp ?? 0;
     groups.push({
       inbox,
       emails: list,
-      latestTimestamp: latestReceivedTs || latestAnyTs,
+      latestTimestamp: latestReceivedTs || (list[0]?.timestamp ?? 0),
     });
   }
   groups.sort((a, b) => b.latestTimestamp - a.latestTimestamp);
   return groups;
-}
-
-function inboxColor(seed: string) {
-  // Stable but per-inbox accent so the active tab feels distinct.
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  const palette = [
-    "#7c5cfc",
-    "#0f766e",
-    "#0369a1",
-    "#a16207",
-    "#be185d",
-    "#7e22ce",
-  ];
-  return palette[h % palette.length];
 }
 
 function unreadIn(group: ThreadInboxGroup): number {
@@ -106,135 +93,108 @@ function unreadIn(group: ThreadInboxGroup): number {
     .length;
 }
 
-/** Strip the @domain — every inbox shares the same domain, so the tab
- *  just shows the local-part (e.g., "support" instead of "support@example.com").
- *  Falls back to the full string if there's no @. */
+/** Só a parte antes do @: as abas mostram "contato", o endereço inteiro vai no title. */
 function inboxLabel(email: string): string {
   const at = email.indexOf("@");
-  if (at <= 0) return email;
-  return email.slice(0, at);
+  return at <= 0 ? email : email.slice(0, at);
 }
 
 export default function PersonDetail({
   person,
   onEmailRead,
   onEmailDelete,
-  refreshKey,
   onOpenCompose,
   onBlock,
+  onBack,
 }: PersonDetailProps) {
   const navigate = useNavigate();
-  const [emails, setEmails] = useState<Email[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  useEffect(() => setPage(1), [person.id]);
+  const qc = useQueryClient();
+  const chave = chaves.emailsPessoa(person.id);
+  const consulta = useEmailsPessoa(person.id);
+  const { data: stats } = useStats();
+  const inscricao = useQuery({
+    queryKey: ["inscricao", person.id],
+    queryFn: () => fetchPersonEnrollment(person.id),
+  });
+
   const [enrollModalOpen, setEnrollModalOpen] = useState(false);
-  const [enrollmentInfo, setEnrollmentInfo] =
-    useState<PersonEnrollmentInfo | null>(null);
   const [htmlPreviewEmail, setHtmlPreviewEmail] = useState<Email | null>(null);
   const [reassignEmail, setReassignEmail] = useState<Email | null>(null);
   const [replyToEmailId, setReplyToEmailId] = useState<string | null>(null);
   const [expandedOlder, setExpandedOlder] = useState<Record<string, boolean>>(
     {},
   );
-  const [inboxModeMap, setInboxModeMap] = useState<
-    Map<string, InboxDisplayMode>
-  >(new Map());
-  const [senderIdentities, setSenderIdentities] = useState<
-    Array<{ email: string; displayName: string | null }>
-  >([]);
   const [activeInbox, setActiveInbox] = useState<string | null>(null);
+
+  const emails = useMemo(
+    () => consulta.data?.pages.flatMap((p) => p.emails) ?? [],
+    [consulta.data],
+  );
+  const inboxModeMap = useMemo(() => {
+    const m = new Map<string, InboxDisplayMode>();
+    for (const p of consulta.data?.pages ?? [])
+      for (const i of p.inboxes) m.set(i.email, i.displayMode);
+    return m;
+  }, [consulta.data]);
+  const senderIdentities = stats?.senderIdentities ?? [];
+
+  /** Muda as mensagens em cache, em todas as páginas já baixadas. */
+  function mudarEmails(fn: (lista: Email[]) => Email[]) {
+    qc.setQueryData(chave, (d: typeof consulta.data) =>
+      mapearPaginas<PersonEmailsResponse>(d, (p) => ({
+        ...p,
+        emails: fn(p.emails),
+      })),
+    );
+  }
+  const recarregar = () => void qc.invalidateQueries({ queryKey: chave });
 
   async function handleBlock(type: "email" | "domain") {
     const email = person.email.toLowerCase();
-    const value =
-      type === "email" ? email : email.slice(email.lastIndexOf("@") + 1);
+    const value = type === "email" ? email : dominioDe(email);
     if (!value) return;
     try {
       await addBlock({ type, value });
       showToast({
         kind: "success",
-        message: `Blocked ${value}`,
+        message: `${value} bloqueado`,
         description:
           type === "domain"
-            ? "Future mail from this domain is dropped and its threads are hidden."
-            : "Future mail from this address is dropped and its threads are hidden.",
+            ? "E-mail novo desse domínio é descartado e as conversas dele somem da caixa."
+            : "E-mail novo desse endereço é descartado e as conversas dele somem da caixa.",
         durationMs: 5000,
       });
-      // The thread is now hidden. Clear the parent's selection so the view
-      // falls back to "no mail selected"; fall back to a route change when
-      // the component is used standalone.
       if (onBlock) onBlock();
       else navigate("/");
     } catch {
-      // Most likely a self-block guard rejection; leave the user on the
-      // thread, but tell them the block didn't go through.
+      // Quase sempre a trava que impede bloquear um domínio nosso.
       showToast({
         kind: "error",
-        message: "Couldn't block",
+        message: "Não deu para bloquear",
         description:
           type === "domain"
-            ? "This domain couldn't be blocked. It may be one of your own."
-            : "This address couldn't be blocked. It may be one of your own.",
+            ? "Esse domínio não pode ser bloqueado; pode ser um dos nossos."
+            : "Esse endereço não pode ser bloqueado; pode ser um dos nossos.",
       });
     }
   }
 
-  function refetchEmails() {
-    fetchPersonEmails(person.id, { page }).then((res) => {
-      setEmails(res.emails);
-      setInboxModeMap(
-        new Map(res.inboxes.map((i) => [i.email, i.displayMode])),
-      );
-    });
-  }
-
-  useEffect(() => {
-    setLoading(true);
-    setReplyToEmailId(null);
-    setExpandedOlder({});
-    setActiveInbox(null);
-    fetchPersonEmails(person.id, { page })
-      .then((res) => {
-        setEmails(res.emails);
-        setInboxModeMap(
-          new Map(res.inboxes.map((i) => [i.email, i.displayMode])),
-        );
-      })
-      .finally(() => setLoading(false));
-  }, [person.id, page]);
-
-  useEffect(() => {
-    if (refreshKey) refetchEmails();
-  }, [refreshKey]);
-
-  useEffect(() => {
-    fetchPersonEnrollment(person.id).then(setEnrollmentInfo);
-  }, [person.id]);
-
-  useEffect(() => {
-    fetchStats().then((stats) => {
-      setSenderIdentities(stats.senderIdentities ?? []);
-    });
-  }, []);
-
-  function refreshEnrollment() {
-    fetchPersonEnrollment(person.id).then(setEnrollmentInfo);
-  }
-
   async function handleMarkRead(email: Email) {
     if (email.type !== "received" || email.isRead !== 0) return;
-    await markEmailRead(email.id, true);
-    setEmails((prev) =>
-      prev.map((e) => (e.id === email.id ? { ...e, isRead: 1 } : e)),
+    mudarEmails((l) =>
+      l.map((e) => (e.id === email.id ? { ...e, isRead: 1 } : e)),
     );
-    onEmailRead(person.id);
+    try {
+      await markEmailRead(email.id, true);
+      onEmailRead(person.id);
+    } catch {
+      recarregar();
+    }
   }
 
   async function handleMarkInboxRead(inboxAddress: string) {
-    // Optimistic local update on the active inbox's emails.
-    setEmails((prev) =>
-      prev.map((e) =>
+    mudarEmails((l) =>
+      l.map((e) =>
         e.recipient === inboxAddress && e.type === "received" && e.isRead === 0
           ? { ...e, isRead: 1 }
           : e,
@@ -243,22 +203,28 @@ export default function PersonDetail({
     try {
       await markPeopleRead([person.id], inboxAddress);
       onEmailRead(person.id);
+      void qc.invalidateQueries({ queryKey: chaves.conversas });
     } catch {
-      refetchEmails();
+      recarregar();
     }
   }
 
   async function handleDelete(emailId: string) {
     if (
       !confirm(
-        "Permanently delete this email and all its attachments? This cannot be undone.",
+        "Excluir esta mensagem e os anexos para sempre? Não dá para desfazer.",
       )
     )
       return;
     const target = emails.find((e) => e.id === emailId);
     const wasUnread = target?.type === "received" && target.isRead === 0;
-    await deleteEmail(emailId);
-    setEmails((prev) => prev.filter((e) => e.id !== emailId));
+    try {
+      await deleteEmail(emailId);
+    } catch {
+      showToast({ kind: "error", message: "Não deu para excluir a mensagem" });
+      return;
+    }
+    mudarEmails((l) => l.filter((e) => e.id !== emailId));
     onEmailDelete(person.id, wasUnread);
   }
 
@@ -266,41 +232,35 @@ export default function PersonDetail({
     const moved = reassignEmail;
     if (moved) {
       const wasUnread = moved.type === "received" && moved.isRead === 0;
-      // The message now belongs to another person — drop it from this thread
-      // and let the parent decrement this person's counts (same as a delete
-      // from this view's perspective).
-      setEmails((prev) => prev.filter((e) => e.id !== moved.id));
+      // A mensagem agora é de outra pessoa: sai daqui como se fosse excluída.
+      mudarEmails((l) => l.filter((e) => e.id !== moved.id));
       onEmailDelete(person.id, wasUnread);
+      void qc.invalidateQueries({ queryKey: chaves.conversas });
     }
     const target = result.person?.email ?? result.email.toAddress;
     showToast({
       kind: "success",
-      message: target ? `Moved to ${target}` : "Message re-targeted",
+      message: target ? `Movida para ${target}` : "Mensagem redirecionada",
       description: result.person?.created
-        ? "Created a new person and moved this message to them."
-        : "Replies to this message now go to them.",
+        ? "Criamos a pessoa e movemos a mensagem para ela."
+        : "As respostas a esta mensagem vão para ela.",
       durationMs: 5000,
     });
   }
 
   const inboxGroups = useMemo(() => groupEmailsByInbox(emails), [emails]);
   const distinctInboxes = useMemo(
-    () => inboxGroups.map((g) => g.inbox).filter((i) => i !== "(unknown)"),
+    () => inboxGroups.map((g) => g.inbox).filter((i) => i !== "(desconhecida)"),
     [inboxGroups],
   );
 
-  // Domains we own — used to flag internal vs external CC contacts.
-  // Pulled from sender_identities (the inboxes the operator has set up).
-  const internalDomains = useMemo(() => {
-    const set = new Set<string>();
-    for (const s of senderIdentities) {
-      const at = s.email.lastIndexOf("@");
-      if (at >= 0) set.add(s.email.slice(at + 1).toLowerCase());
-    }
-    return Array.from(set);
-  }, [senderIdentities]);
+  // Domínios nossos: o CC interno ganha outra cor.
+  const internalDomains = useMemo(
+    () => [...new Set(senderIdentities.map((s) => dominioDe(s.email)))],
+    [senderIdentities],
+  );
 
-  // Auto-pick the first (most-recent) inbox as active when person/emails load.
+  // Abre na caixa da mensagem mais recente.
   useEffect(() => {
     if (inboxGroups.length === 0) {
       setActiveInbox(null);
@@ -311,11 +271,8 @@ export default function PersonDetail({
     }
   }, [inboxGroups, activeInbox]);
 
-  // Deep-link landing: if the URL has `#m=<emailId>` and that message
-  // belongs to this person, switch to its inbox tab, auto-expand the
-  // older-messages drawer when needed (thread mode), and scroll/flash
-  // the bubble. Fires once per (person, hash) pair so paging or
-  // re-renders don't keep yanking the scroll position.
+  // Link para uma mensagem (#m=<id>): troca para a aba dela, abre as anteriores se
+  // preciso, rola e pisca. Uma vez por (pessoa, hash).
   const location = useLocation();
   const lastHashHandled = useRef<string | null>(null);
   useEffect(() => {
@@ -330,253 +287,252 @@ export default function PersonDetail({
 
     const targetInbox = inboxOf(target);
     setActiveInbox(targetInbox);
-
-    // Thread mode collapses older messages behind a toggle. If the
-    // target isn't the latest in its group, force the drawer open so
-    // the bubble is actually in the DOM when we try to scroll to it.
     const group = inboxGroups.find((g) => g.inbox === targetInbox);
     if (group && group.emails[0]?.id !== target.id) {
       setExpandedOlder((prev) =>
         prev[targetInbox] ? prev : { ...prev, [targetInbox]: true },
       );
     }
-
-    // Two rAFs: first lets React commit the tab switch / expand; second
-    // lets the new bubble mount before we measure for scrollIntoView.
+    // Dois quadros: um para a troca de aba entrar, outro para a mensagem existir.
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const el = document.getElementById(messageDomId(target.id));
         if (!el) return;
         el.scrollIntoView({ behavior: "smooth", block: "center" });
         el.classList.remove("message-link-flash");
-        // Reflow so re-adding the class restarts the animation.
         void el.offsetWidth;
         el.classList.add("message-link-flash");
-        window.setTimeout(() => {
-          el.classList.remove("message-link-flash");
-        }, 2400);
+        window.setTimeout(
+          () => el.classList.remove("message-link-flash"),
+          2400,
+        );
       });
     });
   }, [emails, location.hash, inboxGroups, person.id]);
 
-  // Listen for the global "email sent" event so we can:
-  //   1) Refetch emails immediately — already happens via the existing
-  //      onSent callbacks in compose surfaces, but the event-based path
-  //      catches sends initiated from anywhere (FAB compose, chat
-  //      quick reply, reply drawer).
-  //   2) Auto-switch the active inbox tab when the user replied from a
-  //      different inbox than the one they were viewing — otherwise the
-  //      sent message lands in a tab they aren't looking at and they
-  //      have no clue what happened.
-  //   3) Toast the user so they have an artifact telling them where the
-  //      reply landed.
+  // Resposta enviada de outra caixa que não a aba aberta: troca de aba e avisa,
+  // senão a mensagem cai numa aba que ninguém está olhando.
   useEffect(() => {
     const off = onEmailSent((detail) => {
-      // Always refetch — picks up the new sent_emails row.
-      refetchEmails();
       const sentInbox = detail.fromAddress;
-      // We only act on this person's inbox tabs. Compose-from-FAB to a
-      // different person fires the same event but isn't relevant here.
-      const isOurInbox = distinctInboxes.includes(sentInbox);
-      if (!isOurInbox) return;
+      if (!distinctInboxes.includes(sentInbox)) return;
       const previous = activeInbox;
       if (previous && previous !== sentInbox) {
         setActiveInbox(sentInbox);
         showToast({
           kind: "info",
-          message: `Reply landed in ${inboxLabel(sentInbox)}`,
-          description: `You were viewing ${inboxLabel(previous)} — switched tabs so you can see it.`,
+          message: `Resposta saiu por ${inboxLabel(sentInbox)}`,
+          description: `Você estava em ${inboxLabel(previous)}; trocamos de aba para mostrar.`,
           durationMs: 5500,
         });
       }
     });
     return off;
-    // We intentionally close over the latest activeInbox + inbox list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeInbox, distinctInboxes.join("|")]);
 
   const activeGroup =
     inboxGroups.find((g) => g.inbox === activeInbox) ?? inboxGroups[0] ?? null;
+  const modo = activeGroup
+    ? (inboxModeMap.get(activeGroup.inbox) ?? "chat")
+    : "chat";
+  const ultimaRecebida =
+    activeGroup?.emails.find((e) => e.type === "received") ?? null;
 
   const replyInboxForEmail = (email: Email) => {
     const ib = inboxOf(email);
-    return ib === "(unknown)" ? distinctInboxes : [ib];
+    return ib === "(desconhecida)" ? distinctInboxes : [ib];
   };
 
-  if (loading) {
+  const cabecalho = (
+    <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-4 py-3">
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Voltar à lista"
+          className="-ml-1 flex h-8 w-8 items-center justify-center rounded-[6px] text-text-secondary hover:bg-text-primary/[0.05] md:hidden"
+        >
+          <ArrowLeft size={17} />
+        </button>
+      )}
+      <Monograma nome={person.name} email={person.email} />
+      <div className="min-w-0 flex-[1_1_200px]">
+        <h2 className="truncate text-base font-semibold text-text-primary">
+          {person.name || person.email}
+        </h2>
+        <p className="truncate text-xs text-text-tertiary">
+          {person.name ? `${person.email} · ` : ""}
+          {plural(person.totalCount, "mensagem", "mensagens")}
+          {inboxGroups.length > 1
+            ? ` · ${inboxGroups.length} caixas`
+            : distinctInboxes[0]
+              ? ` · ${distinctInboxes[0]}`
+              : ""}
+        </p>
+      </div>
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+        {activeGroup && (
+          <MarkAllReadButton
+            unreadCount={unreadIn(activeGroup)}
+            scopeLabel={activeGroup.inbox}
+            onMarkAllRead={() => handleMarkInboxRead(activeGroup.inbox)}
+          />
+        )}
+        {inscricao.data?.enrollment ? (
+          <SequenceStatus
+            info={inscricao.data}
+            onStatusChange={() =>
+              void qc.invalidateQueries({ queryKey: ["inscricao", person.id] })
+            }
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEnrollModalOpen(true)}
+            className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-border bg-card px-2.5 text-xs font-medium text-text-secondary hover:bg-bg-subtle hover:text-text-primary"
+          >
+            <ListOrdered size={14} />
+            Sequência
+          </button>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Bloquear remetente"
+              className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-border bg-card px-2.5 text-xs font-medium text-text-secondary hover:border-destructive/40 hover:text-destructive"
+            >
+              <ShieldBan size={14} />
+              Bloquear
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuItem onClick={() => handleBlock("email")}>
+              Bloquear {person.email}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleBlock("domain")}>
+              Bloquear o domínio {dominioDe(person.email)}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </header>
+  );
+
+  if (consulta.isPending) {
     return (
-      <div className="flex h-full items-center justify-center text-text-tertiary">
-        <span className="text-sm">Loading…</span>
+      <div className="flex h-full min-h-0 flex-col">
+        {cabecalho}
+        <div className="grid gap-3 p-4" aria-busy="true">
+          {[0, 1].map((i) => (
+            <div key={i} className="h-24 rounded-[6px] bg-bg-muted/70" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (consulta.isError) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        {cabecalho}
+        <div className="px-6 py-16 text-center">
+          <p className="text-sm font-medium text-text-primary">
+            Não deu para abrir a conversa.
+          </p>
+          <button
+            type="button"
+            onClick={() => void consulta.refetch()}
+            className="mt-2 text-sm font-medium text-primary-ink hover:underline"
+          >
+            Tentar de novo
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center justify-between px-4 py-2 text-sm">
-        <button disabled={page === 1} onClick={() => setPage(page - 1)}>
-          Newer messages
-        </button>
-        <span>Page {page}</span>
-        <button disabled={emails.length < 10} onClick={() => setPage(page + 1)}>
-          Older messages
-        </button>
-      </div>
-      {/* Person header — name + email + meta on a single visual block */}
-      <div className="shrink-0 border-b border-border bg-card px-4 pb-2.5 pt-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <h2 className="truncate text-base font-extrabold tracking-tight text-text-primary">
-              {person.name || person.email}
-            </h2>
-            {person.name && (
-              <span className="truncate text-xs font-light text-text-tertiary">
-                {person.email}
-              </span>
-            )}
-            <span className="text-[11px] text-text-tertiary">
-              · {person.totalCount} message
-              {person.totalCount !== 1 ? "s" : ""}
-              {inboxGroups.length > 1 ? ` · ${inboxGroups.length} inboxes` : ""}
-            </span>
-          </div>
+      {cabecalho}
 
-          <div className="flex shrink-0 items-center gap-2">
-            {activeGroup && (
-              <MarkAllReadButton
-                unreadCount={unreadIn(activeGroup)}
-                scopeLabel={activeGroup.inbox}
-                onMarkAllRead={() => handleMarkInboxRead(activeGroup.inbox)}
-              />
-            )}
-            {enrollmentInfo?.enrollment ? (
-              <SequenceStatus
-                personId={person.id}
-                onStatusChange={refreshEnrollment}
-              />
-            ) : (
+      {/* Uma aba por caixa (só a parte antes do @); o endereço inteiro no title. */}
+      {inboxGroups.length > 1 && (
+        <div className="flex shrink-0 gap-1 overflow-x-auto overflow-y-hidden border-b border-border px-3 [scrollbar-width:none]">
+          {inboxGroups.map((group) => {
+            const unread = unreadIn(group);
+            const isActive = activeGroup?.inbox === group.inbox;
+            return (
               <button
-                onClick={() => setEnrollModalOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-[6px] border border-border bg-card px-2.5 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
+                key={group.inbox}
+                type="button"
+                data-testid="inbox-tab"
+                onClick={() => setActiveInbox(group.inbox)}
+                title={group.inbox}
+                aria-pressed={isActive}
+                className={cn(
+                  "-mb-px inline-flex shrink-0 items-center gap-1.5 border-b-2 px-2.5 py-2 text-xs transition-colors",
+                  isActive
+                    ? "border-primary font-semibold text-text-primary"
+                    : "border-transparent text-text-tertiary hover:text-text-primary",
+                )}
               >
-                Add to sequence
-              </button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  aria-label="Block sender"
-                  className="inline-flex items-center gap-1.5 rounded-[6px] border border-border bg-card px-2.5 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-rose-50 hover:text-rose-600"
-                >
-                  <ShieldBan size={13} />
-                  Block
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  className="cursor-pointer"
-                  onClick={() => handleBlock("email")}
-                >
-                  Block {person.email}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="cursor-pointer"
-                  onClick={() => handleBlock("domain")}
-                >
-                  Block entire domain
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </div>
-
-      {/* Inbox tabs — short label (local-part only), counts + mode dot.
-          Tooltip on the tab shows the full address.
-          On mobile: horizontal scroll with snap (native-app feel).
-          On desktop: wraps onto multiple lines. */}
-      {inboxGroups.length > 0 && (
-        <div className="shrink-0 border-b border-border bg-card/60">
-          <div
-            className="smooth-scroll flex gap-0.5 overflow-x-auto px-2 py-1 sm:flex-wrap sm:overflow-visible"
-            style={{ scrollSnapType: "x proximity" }}
-          >
-            {inboxGroups.map((group) => {
-              const mode = inboxModeMap.get(group.inbox) ?? "chat";
-              const unread = unreadIn(group);
-              const isActive = activeGroup?.inbox === group.inbox;
-              const accent = inboxColor(group.inbox);
-              const label = inboxLabel(group.inbox);
-              return (
-                <button
-                  key={group.inbox}
-                  data-testid="inbox-tab"
-                  onClick={() => setActiveInbox(group.inbox)}
-                  title={`${group.inbox} · ${mode} mode`}
-                  style={{ scrollSnapAlign: "start" }}
-                  className={cn(
-                    "inline-flex shrink-0 items-center gap-1.5 rounded-[5px] px-2 py-1 text-xs transition-all",
-                    isActive
-                      ? "bg-text-primary/[0.05] text-text-primary ring-1 ring-text-primary/10"
-                      : "text-text-secondary hover:bg-bg-muted/70 hover:text-text-primary",
-                  )}
-                >
-                  {/* Mode-aware accent dot — color stable per inbox */}
+                {inboxLabel(group.inbox)}
+                <span className="tabular-nums text-text-tertiary">
+                  {group.emails.length}
+                </span>
+                {unread > 0 && (
                   <span
-                    className={cn(
-                      "h-1.5 w-1.5 shrink-0 rounded-full",
-                      mode === "chat" ? "" : "opacity-60",
-                    )}
-                    style={{ backgroundColor: accent }}
-                    aria-hidden
-                  />
-                  <span className="font-medium">{label}</span>
-                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-bg-muted px-1 text-[10px] font-semibold tabular-nums text-text-secondary">
-                    {group.emails.length}
+                    className="tabular-nums font-semibold text-primary-ink"
+                    aria-label={`${unread} não lidas`}
+                  >
+                    {unread}
                   </span>
-                  {unread > 0 && (
-                    <span
-                      className="inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums text-white"
-                      style={{ backgroundColor: "#7c5cfc" }}
-                      aria-label={`${unread} unread`}
-                    >
-                      {unread}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
 
-      {/* Active inbox section — fills remaining height */}
+      {consulta.hasNextPage && (
+        <button
+          type="button"
+          onClick={() => void consulta.fetchNextPage()}
+          disabled={consulta.isFetchingNextPage}
+          className="shrink-0 border-b border-border py-1.5 text-xs font-medium text-primary-ink hover:bg-bg-subtle disabled:opacity-60"
+        >
+          {consulta.isFetchingNextPage
+            ? "Carregando…"
+            : "Mostrar mensagens mais antigas"}
+        </button>
+      )}
+
       <div className="flex min-h-0 flex-1 flex-col">
         {activeGroup ? (
-          (() => {
-            const mode = inboxModeMap.get(activeGroup.inbox) ?? "chat";
-            if (mode === "chat") {
-              return (
-                <ChatInboxSection
+          modo === "chat" ? (
+            <ChatInboxSection
+              key={activeGroup.inbox}
+              group={activeGroup}
+              personEmail={person.email}
+              internalDomains={internalDomains}
+              onOpenHtml={setHtmlPreviewEmail}
+              onMarkRead={handleMarkRead}
+              onDelete={handleDelete}
+              onReassign={setReassignEmail}
+              onReply={setReplyToEmailId}
+              onSent={recarregar}
+              onOpenCompose={onOpenCompose}
+            />
+          ) : (
+            <>
+              <div className="smooth-scroll min-h-0 flex-1 overflow-y-auto bg-bg-subtle">
+                <ThreadInboxSection
                   key={activeGroup.inbox}
                   group={activeGroup}
                   personEmail={person.email}
-                  internalDomains={internalDomains}
-                  onOpenHtml={setHtmlPreviewEmail}
-                  onMarkRead={handleMarkRead}
-                  onDelete={handleDelete}
-                  onReassign={setReassignEmail}
-                  onReply={setReplyToEmailId}
-                  onSent={refetchEmails}
-                  onOpenCompose={onOpenCompose}
-                />
-              );
-            }
-            return (
-              <ThreadPaneScroller key={activeGroup.inbox}>
-                <ThreadInboxSection
-                  group={activeGroup}
-                  personEmail={person.email}
+                  personName={person.name}
                   internalDomains={internalDomains}
                   isOlderExpanded={!!expandedOlder[activeGroup.inbox]}
                   onToggleOlder={() =>
@@ -591,17 +547,30 @@ export default function PersonDetail({
                   onDelete={handleDelete}
                   onReassign={setReassignEmail}
                 />
-              </ThreadPaneScroller>
-            );
-          })()
+              </div>
+              {ultimaRecebida && (
+                <div className="shrink-0 border-t border-border bg-card px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => setReplyToEmailId(ultimaRecebida.id)}
+                    className="flex h-10 w-full items-center gap-2 rounded-[6px] border border-border px-3 text-left text-sm text-text-tertiary hover:border-primary/50 hover:text-text-secondary"
+                  >
+                    <Reply size={15} />
+                    Responder para {person.name || person.email}…
+                  </button>
+                </div>
+              )}
+            </>
+          )
         ) : (
           <div className="flex flex-1 items-center justify-center text-sm text-text-tertiary">
-            No emails found.
+            Nenhuma mensagem.
           </div>
         )}
+      </div>
 
-        {/* Reply composer — chat, thread e modal HTML chegam aqui */}
-        {replyToEmailId && (
+      {replyToEmailId && (
+        <Suspense fallback={null}>
           <ReplyComposer
             emailId={replyToEmailId}
             personName={person.name}
@@ -613,16 +582,16 @@ export default function PersonDetail({
             senderIdentities={senderIdentities}
             internalDomains={internalDomains}
             onClose={() => setReplyToEmailId(null)}
-            onSent={refetchEmails}
+            onSent={recarregar}
           />
-        )}
-      </div>
+        </Suspense>
+      )}
 
       <EmailHtmlModal
         email={htmlPreviewEmail}
         open={htmlPreviewEmail !== null}
         onClose={() => setHtmlPreviewEmail(null)}
-        onUpdated={refetchEmails}
+        onUpdated={recarregar}
         onReply={(id) => {
           setHtmlPreviewEmail(null);
           setReplyToEmailId(id);
@@ -644,21 +613,10 @@ export default function PersonDetail({
         recipients={distinctInboxes}
         open={enrollModalOpen}
         onClose={() => setEnrollModalOpen(false)}
-        onEnrolled={refreshEnrollment}
+        onEnrolled={() =>
+          void qc.invalidateQueries({ queryKey: ["inscricao", person.id] })
+        }
       />
-    </div>
-  );
-}
-
-/** Scroll wrapper for thread-mode inbox content. */
-function ThreadPaneScroller({ children }: { children: React.ReactNode }) {
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  return (
-    <div
-      ref={scrollRef}
-      className="smooth-scroll min-h-0 flex-1 overflow-y-auto"
-    >
-      {children}
     </div>
   );
 }

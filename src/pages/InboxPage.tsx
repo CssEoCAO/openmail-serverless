@@ -6,169 +6,135 @@ import {
   useOutletContext,
   useSearchParams,
 } from "react-router-dom";
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-
-import type { ComposePrefill } from "@/pages/ComposeModal";
-
-interface InboxOutletContext {
-  onCompose: (prefill?: ComposePrefill) => void;
-}
+import type { ShellContext } from "@/components/AppShell";
 import PersonList from "./PersonList";
 import PersonDetail from "./PersonDetail";
-import InboxToolbar, {
+import ConversationDetail from "./ConversationDetail";
+import ListHeader, {
   type InboxFilters,
   type InboxView,
-} from "@/components/InboxToolbar";
+} from "@/components/ListHeader";
 import PeopleTable from "@/components/PeopleTable";
 import SelectionBar from "@/components/SelectionBar";
 import {
   addBlock,
-  defaultDirectionFor,
   fetchPerson,
-  fetchStats,
-  fetchGroupedPeople,
   markPeopleRead,
   markConversationsRead,
   type GroupedItem,
   type GroupedPerson,
   type GroupedConversation,
-  type InboxAggregates,
-  type InboxSort,
   type InboxSortSpec,
-  type Stats,
+  type PaginatedGroupedPeople,
 } from "@/lib/api";
-import ConversationDetail from "./ConversationDetail";
+import {
+  chaves,
+  lerOrdem,
+  opcoesLista,
+  POR_PAGINA_LISTA,
+  useStats,
+} from "@/lib/queries";
+import { rotuloCaixa, dominioDe } from "@/lib/arvore-caixas";
 import { useSession } from "@/lib/auth-client";
-import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates";
-import { useResizableSidebar } from "@/hooks/useResizableSidebar";
 import { cn } from "@/lib/utils";
-import { PushOptInBanner } from "@/components/PushOptInBanner";
-import { isPushSupported, hasDismissedPrompt } from "@/lib/push";
 
-const PEOPLE_PAGE_SIZE = 40;
+/** Espera o usuário parar de digitar; o resto da lista responde na hora. */
+function useAtrasado<T>(valor: T, ms: number): T {
+  const [v, setV] = useState(valor);
+  useEffect(() => {
+    const t = setTimeout(() => setV(valor), ms);
+    return () => clearTimeout(t);
+  }, [valor, ms]);
+  return v;
+}
 
 export default function InboxPage() {
-  const outlet = useOutletContext<InboxOutletContext | null>();
+  const outlet = useOutletContext<ShellContext | null>();
   const onCompose = outlet?.onCompose ?? (() => {});
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "admin";
+  const { data: stats } = useStats();
+
   const [selectedPerson, setSelectedPerson] = useState<GroupedPerson | null>(
     null,
   );
   const [selectedConversation, setSelectedConversation] =
     useState<GroupedConversation | null>(null);
-  const [items, setItems] = useState<GroupedItem[]>([]);
-  const [peopleTotal, setPeopleTotal] = useState(0);
-  const [peoplePage, setPeoplePage] = useState(1);
-  const [peopleLoading, setPeopleLoading] = useState(true);
-  // Server-side aggregates over the *filtered* set so the table's
-  // stat tiles reflect the whole result, not just the visible page.
-  const [aggregates, setAggregates] = useState<InboxAggregates>({
-    unreadRowCount: 0,
-    attachmentRowCount: 0,
-    multiInboxRowCount: 0,
-    totalUnreadEmails: 0,
-  });
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [searchParams] = useSearchParams();
-  // Seed the inbox filter from the URL param (/inbox/:inbox) so the selector
-  // can deep-link into a specific inbox. "todas" is the "all inboxes" sentinel.
-  const { inbox: inboxParam } = useParams<{
+
+  // A caixa vem da ROTA: recarregar, compartilhar o link e voltar pelo histórico
+  // mantêm a caixa. "todas" é sentinela segura, todo endereço real tem "@".
+  const { inbox: routeInbox, personId: routePersonId } = useParams<{
     inbox: string;
     personId: string;
   }>();
-  const [filters, setFilters] = useState<InboxFilters>(() =>
-    inboxParam && inboxParam !== "todas" ? { recipient: inboxParam } : {},
-  );
-  // Deep-link support: seed search from `?q=` (or `?search=`) so an
-  // external admin link like `/?q=user@example.com` lands pre-filtered.
+  const caixaDaRota =
+    routeInbox && routeInbox !== "todas"
+      ? decodeURIComponent(routeInbox)
+      : undefined;
+
+  const [filters, setFilters] = useState<InboxFilters>(() => ({
+    recipient: caixaDaRota,
+  }));
+  useEffect(() => {
+    setFilters((f) =>
+      f.recipient === caixaDaRota ? f : { ...f, recipient: caixaDaRota },
+    );
+  }, [caixaDaRota]);
+
+  // `/?q=` e `/?search=` são links já publicados (admin externo): chegam filtrados.
   const [search, setSearch] = useState(
     () => searchParams.get("q") ?? searchParams.get("search") ?? "",
   );
+  const busca = useAtrasado(search, 250);
   const [view, setView] = useState<InboxView>("list");
-  const [sortSpec, setSortSpec] = useState<InboxSortSpec>(() => {
-    // Persisted as JSON now ({key, direction}). For back-compat, also
-    // accept the legacy plain-string key form so users with an older
-    // saved value don't bounce back to "recency" on first load.
-    if (typeof window === "undefined")
-      return { key: "recency", direction: "desc" };
-    const saved = window.localStorage?.getItem("saasmail.inboxSort");
-    if (!saved) return { key: "recency", direction: "desc" };
-    try {
-      const parsed = JSON.parse(saved);
-      if (
-        parsed &&
-        (parsed.key === "recency" ||
-          parsed.key === "unread" ||
-          parsed.key === "inbox" ||
-          parsed.key === "attachments") &&
-        (parsed.direction === "asc" || parsed.direction === "desc")
-      ) {
-        return parsed as InboxSortSpec;
-      }
-    } catch {
-      /* fallthrough — treat as legacy bare-key string */
-    }
-    if (
-      saved === "recency" ||
-      saved === "unread" ||
-      saved === "inbox" ||
-      saved === "attachments"
-    ) {
-      return { key: saved as InboxSort, direction: defaultDirectionFor(saved) };
-    }
-    return { key: "recency", direction: "desc" };
-  });
-
-  // Persist sort across reloads.
+  const [sortSpec, setSortSpec] = useState<InboxSortSpec>(lerOrdem);
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage?.setItem(
-      "saasmail.inboxSort",
-      JSON.stringify(sortSpec),
-    );
+    try {
+      window.localStorage?.setItem(
+        "saasmail.inboxSort",
+        JSON.stringify(sortSpec),
+      );
+    } catch {
+      /* sem armazenamento: a ordem vale só nesta aba */
+    }
   }, [sortSpec]);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [selectedConversationIds, setSelectedConversationIds] = useState<
-    Set<string>
-  >(new Set());
-  const [bulkBusy, setBulkBusy] = useState(false);
-  // Manual refresh (desktop button / mobile pull-to-refresh) — separate from
-  // `peopleLoading` so a refresh keeps the current list visible (just a
-  // spinner) instead of flashing the full-pane "Loading…" placeholder.
-  const [refreshing, setRefreshing] = useState(false);
 
-  // Resizable sidebar — the user can drag the right edge to make the
-  // people list narrower (down to "just avatar + unread badge" mode).
-  const { width: sidebarWidth, startDrag, isCompact } = useResizableSidebar();
-
-  // Reset to page 1 whenever the query inputs change. (Direction
-  // change keeps the page — the user usually wants to keep looking at
-  // the same window when they flip asc/desc.)
+  const [peoplePage, setPeoplePage] = useState(1);
+  // Volta para a página 1 quando o que se busca muda (inverter a ordem mantém a
+  // página: quem inverte quer olhar a mesma janela).
   useEffect(() => {
     setPeoplePage(1);
   }, [
-    search,
+    busca,
     filters.recipient,
     filters.unread,
     filters.hasAttachment,
     sortSpec.key,
   ]);
 
-  // The current people query, derived from search + filters + sort + page.
-  // Shared by the debounced auto-load below and the manual refresh path so
-  // both always hit the same parameters.
   const peopleQuery = useMemo(
     () => ({
-      q: search || undefined,
+      q: busca || undefined,
       recipient: filters.recipient,
       unread: filters.unread,
       hasAttachment: filters.hasAttachment,
       sort: sortSpec.key,
       direction: sortSpec.direction,
       page: peoplePage,
-      limit: PEOPLE_PAGE_SIZE,
+      limit: POR_PAGINA_LISTA,
     }),
     [
-      search,
+      busca,
       filters.recipient,
       filters.unread,
       filters.hasAttachment,
@@ -177,38 +143,33 @@ export default function InboxPage() {
       peoplePage,
     ],
   );
+  const consulta = useMemo(() => opcoesLista(peopleQuery), [peopleQuery]);
+  const chaveLista = consulta.queryKey;
 
-  // Fetch the people list at the InboxPage level so both Table view
-  // (PeopleTable) and List view (PersonList sidebar) see the same data.
-  // Previously the fetch lived inside PersonList, which meant Table view
-  // showed an empty state because PersonList wasn't mounted.
-  useEffect(() => {
-    setPeopleLoading(true);
-    const t = setTimeout(() => {
-      fetchGroupedPeople(peopleQuery)
-        .then((res) => {
-          setItems(res.data);
-          setPeopleTotal(res.total);
-          setAggregates(res.aggregates);
-        })
-        .finally(() => setPeopleLoading(false));
-    }, 200);
-    return () => clearTimeout(t);
-  }, [peopleQuery]);
+  const lista = useQuery({
+    ...consulta,
+    // Trocar de caixa mantém a lista anterior (apagada) até a nova chegar, em vez
+    // de piscar "Carregando…".
+    placeholderData: keepPreviousData,
+  });
+  const items: GroupedItem[] = lista.data?.data ?? [];
+  const peopleTotal = lista.data?.total ?? 0;
 
-  // Manual refresh: re-fetch the current page immediately (no debounce) while
-  // keeping the existing rows on screen. Returns the promise so the mobile
-  // pull-to-refresh spinner can wait on it.
-  const refreshPeople = useCallback(() => {
-    setRefreshing(true);
-    return fetchGroupedPeople(peopleQuery)
-      .then((res) => {
-        setItems(res.data);
-        setPeopleTotal(res.total);
-        setAggregates(res.aggregates);
-      })
-      .finally(() => setRefreshing(false));
-  }, [peopleQuery]);
+  /** Atualiza a lista em cache (otimista) sem esperar o servidor. */
+  const mudarLista = useCallback(
+    (fn: (itens: GroupedItem[]) => GroupedItem[]) => {
+      qc.setQueryData<PaginatedGroupedPeople>(chaveLista, (d) =>
+        d ? { ...d, data: fn(d.data) } : d,
+      );
+    },
+    [qc, chaveLista],
+  );
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedConversationIds, setSelectedConversationIds] = useState<
+    Set<string>
+  >(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const toggleSelected = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -228,9 +189,7 @@ export default function InboxPage() {
     });
   }, []);
 
-  // Bulk-select all (or none) on the current page — covers BOTH person
-  // and group rows in one shot. The header checkbox is "on" only when
-  // every visible row is selected.
+  // Marca ou desmarca todas as linhas da página (pessoas e grupos de uma vez).
   const toggleSelectAll = useCallback(() => {
     const persons = items.filter(
       (it): it is GroupedPerson => it.type === "person",
@@ -238,27 +197,22 @@ export default function InboxPage() {
     const groups = items.filter(
       (it): it is GroupedConversation => it.type === "group",
     );
-    const allPersonsSelected =
-      persons.length === 0 || persons.every((p) => selectedIds.has(p.id));
-    const allGroupsSelected =
-      groups.length === 0 ||
+    const allOn =
+      persons.every((p) => selectedIds.has(p.id)) &&
       groups.every((g) => selectedConversationIds.has(g.id));
-    const allOn = allPersonsSelected && allGroupsSelected;
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (allOn) {
-        for (const p of persons) next.delete(p.id);
-      } else {
-        for (const p of persons) next.add(p.id);
+      for (const p of persons) {
+        if (allOn) next.delete(p.id);
+        else next.add(p.id);
       }
       return next;
     });
     setSelectedConversationIds((prev) => {
       const next = new Set(prev);
-      if (allOn) {
-        for (const g of groups) next.delete(g.id);
-      } else {
-        for (const g of groups) next.add(g.id);
+      for (const g of groups) {
+        if (allOn) next.delete(g.id);
+        else next.add(g.id);
       }
       return next;
     });
@@ -269,52 +223,45 @@ export default function InboxPage() {
     setSelectedConversationIds(new Set());
   }, []);
 
-  // Optimistic mark-read: clear unread locally on the matching rows,
-  // fire APIs in parallel, roll back on failure.
+  // Marcar como lida: zera na hora, chama a API e desfaz se ela falhar.
   async function applyMarkRead(personIds: string[], conversationIds: string[]) {
     if (personIds.length === 0 && conversationIds.length === 0) return;
     setBulkBusy(true);
-    const before = items;
-    setItems(
-      items.map((it) => {
-        if (it.type === "person" && personIds.includes(it.id)) {
-          return { ...it, unreadCount: 0 };
-        }
-        if (it.type === "group" && conversationIds.includes(it.id)) {
-          return { ...it, unreadCount: 0 };
-        }
-        return it;
-      }),
+    const antes = qc.getQueryData<PaginatedGroupedPeople>(chaveLista);
+    mudarLista((itens) =>
+      itens.map((it) =>
+        (it.type === "person" && personIds.includes(it.id)) ||
+        (it.type === "group" && conversationIds.includes(it.id))
+          ? { ...it, unreadCount: 0 }
+          : it,
+      ),
     );
     try {
       await Promise.all([
-        personIds.length > 0
-          ? markPeopleRead(personIds)
-          : Promise.resolve(undefined),
+        personIds.length > 0 ? markPeopleRead(personIds) : undefined,
         conversationIds.length > 0
           ? markConversationsRead(conversationIds)
-          : Promise.resolve(undefined),
+          : undefined,
       ]);
-      incrementRefreshKey();
+      void qc.invalidateQueries({ queryKey: chaves.stats });
+      void qc.invalidateQueries({ queryKey: ["emails-pessoa"] });
+      void qc.invalidateQueries({ queryKey: ["conversa"] });
     } catch {
-      setItems(before);
+      qc.setQueryData(chaveLista, antes);
     } finally {
       setBulkBusy(false);
     }
-  }
-
-  function handleMarkPersonRead(id: string) {
-    applyMarkRead([id], []);
-  }
-
-  function handleMarkConversationRead(id: string) {
-    applyMarkRead([], [id]);
   }
 
   function handleBulkMarkRead() {
     applyMarkRead(Array.from(selectedIds), Array.from(selectedConversationIds));
     clearSelection();
   }
+
+  const recarregarLista = useCallback(
+    () => qc.invalidateQueries({ queryKey: chaves.conversas }),
+    [qc],
+  );
 
   const handleBlockSelected = useCallback(async () => {
     const emails = items
@@ -325,41 +272,13 @@ export default function InboxPage() {
       emails.map((value) => addBlock({ type: "email", value }).catch(() => {})),
     );
     clearSelection();
-    await refreshPeople();
-  }, [items, selectedIds, clearSelection, refreshPeople]);
+    await recarregarLista();
+  }, [items, selectedIds, clearSelection, recarregarLista]);
 
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [showBanner, setShowBanner] = useState(false);
-  const { data: session } = useSession();
-  // When the user arrives via a Web Push notification (URL shape:
-  // /inbox/:inbox/:personId — see worker/src/do/notifications.ts and
-  // the route in App.tsx), pre-select that person so the tab shows the
-  // intended conversation rather than the empty default view.
-  const { inbox: routeInbox, personId: routePersonId } = useParams<{
-    inbox: string;
-    personId: string;
-  }>();
-  // A caixa agora vem da ROTA, nao de estado local. Isso e' o que faz recarregar,
-  // compartilhar link e voltar pelo historico manterem a caixa — antes `filters`
-  // nascia {} a cada mount e o dropdown voltava sozinho para "todas".
-  //
-  // "todas" e' sentinela segura: todo valor real e' um endereco e contem "@".
-  const caixaDaRota =
-    routeInbox && routeInbox !== "todas"
-      ? decodeURIComponent(routeInbox)
-      : undefined;
-  useEffect(() => {
-    setFilters((f) =>
-      f.recipient === caixaDaRota ? f : { ...f, recipient: caixaDaRota },
-    );
-  }, [caixaDaRota]);
-
-  // Estado -> URL: abrir/fechar conversa reescreve /inbox/<caixa>[/<pessoa>], entao
-  // recarregar ou copiar o link devolve a mesma tela. So' reage a MUDANCA do id: no
-  // primeiro render a pessoa da rota ainda nao carregou (null) e apagar o /<pessoa>
-  // ali mataria o deep link. `replace` para nao encher o historico a cada clique.
-  const navigate = useNavigate();
-  const location = useLocation();
+  // Estado → URL: abrir e fechar conversa reescreve /inbox/<caixa>[/<pessoa>], então
+  // recarregar ou copiar o link devolve a mesma tela. Só reage a MUDANÇA do id: no
+  // primeiro render a pessoa da rota ainda não carregou, e apagar o /<pessoa> ali
+  // mataria o link direto. `replace` para não encher o histórico a cada clique.
   const idAnterior = useRef<string | null>(null);
   const idSelecionado = selectedPerson?.id ?? null;
   useEffect(() => {
@@ -378,19 +297,21 @@ export default function InboxPage() {
     navigate,
   ]);
 
-  // Dropdown de caixa navega em vez de so' filtrar: a rota e' a fonte da caixa.
-  function trocarFiltros(f: InboxFilters) {
-    if (f.recipient !== filters.recipient) {
+  // Trocar de caixa pela lateral troca a rota; a conversa aberta é de outra caixa.
+  const caixaAnterior = useRef(caixaDaRota);
+  useEffect(() => {
+    if (caixaAnterior.current === caixaDaRota) return;
+    caixaAnterior.current = caixaDaRota;
+    if (!routePersonId) {
       setSelectedPerson(null);
-      navigate(
-        `/inbox/${encodeURIComponent(f.recipient ?? "todas")}${location.search}`,
-      );
+      setSelectedConversation(null);
     }
-    setFilters(f);
-  }
+    clearSelection();
+  }, [caixaDaRota, routePersonId, clearSelection]);
 
+  // Pessoa da rota (link de notificação push ou recarga): usa a da lista se já
+  // estiver nela; senão busca a pessoa direto para abrir a conversa mesmo assim.
   const lastProcessedPersonId = useRef<string | null>(null);
-
   useEffect(() => {
     if (!routePersonId) return;
     if (lastProcessedPersonId.current === routePersonId) return;
@@ -399,10 +320,6 @@ export default function InboxPage() {
       return;
     }
     lastProcessedPersonId.current = routePersonId;
-
-    // Prefer a hit in the already-loaded list (cheaper, has full grouped
-    // stats); fall back to fetching the person directly so we can still
-    // open the conversation when it isn't on the current page.
     const found = items.find(
       (it): it is GroupedPerson =>
         it.type === "person" && it.id === routePersonId,
@@ -423,9 +340,7 @@ export default function InboxPage() {
           lastEmailAt: p.lastEmailAt,
           unreadCount: p.unreadCount,
           totalCount: p.totalCount,
-          // recipientCount/hasAttachment aren't returned by /api/people/:id;
-          // the grouped list will overwrite this object with full stats once
-          // it loads. PersonDetail only needs `id` to fetch emails.
+          // /api/people/:id não traz estes dois; o PersonDetail só precisa do id.
           recipientCount: 1,
           recipients: [],
           hasAttachment: 0,
@@ -438,26 +353,25 @@ export default function InboxPage() {
   }, [routePersonId, items, selectedPerson?.id]);
 
   function handleEmailRead(personId: string) {
-    setItems((prev) =>
-      prev.map((it) =>
+    mudarLista((itens) =>
+      itens.map((it) =>
         it.type === "person" && it.id === personId
           ? { ...it, unreadCount: Math.max(0, it.unreadCount - 1) }
           : it,
       ),
     );
+    void qc.invalidateQueries({ queryKey: chaves.stats });
   }
 
-  // The open thread's sender (or their whole domain) was just blocked, so it
-  // no longer belongs in the inbox. Drop the selection back to "no mail
-  // selected" and refresh the list so the hidden thread disappears.
+  // O remetente (ou o domínio dele) acabou de ser bloqueado: a conversa some da caixa.
   function handlePersonBlocked() {
     setSelectedPerson(null);
-    refreshPeople();
+    void recarregarLista();
   }
 
   function handleEmailDelete(personId: string, wasUnread: boolean) {
-    setItems((prev) =>
-      prev.map((it) =>
+    mudarLista((itens) =>
+      itens.map((it) =>
         it.type === "person" && it.id === personId
           ? {
               ...it,
@@ -469,335 +383,227 @@ export default function InboxPage() {
           : it,
       ),
     );
+    void qc.invalidateQueries({ queryKey: chaves.stats });
   }
 
-  useEffect(() => {
-    fetchStats()
-      .then(setStats)
-      .catch(() => {});
-  }, []);
+  const internalDomains = useMemo(
+    () => (stats?.inboxes ?? []).map((s) => dominioDe(s.email)),
+    [stats?.inboxes],
+  );
 
-  const incrementRefreshKey = useCallback(() => {
-    setRefreshKey((k) => k + 1);
-  }, []);
+  const caixaInfo = caixaDaRota
+    ? stats?.inboxes.find((i) => i.email === caixaDaRota)
+    : undefined;
+  const titulo = caixaDaRota
+    ? rotuloCaixa(caixaInfo ?? { email: caixaDaRota, displayName: null })
+    : "Todas as caixas";
 
-  function onShouldPromptPush() {
-    if (!isPushSupported()) return;
-    if (hasDismissedPrompt()) return;
-    if (Notification.permission !== "default") return;
-    setShowBanner(true);
-  }
-
-  useRealtimeUpdates(incrementRefreshKey, onShouldPromptPush);
-
-  const isAdmin = session?.user?.role === "admin";
-
-  if (stats && stats.recipients.length === 0 && !isAdmin) {
+  if (stats && stats.inboxes.length === 0 && !isAdmin) {
     return (
-      <div className="mx-auto flex w-full max-w-[1600px] flex-1 items-center justify-center px-4 py-16 md:px-6">
-        <div className="rounded-2xl bg-card p-12 text-center ring-1 ring-border">
-          <h2 className="text-lg font-semibold text-text-primary">
-            No inboxes assigned yet
+      <div className="flex flex-1 items-center justify-center px-6">
+        <div className="max-w-sm text-center">
+          <h2 className="text-base font-semibold text-text-primary">
+            Nenhuma caixa liberada para você
           </h2>
-          <p className="mt-2 text-sm text-text-secondary">
-            Ask an admin to grant you access to an inbox.
+          <p className="mt-1 text-sm text-text-tertiary">
+            Peça a um administrador para dar acesso a uma caixa.
           </p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col px-4 pb-3 pt-2 md:px-6">
-      {/* Toolbar — search + filters + view toggle + Compose, all on one
-          unified bar. The dashboard chrome (TopNav) already tells the user
-          they're on the inbox, so no page title is needed.
-          Hidden when a person is open in table view to keep the focus on
-          the conversation. (Toggle stays accessible via the back button.) */}
-      {!(view === "table" && (selectedPerson || selectedConversation)) && (
-        <div
-          className={`mb-2 ${selectedPerson || selectedConversation ? "hidden sm:block" : ""}`}
-        >
-          <InboxToolbar
-            filters={filters}
-            onFiltersChange={trocarFiltros}
-            inboxes={stats?.inboxes ?? []}
-            search={search}
-            onSearchChange={setSearch}
-            view={view}
-            onViewChange={(v) => {
-              setView(v);
-              setSelectedPerson(null);
-              clearSelection();
-            }}
-            sortSpec={sortSpec}
-            onSortChange={setSortSpec}
-            onRefresh={refreshPeople}
-            refreshing={refreshing}
-            onCompose={onCompose}
-          />
-        </div>
-      )}
+  const aberta = !!(selectedPerson || selectedConversation);
+  const temSelecao = selectedIds.size > 0 || selectedConversationIds.size > 0;
+  const abrirPessoa = (p: GroupedPerson) => {
+    setSelectedConversation(null);
+    setSelectedPerson(p);
+  };
+  const abrirConversa = (c: GroupedConversation) => {
+    setSelectedPerson(null);
+    setSelectedConversation(c);
+  };
+  const fechar = () => {
+    setSelectedPerson(null);
+    setSelectedConversation(null);
+  };
 
-      {/* Selection bar — desktop: above the inbox card. Mobile: floats at
-          the bottom of the screen so the user's thumb can reach it. */}
-      {(selectedIds.size > 0 || selectedConversationIds.size > 0) &&
-        !selectedPerson &&
-        !selectedConversation && (
+  const cabecalho = (
+    <ListHeader
+      titulo={titulo}
+      endereco={caixaDaRota}
+      naoLidas={lista.data?.aggregates.totalUnreadEmails ?? 0}
+      conversas={lista.data ? peopleTotal : null}
+      filters={filters}
+      onFiltersChange={setFilters}
+      search={search}
+      onSearchChange={setSearch}
+      view={view}
+      onViewChange={(v) => {
+        setView(v);
+        fechar();
+        clearSelection();
+      }}
+      sortSpec={sortSpec}
+      onSortChange={setSortSpec}
+      onRefresh={() => void lista.refetch()}
+      refreshing={lista.isFetching && !lista.isPending}
+    />
+  );
+
+  const barraSelecao = temSelecao && !aberta && (
+    <SelectionBar
+      count={selectedIds.size + selectedConversationIds.size}
+      busy={bulkBusy}
+      onMarkRead={handleBulkMarkRead}
+      onBlock={handleBlockSelected}
+      onClear={clearSelection}
+      className="mx-3 my-2"
+    />
+  );
+
+  const leitura = selectedConversation ? (
+    <ConversationDetail
+      key={selectedConversation.id}
+      conversation={selectedConversation}
+      internalDomains={internalDomains}
+      onOpenCompose={onCompose}
+      onBack={fechar}
+    />
+  ) : selectedPerson ? (
+    <PersonDetail
+      key={selectedPerson.id}
+      person={selectedPerson}
+      onEmailRead={handleEmailRead}
+      onEmailDelete={handleEmailDelete}
+      onOpenCompose={onCompose}
+      onBlock={handlePersonBlocked}
+      onBack={fechar}
+    />
+  ) : null;
+
+  if (view === "table") {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col bg-card">
+        {aberta ? (
           <>
-            <div className="mb-3 hidden sm:block">
-              <SelectionBar
-                count={selectedIds.size + selectedConversationIds.size}
-                busy={bulkBusy}
-                onMarkRead={handleBulkMarkRead}
-                onBlock={handleBlockSelected}
-                onClear={clearSelection}
-              />
+            <div className="flex shrink-0 items-center gap-3 border-b border-border px-3 py-2">
+              <button
+                onClick={fechar}
+                className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 text-xs font-medium text-text-secondary hover:bg-text-primary/[0.05] hover:text-text-primary"
+              >
+                <ArrowLeft size={14} />
+                Voltar à tabela
+              </button>
             </div>
-            <div
-              className="fixed inset-x-3 bottom-3 z-40 sm:hidden"
-              style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
-            >
-              <SelectionBar
-                count={selectedIds.size + selectedConversationIds.size}
-                busy={bulkBusy}
-                onMarkRead={handleBulkMarkRead}
-                onBlock={handleBlockSelected}
-                onClear={clearSelection}
-              />
-            </div>
+            <div className="min-h-0 flex-1">{leitura}</div>
           </>
-        )}
-
-      <div className="-mx-4 flex h-[calc(100vh-7rem)] min-h-[420px] flex-col overflow-hidden rounded-none bg-card shadow-sm ring-0 sm:mx-0 sm:rounded-[8px] sm:ring-1 sm:ring-border">
-        {view === "table" ? (
-          selectedConversation ? (
-            // Table view + group open → full-width merged timeline.
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="flex shrink-0 items-center gap-3 border-b border-border bg-bg-subtle/60 px-4 py-2">
-                <button
-                  onClick={() => setSelectedConversation(null)}
-                  className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
-                >
-                  <ArrowLeft size={13} />
-                  Back to all
-                </button>
-                <span className="text-[11px] font-light text-text-tertiary">
-                  Viewing group ({selectedConversation.participants.length}{" "}
-                  participants)
-                </span>
-              </div>
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <ConversationDetail
-                  conversation={selectedConversation}
-                  refreshKey={refreshKey}
-                  internalDomains={
-                    stats?.inboxes?.map((s) => {
-                      const at = s.email.lastIndexOf("@");
-                      return at === -1
-                        ? ""
-                        : s.email.slice(at + 1).toLowerCase();
-                    }) ?? []
-                  }
-                  onOpenCompose={onCompose}
-                />
-              </div>
-            </div>
-          ) : selectedPerson ? (
-            // Table view + person open → full-width person detail.
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="flex shrink-0 items-center gap-3 border-b border-border bg-bg-subtle/60 px-4 py-2">
-                <button
-                  onClick={() => setSelectedPerson(null)}
-                  className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
-                >
-                  <ArrowLeft size={13} />
-                  Back to all
-                </button>
-                <span className="text-[11px] font-light text-text-tertiary">
-                  Viewing {selectedPerson.name || selectedPerson.email}
-                </span>
-              </div>
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <PersonDetail
-                  person={selectedPerson}
-                  onEmailRead={handleEmailRead}
-                  onEmailDelete={handleEmailDelete}
-                  refreshKey={refreshKey}
-                  onOpenCompose={onCompose}
-                  onBlock={handlePersonBlocked}
-                />
-              </div>
-            </div>
-          ) : (
-            // Table view, no selection → full table. `min-h-0 overflow-hidden`
-            // is required so the inner ScrollArea actually constrains and the
-            // table can scroll instead of pushing the page taller.
-            <div className="flex min-h-0 flex-1 overflow-hidden bg-card">
+        ) : (
+          <>
+            {cabecalho}
+            {barraSelecao}
+            <div className="flex min-h-0 flex-1 overflow-hidden">
               <PeopleTable
                 items={items}
-                onSelectPerson={(p) => {
-                  setSelectedConversation(null);
-                  setSelectedPerson(p);
-                }}
-                onSelectConversation={(c) => {
-                  setSelectedPerson(null);
-                  setSelectedConversation(c);
-                }}
+                onSelectPerson={abrirPessoa}
+                onSelectConversation={abrirConversa}
                 selectedIds={selectedIds}
                 onToggleSelected={toggleSelected}
                 selectedConversationIds={selectedConversationIds}
                 onToggleSelectedConversation={toggleSelectedConversation}
                 onToggleSelectAll={toggleSelectAll}
-                onMarkPersonRead={handleMarkPersonRead}
-                onMarkConversationRead={handleMarkConversationRead}
+                onMarkPersonRead={(id) => applyMarkRead([id], [])}
+                onMarkConversationRead={(id) => applyMarkRead([], [id])}
                 sortSpec={sortSpec}
                 onSortChange={setSortSpec}
                 total={peopleTotal}
                 page={peoplePage}
-                pageSize={PEOPLE_PAGE_SIZE}
+                pageSize={POR_PAGINA_LISTA}
                 onPageChange={setPeoplePage}
-                aggregates={aggregates}
+                aggregates={
+                  lista.data?.aggregates ?? {
+                    unreadRowCount: 0,
+                    attachmentRowCount: 0,
+                    multiInboxRowCount: 0,
+                    totalUnreadEmails: 0,
+                  }
+                }
               />
             </div>
-          )
-        ) : (
-          // List view — sidebar + detail (or empty state).
-          <div className="flex h-full min-h-0">
-            <div
-              className={cn(
-                "relative shrink-0 border-r border-border bg-bg-subtle",
-                // Mobile: full-width when nothing selected, hidden when a
-                // person/conversation is open. Desktop: always shown,
-                // width controlled by the resize handle below.
-                selectedPerson || selectedConversation
-                  ? "hidden md:block"
-                  : "block",
-                "w-full md:w-auto",
-              )}
-              style={{
-                width:
-                  typeof window !== "undefined" && window.innerWidth >= 768
-                    ? sidebarWidth
-                    : undefined,
-              }}
-            >
-              {showBanner && (
-                <PushOptInBanner onClose={() => setShowBanner(false)} />
-              )}
-              <PersonList
-                items={items}
-                setItems={setItems}
-                loading={peopleLoading}
-                total={peopleTotal}
-                pageSize={PEOPLE_PAGE_SIZE}
-                page={peoplePage}
-                onPageChange={setPeoplePage}
-                selectedPersonId={selectedPerson?.id ?? null}
-                selectedConversationId={selectedConversation?.id ?? null}
-                onSelectPerson={(p) => {
-                  setSelectedConversation(null);
-                  setSelectedPerson(p);
-                }}
-                onSelectConversation={(c) => {
-                  setSelectedPerson(null);
-                  setSelectedConversation(c);
-                }}
-                onPersonDeleted={(id) => {
-                  if (selectedPerson?.id === id) setSelectedPerson(null);
-                }}
-                isAdmin={isAdmin}
-                selectedIds={selectedIds}
-                onToggleSelected={toggleSelected}
-                onMarkPersonRead={handleMarkPersonRead}
-                onRefresh={refreshPeople}
-                compact={isCompact}
-              />
-              {/* Drag handle — visible on hover, full-height column. */}
-              <div
-                onMouseDown={startDrag}
-                onTouchStart={startDrag}
-                role="separator"
-                aria-label="Resize sidebar"
-                aria-orientation="vertical"
-                className="absolute -right-1 top-0 z-20 hidden h-full w-2 cursor-col-resize items-center justify-center md:flex"
-              >
-                <span className="h-full w-px bg-transparent transition-colors group-hover:bg-text-primary/10 hover:bg-text-primary/20" />
-              </div>
-            </div>
-
-            <div
-              className={`min-w-0 flex-1 bg-card ${
-                selectedPerson || selectedConversation
-                  ? "block"
-                  : "hidden md:block"
-              }`}
-            >
-              {selectedConversation ? (
-                <div className="flex h-full flex-col">
-                  <button
-                    onClick={() => setSelectedConversation(null)}
-                    className="flex items-center gap-1.5 border-b border-border px-4 py-2 text-xs text-text-secondary hover:text-text-primary md:hidden"
-                  >
-                    <ArrowLeft size={14} />
-                    Back
-                  </button>
-                  <div className="flex-1 overflow-hidden">
-                    <ConversationDetail
-                      conversation={selectedConversation}
-                      refreshKey={refreshKey}
-                      internalDomains={
-                        stats?.inboxes?.map((s) => {
-                          const at = s.email.lastIndexOf("@");
-                          return at === -1
-                            ? ""
-                            : s.email.slice(at + 1).toLowerCase();
-                        }) ?? []
-                      }
-                      onOpenCompose={onCompose}
-                    />
-                  </div>
-                </div>
-              ) : selectedPerson ? (
-                <div className="flex h-full flex-col">
-                  <button
-                    onClick={() => setSelectedPerson(null)}
-                    className="flex items-center gap-1.5 border-b border-border px-4 py-2 text-xs text-text-secondary hover:text-text-primary md:hidden"
-                  >
-                    <ArrowLeft size={14} />
-                    Back
-                  </button>
-                  <div className="flex-1 overflow-hidden">
-                    <PersonDetail
-                      person={selectedPerson}
-                      onEmailRead={handleEmailRead}
-                      onEmailDelete={handleEmailDelete}
-                      refreshKey={refreshKey}
-                      onOpenCompose={onCompose}
-                      onBlock={handlePersonBlocked}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
-                  <span
-                    className="text-3xl leading-none"
-                    style={{ color: "#7c5cfc" }}
-                    aria-hidden
-                  >
-                    ✦
-                  </span>
-                  <p className="max-w-[280px] text-sm font-light text-text-tertiary">
-                    Select a person to view emails, or switch to{" "}
-                    <span className="font-medium">Table</span> view for an
-                    overview.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
+          </>
         )}
       </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1">
+      {/* Lista: no celular ocupa a tela e some quando uma conversa abre. */}
+      <section
+        aria-label="Conversas"
+        className={cn(
+          "min-h-0 w-full flex-col border-r border-border bg-card md:flex md:w-[340px] md:shrink-0 xl:w-[380px]",
+          aberta ? "hidden" : "flex",
+        )}
+      >
+        {cabecalho}
+        {barraSelecao}
+        <PersonList
+          items={items}
+          onDelete={(id) =>
+            mudarLista((itens) =>
+              itens.filter((it) => !(it.type === "person" && it.id === id)),
+            )
+          }
+          loading={lista.isPending}
+          stale={lista.isPlaceholderData}
+          error={lista.isError}
+          total={peopleTotal}
+          pageSize={POR_PAGINA_LISTA}
+          page={peoplePage}
+          onPageChange={setPeoplePage}
+          selectedPersonId={selectedPerson?.id ?? null}
+          selectedConversationId={selectedConversation?.id ?? null}
+          onSelectPerson={abrirPessoa}
+          onSelectConversation={abrirConversa}
+          onPersonDeleted={(id) => {
+            if (selectedPerson?.id === id) setSelectedPerson(null);
+          }}
+          isAdmin={isAdmin}
+          selectedIds={selectedIds}
+          onToggleSelected={toggleSelected}
+          selectedConversationIds={selectedConversationIds}
+          onToggleSelectedConversation={toggleSelectedConversation}
+          onMarkPersonRead={(id) => applyMarkRead([id], [])}
+          onMarkConversationRead={(id) => applyMarkRead([], [id])}
+          onRefresh={recarregarLista}
+          mostrarCaixa={!caixaDaRota}
+          rotuloCaixa={(email) =>
+            rotuloCaixa(
+              stats?.inboxes.find((i) => i.email === email) ?? {
+                email,
+                displayName: null,
+              },
+            )
+          }
+        />
+      </section>
+
+      <section
+        aria-label="Leitura"
+        className={cn(
+          "min-h-0 min-w-0 flex-1 bg-card md:block",
+          aberta ? "block" : "hidden",
+        )}
+      >
+        {leitura ?? (
+          <div className="flex h-full items-center justify-center px-8 text-center">
+            <p className="max-w-[280px] text-sm text-text-tertiary">
+              Escolha uma conversa na lista.
+            </p>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

@@ -29,11 +29,11 @@ export async function copyMessageLink(emailId: string): Promise<void> {
   const url = buildMessageUrl(emailId);
   try {
     await navigator.clipboard.writeText(url);
-    showToast({ kind: "success", message: "Message link copied" });
+    showToast({ kind: "success", message: "Link da mensagem copiado" });
   } catch {
     showToast({
       kind: "error",
-      message: "Couldn't copy link",
+      message: "Não deu para copiar o link",
       description: url,
       durationMs: 8000,
     });

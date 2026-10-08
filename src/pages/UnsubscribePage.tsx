@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { Mail } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import Footer from "@/components/Footer";
+import { MarcaPublica, botaoSecundario } from "@/components/Publico";
+import { useSearchParams } from "react-router-dom";
 
 type State =
   | { kind: "loading" }
@@ -76,102 +74,73 @@ export default function UnsubscribePage() {
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col bg-background">
-      <div className="dashboard-backdrop" aria-hidden />
-      <div className="dashboard-backdrop-mask" aria-hidden />
-
-      {/* Brand strip — mirrors LegalLayout so the page sits next to /terms
-          and /privacy stylistically. */}
-      <header className="relative z-10">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-6 md:px-6">
-          <Link
-            to="/"
-            className="flex items-center gap-2 text-text-primary transition-opacity hover:opacity-80"
-          >
-            <Mail
-              className="h-5 w-5"
-              strokeWidth={2.5}
-              style={{ color: "#7c5cfc" }}
-              aria-hidden
-            />
-            <span className="text-lg font-extrabold uppercase tracking-tight">
-              saasmail
-            </span>
-          </Link>
-        </div>
-      </header>
-
-      <main className="relative z-10 flex flex-1 items-center justify-center px-4 pb-16">
-        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
+    <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-12">
+      <div className="flex w-full max-w-md flex-col gap-6">
+        <MarcaPublica />
+        <div className="rounded-[12px] border border-border bg-card p-7 text-center shadow-sm">
           {state.kind === "loading" && (
             <>
-              <h1 className="text-xl font-semibold tracking-tight text-text-primary">
-                Processing your request…
+              <h1 className="text-lg font-semibold text-text-primary">
+                Processando o pedido…
               </h1>
-              <p className="mt-2 text-sm text-text-secondary">
-                One moment while we update your preferences.
+              <p className="mt-2 text-sm text-text-tertiary">
+                Um instante enquanto atualizamos suas preferências.
               </p>
             </>
           )}
 
           {state.kind === "suppressed" && (
             <>
-              <h1 className="text-2xl font-extrabold tracking-tight text-text-primary">
-                You've been unsubscribed
+              <h1 className="text-xl font-semibold text-text-primary">
+                Inscrição cancelada
               </h1>
-              <p className="mt-3 break-all text-sm text-text-secondary">
+              <p className="mt-2 break-all text-sm text-text-secondary">
                 <span className="font-medium text-text-primary">
                   {state.email}
                 </span>{" "}
-                won't receive any more emails from us.
+                não vai mais receber nossos e-mails.
               </p>
-              <div className="mt-6">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleResubscribe}
-                  disabled={undoLoading || !undoToken}
-                >
-                  {undoLoading ? "Updating…" : "Re-subscribe"}
-                </Button>
-              </div>
-              <p className="mt-4 text-xs text-text-tertiary">
-                Changed your mind? Re-subscribing only restores delivery — it
-                doesn't sign you up for anything new.
+              <button
+                type="button"
+                onClick={handleResubscribe}
+                disabled={undoLoading || !undoToken}
+                className={`${botaoSecundario} mt-5`}
+              >
+                {undoLoading ? "Atualizando…" : "Voltar a receber"}
+              </button>
+              <p className="mt-3 text-xs text-text-tertiary">
+                Mudou de ideia? Voltar a receber só reativa a entrega; não
+                inscreve você em nada novo.
               </p>
             </>
           )}
 
           {state.kind === "subscribed" && (
             <>
-              <h1 className="text-2xl font-extrabold tracking-tight text-text-primary">
-                You're subscribed again
+              <h1 className="text-xl font-semibold text-text-primary">
+                Inscrição reativada
               </h1>
-              <p className="mt-3 break-all text-sm text-text-secondary">
+              <p className="mt-2 break-all text-sm text-text-secondary">
                 <span className="font-medium text-text-primary">
                   {state.email}
                 </span>{" "}
-                will continue to receive emails.
+                volta a receber nossos e-mails.
               </p>
             </>
           )}
 
           {state.kind === "error" && (
             <>
-              <h1 className="text-xl font-semibold tracking-tight text-text-primary">
-                This unsubscribe link is invalid or expired
+              <h1 className="text-lg font-semibold text-text-primary">
+                Este link de descadastro é inválido ou expirou
               </h1>
-              <p className="mt-3 text-sm text-text-secondary">
-                If you keep receiving unwanted emails, reply to one of them and
-                let the sender know directly.
+              <p className="mt-2 text-sm text-text-tertiary">
+                Se continuar recebendo e-mails que não quer, responda a um deles
+                e avise o remetente.
               </p>
             </>
           )}
         </div>
-      </main>
-
-      <div className="relative z-10">
-        <Footer variant="light" />
       </div>
     </div>
   );

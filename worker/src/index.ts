@@ -401,12 +401,37 @@ app.doc("/doc", {
 // SPA fallback
 app.all("*", async (c) => {
   const response = await c.env.ASSETS.fetch(c.req.raw);
+  const path = new URL(c.req.url).pathname;
+  // Vite põe hash no nome de tudo em /assets/, e as fontes trocam de nome quando
+  // mudam: o navegador guarda por um ano e reabrir o app não pergunta nada ao
+  // servidor (o padrão do Workers é max-age=0, uma revalidação por arquivo).
+  if (path.startsWith("/assets/") || path.startsWith("/fonts/")) {
+    // Pedaço apagado por um deploy (aba aberta desde antes) cairia no fallback
+    // da SPA e voltaria o index.html com 200; o 404 faz o app recarregar.
+    if (
+      response.headers.get("Content-Type")?.includes("text/html") ||
+      (!response.ok && response.status !== 304)
+    ) {
+      return c.text("Not found", 404);
+    }
+    const headers = new Headers(response.headers);
+    headers.set("Cache-Control", "public, max-age=31536000, immutable");
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
   if (!response.headers.get("Content-Type")?.includes("text/html"))
     return response;
   const headers = new Headers(response.headers);
+  // O `vite dev` injeta um preâmbulo inline do React: só o dev em loopback roda.
+  const devLocal =
+    isDevEnvironment(c.env) &&
+    ["localhost", "127.0.0.1", "[::1]"].includes(new URL(c.req.url).hostname);
   headers.set(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' https: data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+    `default-src 'self'; script-src 'self'${devLocal ? " 'unsafe-inline'" : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`,
   );
   headers.set("X-Frame-Options", "DENY");
   headers.set("X-Content-Type-Options", "nosniff");

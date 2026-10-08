@@ -13,7 +13,7 @@ interface Branding {
 
 const DEFAULT_BRANDING: Branding = {
   passkeyRequired: true,
-  brandName: "saasmail",
+  brandName: "E-mail",
 };
 
 interface BrandingContextValue extends Branding {

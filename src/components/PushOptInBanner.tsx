@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { enablePush, markPromptDismissed } from "@/lib/push";
+import { enablePush, markPromptDismissed, motivoPush } from "@/lib/push";
 
 export function PushOptInBanner({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
@@ -14,7 +14,7 @@ export function PushOptInBanner({ onClose }: { onClose: () => void }) {
       markPromptDismissed();
       onClose();
     } else {
-      setError(result.reason);
+      setError(motivoPush("reason" in result ? result.reason : ""));
     }
   }
 
@@ -24,35 +24,34 @@ export function PushOptInBanner({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="mx-4 mt-3 flex items-center justify-between rounded-md border border-border bg-bg-subtle px-4 py-3 text-sm shadow-sm">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-primary-soft px-4 py-2.5 text-sm">
       <div>
         <p className="font-medium text-text-primary">
-          Get notified even when this tab is closed
+          Receber aviso de e-mail novo mesmo com a aba fechada
         </p>
         {error ? (
-          <p className="mt-1 text-xs text-red-600">
-            Couldn&apos;t enable notifications: {error}
+          <p className="mt-1 text-xs text-destructive">
+            Não deu para ligar as notificações: {error}
           </p>
         ) : (
           <p className="mt-1 text-xs text-text-secondary">
-            saasmail can send browser push notifications when a new email
-            arrives.
+            O navegador avisa quando chega e-mail, como um app.
           </p>
         )}
       </div>
       <div className="flex gap-2">
         <button
-          className="rounded-md bg-black px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+          className="rounded-[6px] bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
           disabled={busy}
           onClick={handleEnable}
         >
-          {busy ? "…" : "Enable"}
+          {busy ? "…" : "Ligar"}
         </button>
         <button
-          className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-primary"
+          className="rounded-[6px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-primary"
           onClick={handleDismiss}
         >
-          Not now
+          Agora não
         </button>
       </div>
     </div>

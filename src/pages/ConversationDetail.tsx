@@ -1,278 +1,268 @@
-import { useState, useEffect, useMemo, useRef } from "react";
-import { Users } from "lucide-react";
+import { lazy, Suspense, useState, useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Users } from "lucide-react";
 import MarkAllReadButton from "@/components/MarkAllReadButton";
 import {
-  fetchConversationEmails,
   markEmailRead,
+  markConversationsRead,
   deleteEmail,
   type GroupedConversation,
   type Email,
   type ConversationDetail as ConversationDetailData,
-  fetchStats,
 } from "@/lib/api";
 import EmailHtmlModal from "@/components/EmailHtmlModal";
 import { type ThreadInboxGroup } from "@/components/ThreadInboxSection";
 import ChatInboxSection from "@/components/ChatInboxSection";
-import ReplyComposer from "@/components/ReplyComposer";
+import { nomesDoGrupo } from "@/components/GroupRow";
 import type { ComposePrefill } from "@/pages/ComposeModal";
 import { onEmailSent } from "@/lib/email-events";
 import { showToast } from "@/lib/toast";
+import { chaves, mapearPaginas, useConversa, useStats } from "@/lib/queries";
+import { plural } from "@/lib/datas";
+
+const ReplyComposer = lazy(() => import("@/components/ReplyComposer"));
 
 interface ConversationDetailProps {
   conversation: GroupedConversation;
-  refreshKey?: number;
-  /** Domains we treat as "internal" for CC chip coloring. */
+  /** Domínios nossos, para colorir o CC interno. */
   internalDomains?: string[];
-  /**
-   * Called when the user clicks "open in full compose" inside a chat
-   * thread — the chat section computes a prefill (from + to + cc +
-   * subject) so the drawer opens with the reply context applied.
-   */
+  /** "Abrir no editor completo" do chat. */
   onOpenCompose?: (prefill?: ComposePrefill) => void;
+  /** Voltar à lista (celular). */
+  onBack?: () => void;
 }
 
 function inboxLabel(email: string): string {
   const at = email.indexOf("@");
-  if (at <= 0) return email;
-  return email.slice(0, at);
+  return at <= 0 ? email : email.slice(0, at);
 }
 
 /**
- * Group-conversation timeline. Mirrors PersonDetail but for threads with
- * 2+ external participants — every bubble shows its actual sender, not
- * a single "person" identity.
- *
- * The conversation is scoped to one inbox (that's how groups are keyed),
- * so we don't show inbox tabs the way PersonDetail does.
+ * Conversa com 2+ participantes de fora: cada mensagem mostra quem mandou. Uma
+ * conversa é de uma caixa só (é assim que os grupos se formam), então não tem abas.
+ * Sempre no modo chat: ida e volta entre várias pessoas lê melhor em balões.
  */
 export default function ConversationDetail({
   conversation,
-  refreshKey,
   internalDomains = [],
   onOpenCompose,
+  onBack,
 }: ConversationDetailProps) {
-  const [data, setData] = useState<ConversationDetailData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  useEffect(() => setPage(1), [conversation.id]);
+  const qc = useQueryClient();
+  const chave = chaves.conversa(conversation.id);
+  const consulta = useConversa(conversation.id);
+  const { data: stats } = useStats();
   const [htmlPreviewEmail, setHtmlPreviewEmail] = useState<Email | null>(null);
-  // Responder a UMA mensagem do grupo: mesmo composer da caixa por pessoa. A
-  // resposta sai pela caixa do grupo; o "para" e quem escreveu aquela mensagem.
+  // Responder a UMA mensagem do grupo: sai pela caixa do grupo, para quem escreveu.
   const [replyToEmailId, setReplyToEmailId] = useState<string | null>(null);
-  const [senderIdentities, setSenderIdentities] = useState<
-    Array<{ email: string; displayName: string | null }>
-  >([]);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    fetchStats().then((stats) => {
-      setSenderIdentities(stats.senderIdentities ?? []);
-    });
-  }, []);
+  // Página 1 é a mais nova e cada página vem em ordem de tempo: inverte as páginas.
+  const emails = useMemo(
+    () =>
+      consulta.data
+        ? [...consulta.data.pages].reverse().flatMap((p) => p.emails)
+        : [],
+    [consulta.data],
+  );
 
-  function refetch() {
-    fetchConversationEmails(conversation.id, page).then(setData);
+  function mudarEmails(fn: (lista: Email[]) => Email[]) {
+    qc.setQueryData(chave, (d: typeof consulta.data) =>
+      mapearPaginas<ConversationDetailData>(d, (p) => ({
+        ...p,
+        emails: fn(p.emails),
+      })),
+    );
   }
+  const recarregar = () => void qc.invalidateQueries({ queryKey: chave });
 
-  useEffect(() => {
-    setLoading(true);
-    fetchConversationEmails(conversation.id, page)
-      .then(setData)
-      .finally(() => setLoading(false));
-  }, [conversation.id, page]);
-
-  useEffect(() => {
-    if (refreshKey) refetch();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey]);
-
-  // Listen for email-sent events so we can refetch immediately and
-  // surface a toast if the user replied from a different inbox than
-  // this conversation. Group conversation_ids are keyed by
-  // (inbox, sorted-externals) — so a reply from a different inbox
-  // lives in an entirely different conversation; the user needs to
-  // know rather than wonder where their reply went.
-  useEffect(() => {
-    const off = onEmailSent((detail) => {
-      refetch();
-      if (
-        detail.fromAddress.toLowerCase() !== conversation.inbox.toLowerCase()
-      ) {
-        showToast({
-          kind: "warning",
-          message: `Reply went to ${inboxLabel(detail.fromAddress)}`,
-          description: `This thread is on ${inboxLabel(conversation.inbox)} — replies from another inbox start a new thread.`,
-          durationMs: 6500,
-        });
-      }
-    });
-    return off;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversation.inbox, conversation.id]);
+  // Resposta saiu por outra caixa: em grupo isso abre outra conversa. Avisa.
+  useEffect(
+    () =>
+      onEmailSent((detail) => {
+        if (
+          detail.fromAddress.toLowerCase() !== conversation.inbox.toLowerCase()
+        ) {
+          showToast({
+            kind: "warning",
+            message: `A resposta saiu por ${inboxLabel(detail.fromAddress)}`,
+            description: `Esta conversa é de ${inboxLabel(conversation.inbox)}; resposta por outra caixa começa outra conversa.`,
+            durationMs: 6500,
+          });
+        }
+      }),
+    [conversation.inbox],
+  );
 
   async function handleMarkRead(email: Email) {
     if (email.type !== "received" || email.isRead !== 0) return;
-    await markEmailRead(email.id, true);
-    setData((prev) =>
-      prev
-        ? {
-            ...prev,
-            emails: prev.emails.map((e) =>
-              e.id === email.id ? { ...e, isRead: 1 } : e,
-            ),
-          }
-        : prev,
+    mudarEmails((l) =>
+      l.map((e) => (e.id === email.id ? { ...e, isRead: 1 } : e)),
     );
+    try {
+      await markEmailRead(email.id, true);
+      void qc.invalidateQueries({ queryKey: chaves.stats });
+    } catch {
+      recarregar();
+    }
+  }
+
+  async function marcarTudo() {
+    mudarEmails((l) =>
+      l.map((e) =>
+        e.type === "received" && e.isRead === 0 ? { ...e, isRead: 1 } : e,
+      ),
+    );
+    try {
+      await markConversationsRead([conversation.id]);
+      void qc.invalidateQueries({ queryKey: chaves.stats });
+      void qc.invalidateQueries({ queryKey: chaves.conversas });
+    } catch {
+      recarregar();
+    }
   }
 
   async function handleDelete(emailId: string) {
     if (
       !confirm(
-        "Permanently delete this email and all its attachments? This cannot be undone.",
+        "Excluir esta mensagem e os anexos para sempre? Não dá para desfazer.",
       )
     )
       return;
-    await deleteEmail(emailId);
-    setData((prev) =>
-      prev
-        ? {
-            ...prev,
-            emails: prev.emails.filter((e) => e.id !== emailId),
-          }
-        : prev,
-    );
+    try {
+      await deleteEmail(emailId);
+    } catch {
+      showToast({ kind: "error", message: "Não deu para excluir a mensagem" });
+      return;
+    }
+    mudarEmails((l) => l.filter((e) => e.id !== emailId));
   }
 
-  // Adapter: ChatInboxSection / ThreadInboxSection both expect a
-  // ThreadInboxGroup (one inbox, newest-first emails). We only have one
-  // inbox per conversation, so the adapter is straightforward — but the
-  // section orders newest-first while the API returns chronological, so
-  // we reverse here.
-  const group: ThreadInboxGroup | null = useMemo(() => {
-    if (!data) return null;
-    const newestFirst = [...data.emails].reverse();
-    const latestTimestamp = newestFirst[0]?.timestamp ?? 0;
+  // ChatInboxSection espera uma caixa com as mensagens da mais nova para a mais antiga.
+  const group: ThreadInboxGroup = useMemo(() => {
+    const newestFirst = [...emails].reverse();
     return {
       inbox: conversation.inbox,
       emails: newestFirst,
-      latestTimestamp,
+      latestTimestamp: newestFirst[0]?.timestamp ?? 0,
     };
-  }, [data, conversation.inbox]);
+  }, [emails, conversation.inbox]);
 
-  // Map personId → {name, email} so each bubble can resolve its actual
-  // sender. The conversation endpoint already returns participants —
-  // we just denormalize into a Map for O(1) lookup.
   const senderById = useMemo(() => {
     const m = new Map<string, { email: string; name: string | null }>();
-    for (const p of conversation.participants) {
+    for (const p of conversation.participants)
       m.set(p.id, { email: p.email, name: p.name });
-    }
     return m;
   }, [conversation.participants]);
 
-  if (loading || !data || !group) {
-    return (
-      <div className="flex h-full items-center justify-center text-text-tertiary">
-        <span className="text-sm">Loading…</span>
-      </div>
-    );
-  }
-
-  const totalUnread = group.emails.filter(
+  const totalUnread = emails.filter(
     (e) => e.type === "received" && e.isRead === 0,
   ).length;
 
-  const participantNames = conversation.participants
-    .map((p) => p.name?.split(/\s+/)[0] ?? p.email.split("@")[0])
-    .join(", ");
-
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center justify-between px-4 py-2 text-sm">
-        <button disabled={page === 1} onClick={() => setPage(page - 1)}>
-          Newer messages
-        </button>
-        <span>Page {page}</span>
-        <button
-          disabled={data.emails.length < 10}
-          onClick={() => setPage(page + 1)}
-        >
-          Older messages
-        </button>
-      </div>
-      {/* Conversation header — overlapping avatars + comma-separated names */}
-      <div className="shrink-0 border-b border-border bg-card px-4 pb-2.5 pt-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <h2 className="flex items-center gap-1.5 truncate text-base font-extrabold tracking-tight text-text-primary">
-              <Users size={14} className="shrink-0 text-text-tertiary" />
-              {participantNames || "Group conversation"}
-            </h2>
-            <span className="truncate text-xs font-light text-text-tertiary">
-              {conversation.inbox}
-            </span>
-            <span className="text-[11px] text-text-tertiary">
-              · {data.emails.length} message
-              {data.emails.length !== 1 ? "s" : ""}
-              {" · "}
-              {conversation.participants.length} participants
-            </span>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <MarkAllReadButton
-              unreadCount={totalUnread}
-              scopeLabel={conversation.inbox}
-              onMarkAllRead={() => {
-                // Mark every unread received email read sequentially.
-                for (const e of data.emails) {
-                  if (e.type === "received" && e.isRead === 0) {
-                    handleMarkRead(e);
-                  }
-                }
-              }}
-            />
-          </div>
+      <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-4 py-3">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Voltar à lista"
+            className="-ml-1 flex h-8 w-8 items-center justify-center rounded-[6px] text-text-secondary hover:bg-text-primary/[0.05] md:hidden"
+          >
+            <ArrowLeft size={17} />
+          </button>
+        )}
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg-muted text-text-secondary">
+          <Users size={15} />
+        </span>
+        <div className="min-w-0 flex-[1_1_200px]">
+          <h2
+            className="truncate text-base font-semibold text-text-primary"
+            title={conversation.participants.map((p) => p.email).join(", ")}
+          >
+            {nomesDoGrupo(conversation.participants)}
+          </h2>
+          <p className="truncate text-xs text-text-tertiary">
+            {conversation.inbox} ·{" "}
+            {plural(
+              conversation.participants.length,
+              "participante",
+              "participantes",
+            )}{" "}
+            · {plural(conversation.totalCount, "mensagem", "mensagens")}
+          </p>
         </div>
-      </div>
-
-      {/* Inbox label — slim, just shows which of OUR inboxes this thread lives in */}
-      <div className="shrink-0 border-b border-border bg-bg-subtle/40 px-4 py-1.5 text-[11px] text-text-tertiary">
-        {inboxLabel(conversation.inbox)}@
-      </div>
-
-      {/* The merged timeline. Use chat-mode by default for groups since it
-          handles "rapid back-and-forth between multiple people" better than
-          the thread-mode collapsed view. */}
-      {/* Group conversations always render in chat mode. The reply
-          path is the same as PersonDetail's chat path — ChatQuickReply
-          inline, or "open in full compose" via onOpenCompose. */}
-      <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col">
-        <ChatInboxSection
-          key={conversation.id}
-          group={group}
-          personEmail={conversation.participants[0]?.email ?? ""}
-          internalDomains={internalDomains}
-          senderResolver={(e) => {
-            if (e.type === "sent") return null; // bubble shows "You"
-            if (e.personId) {
-              const r = senderById.get(e.personId);
-              if (r) return r;
-            }
-            if (e.fromAddress) return { email: e.fromAddress, name: null };
-            return null;
-          }}
-          onOpenHtml={setHtmlPreviewEmail}
-          onMarkRead={handleMarkRead}
-          onDelete={handleDelete}
-          onReply={setReplyToEmailId}
-          onSent={refetch}
-          onOpenCompose={onOpenCompose}
+        <MarkAllReadButton
+          unreadCount={totalUnread}
+          scopeLabel={conversation.inbox}
+          onMarkAllRead={marcarTudo}
         />
+      </header>
+
+      {consulta.hasNextPage && (
+        <button
+          type="button"
+          onClick={() => void consulta.fetchNextPage()}
+          disabled={consulta.isFetchingNextPage}
+          className="shrink-0 border-b border-border py-1.5 text-xs font-medium text-primary-ink hover:bg-bg-subtle disabled:opacity-60"
+        >
+          {consulta.isFetchingNextPage
+            ? "Carregando…"
+            : "Mostrar mensagens mais antigas"}
+        </button>
+      )}
+
+      <div className="flex min-h-0 flex-1 flex-col">
+        {consulta.isPending ? (
+          <div className="grid gap-3 p-4" aria-busy="true">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className={`h-14 w-2/3 rounded-[12px] bg-bg-muted/70 ${i === 1 ? "justify-self-end" : ""}`}
+              />
+            ))}
+          </div>
+        ) : consulta.isError ? (
+          <div className="px-6 py-16 text-center">
+            <p className="text-sm font-medium text-text-primary">
+              Não deu para abrir a conversa.
+            </p>
+            <button
+              type="button"
+              onClick={() => void consulta.refetch()}
+              className="mt-2 text-sm font-medium text-primary-ink hover:underline"
+            >
+              Tentar de novo
+            </button>
+          </div>
+        ) : (
+          <ChatInboxSection
+            key={conversation.id}
+            group={group}
+            personEmail={conversation.participants[0]?.email ?? ""}
+            internalDomains={internalDomains}
+            senderResolver={(e) => {
+              if (e.type === "sent") return null;
+              if (e.personId) {
+                const r = senderById.get(e.personId);
+                if (r) return r;
+              }
+              return e.fromAddress
+                ? { email: e.fromAddress, name: null }
+                : null;
+            }}
+            onOpenHtml={setHtmlPreviewEmail}
+            onMarkRead={handleMarkRead}
+            onDelete={handleDelete}
+            onReply={setReplyToEmailId}
+            onSent={recarregar}
+            onOpenCompose={onOpenCompose}
+          />
+        )}
       </div>
 
       {replyToEmailId &&
         (() => {
-          const alvo = data.emails.find((e) => e.id === replyToEmailId);
+          const alvo = emails.find((e) => e.id === replyToEmailId);
           const quem =
             (alvo?.personId ? senderById.get(alvo.personId) : null) ??
             (alvo?.type === "received" && alvo.fromAddress
@@ -281,16 +271,18 @@ export default function ConversationDetail({
             conversation.participants[0] ??
             null;
           return (
-            <ReplyComposer
-              emailId={replyToEmailId}
-              personName={quem?.name ?? null}
-              personEmail={quem?.email ?? ""}
-              recipients={[conversation.inbox]}
-              senderIdentities={senderIdentities}
-              internalDomains={internalDomains}
-              onClose={() => setReplyToEmailId(null)}
-              onSent={refetch}
-            />
+            <Suspense fallback={null}>
+              <ReplyComposer
+                emailId={replyToEmailId}
+                personName={quem?.name ?? null}
+                personEmail={quem?.email ?? ""}
+                recipients={[conversation.inbox]}
+                senderIdentities={stats?.senderIdentities ?? []}
+                internalDomains={internalDomains}
+                onClose={() => setReplyToEmailId(null)}
+                onSent={recarregar}
+              />
+            </Suspense>
           );
         })()}
 
@@ -298,7 +290,7 @@ export default function ConversationDetail({
         email={htmlPreviewEmail}
         open={htmlPreviewEmail !== null}
         onClose={() => setHtmlPreviewEmail(null)}
-        onUpdated={refetch}
+        onUpdated={recarregar}
         onReply={(id) => {
           setHtmlPreviewEmail(null);
           setReplyToEmailId(id);

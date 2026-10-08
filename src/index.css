@@ -1,70 +1,137 @@
 @import "tailwindcss";
 
-@theme {
-  /* ──────────────────────────────────────────────────────────────
-     Brand palette — matches givefeedback.dev
-     Lime primary + violet accent on near-white surfaces.
-     ──────────────────────────────────────────────────────────── */
+/* Inter (SIL Open Font License 1.1, public/fonts/OFL.txt), subconjuntos latin e
+   latin-ext do Google Fonts, servidos daqui: sem ida a outro domínio na abertura.
+   O latin-ext só baixa se a página tiver um caractere da faixa dele. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/inter-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/inter-latin-ext.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+    U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
 
-  /* Surfaces */
-  --color-background: hsl(0 0% 99%);
-  --color-bg: hsl(0 0% 99%);
-  --color-bg-subtle: hsl(220 14% 96%);
-  --color-bg-muted: hsl(220 13% 91%);
-  --color-card: hsl(0 0% 100%);
-  --color-card-foreground: hsl(222 47% 11%);
+/* Paleta do tema: grafite + azul no claro; no escuro,
+   as tonalidades OKLCH antigas. O tema segue o sistema. */
+:root {
+  --app-bg: #f5f5f5;
+  --app-card: #ffffff;
+  --app-subtle: #f9fafb;
+  --app-muted: #eef0f3;
+  --app-fg: #181a20;
+  --app-fg-2: #4b5160;
+  --app-fg-3: #5f6573;
+  --app-line: #e2e4e8;
+  --app-line-2: #eef0f3;
+  --app-primary: #2a6bf2;
+  --app-primary-hover: #1f5be0;
+  --app-primary-fg: #ffffff;
+  --app-primary-soft: #e9f0fe;
+  --app-primary-ink: #1c4fc4;
+  --app-ring: #73a1ff;
+  --app-danger: #dc2626;
+  --app-danger-soft: #fdecec;
+  --app-ok: #15803d;
+  --app-ok-soft: #e8f6ee;
+  --app-warn: #a15c07;
+  --app-warn-soft: #fdf3e2;
+  --app-warn-line: #f2d7a6;
+  color-scheme: light;
+}
 
-  /* Borders */
-  --color-border: hsl(220 13% 91%);
-  --color-border-subtle: hsl(220 14% 96%);
-  --color-input: hsl(220 13% 91%);
+@media (prefers-color-scheme: dark) {
+  :root {
+    --app-bg: oklch(0.145 0 0);
+    --app-card: oklch(0.205 0 0);
+    --app-subtle: oklch(0.18 0 0);
+    --app-muted: oklch(0.269 0 0);
+    --app-fg: oklch(0.985 0 0);
+    --app-fg-2: oklch(0.85 0 0);
+    --app-fg-3: oklch(0.708 0 0);
+    --app-line: oklch(1 0 0 / 10%);
+    --app-line-2: oklch(1 0 0 / 6%);
+    --app-primary: oklch(0.643 0.141 253.9);
+    --app-primary-hover: oklch(0.7 0.13 253.9);
+    --app-primary-fg: oklch(0.145 0 0);
+    --app-primary-soft: oklch(0.643 0.141 253.9 / 16%);
+    --app-primary-ink: oklch(0.8 0.1 253.9);
+    --app-ring: oklch(0.643 0.141 253.9);
+    --app-danger: oklch(0.7 0.19 25);
+    --app-danger-soft: oklch(0.7 0.19 25 / 14%);
+    --app-ok: oklch(0.72 0.15 150);
+    --app-ok-soft: oklch(0.72 0.15 150 / 14%);
+    --app-warn: oklch(0.8 0.13 75);
+    --app-warn-soft: oklch(0.8 0.13 75 / 14%);
+    --app-warn-line: oklch(0.8 0.13 75 / 30%);
+    color-scheme: dark;
+  }
+}
 
-  /* Text */
-  --color-foreground: hsl(222 47% 11%);
-  --color-text-primary: hsl(222 47% 11%);
-  --color-text-secondary: hsl(215 16% 47%);
-  --color-text-tertiary: hsl(215 16% 65%);
-  --color-muted-foreground: hsl(215 16% 47%);
+/* Os nomes antigos (bg-card, text-text-primary, bg-accent, bg-violet…) continuam
+   valendo e passam a apontar para a família; violeta e lima viram o azul. */
+@theme inline {
+  --color-background: var(--app-bg);
+  --color-bg: var(--app-bg);
+  --color-bg-subtle: var(--app-subtle);
+  --color-bg-muted: var(--app-muted);
+  --color-card: var(--app-card);
+  --color-card-foreground: var(--app-fg);
 
-  /* Primary (lime) — used for CTAs */
-  --color-primary: hsl(75 100% 32%);
-  --color-primary-foreground: hsl(0 0% 100%);
+  --color-border: var(--app-line);
+  --color-border-subtle: var(--app-line-2);
+  --color-input: var(--app-line);
 
-  /* Saasmail's existing 'accent' name aliases the primary lime
-     so existing components (bg-accent, text-accent) inherit the
-     new brand color without rewriting every call site. */
-  --color-accent: hsl(75 100% 32%);
-  --color-accent-hover: hsl(75 100% 26%);
-  --color-accent-subtle: hsl(75 70% 94%);
-  --color-accent-subtle-fg: hsl(75 100% 22%);
-  --color-accent-foreground: hsl(0 0% 100%);
+  --color-foreground: var(--app-fg);
+  --color-text-primary: var(--app-fg);
+  --color-text-secondary: var(--app-fg-2);
+  --color-text-tertiary: var(--app-fg-3);
+  --color-muted-foreground: var(--app-fg-3);
 
-  /* Brand pure-tones (used for the ✦ sparkle and footer brand line) */
-  --color-lime: #bfff00;
-  --color-violet: #7c5cfc;
+  --color-primary: var(--app-primary);
+  --color-primary-hover: var(--app-primary-hover);
+  --color-primary-foreground: var(--app-primary-fg);
+  --color-primary-soft: var(--app-primary-soft);
+  --color-primary-ink: var(--app-primary-ink);
+  --color-accent: var(--app-primary);
+  --color-accent-hover: var(--app-primary-hover);
+  --color-accent-subtle: var(--app-primary-soft);
+  --color-accent-subtle-fg: var(--app-primary-ink);
+  --color-accent-foreground: var(--app-primary-fg);
+  --color-violet: var(--app-primary);
+  --color-lime: var(--app-primary);
+  --color-unread: var(--app-primary);
+  --color-ring: var(--app-ring);
 
-  /* Violet accent — focus rings, highlights, unread indicators */
-  --color-ring: hsl(254 95% 55%);
-  --color-unread: hsl(254 95% 55%);
+  --color-secondary: var(--app-muted);
+  --color-secondary-foreground: var(--app-fg);
+  --color-muted: var(--app-muted);
+  --color-destructive: var(--app-danger);
+  --color-destructive-subtle: var(--app-danger-soft);
+  --color-success: var(--app-ok);
+  --color-success-subtle: var(--app-ok-soft);
+  --color-warning-bg: var(--app-warn-soft);
+  --color-warning-border: var(--app-warn-line);
+  --color-warning-text: var(--app-warn);
 
-  /* Semantic */
-  --color-secondary: hsl(220 14% 96%);
-  --color-secondary-foreground: hsl(222 47% 11%);
-  --color-muted: hsl(220 14% 96%);
-  --color-destructive: hsl(0 72% 51%);
-  --color-destructive-subtle: hsl(0 72% 95%);
-  --color-success: hsl(142 60% 38%);
-  --color-warning-bg: hsl(48 100% 96%);
-  --color-warning-border: hsl(48 96% 76%);
-  --color-warning-text: hsl(35 91% 33%);
-
-  /* Fonts */
   --font-sans:
-    "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Helvetica, Arial, sans-serif;
-  --font-script: "Caveat", cursive;
+    "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
 
-  /* Radii */
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
@@ -74,34 +141,27 @@
 
 html {
   font-size: 16px;
-  /* Stop iOS Safari from inflating text on rotate / when zoomed.
-     We control text size explicitly. */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
 body {
-  background-color: var(--color-background);
-  color: var(--color-foreground);
+  background-color: var(--app-bg);
+  color: var(--app-fg);
   font-family: var(--font-sans);
   font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Kill the gray flash on tap on iOS / Android — we rely on
-     hover/focus rings for affordance. */
   -webkit-tap-highlight-color: transparent;
 }
 
-/* ── Mobile form controls ────────────────────────────────────────
-   iOS Safari (and some Android browsers) zoom the viewport in when
-   the focused input's computed font-size is below 16px. Many of our
-   inputs use `text-sm` (14px) for visual density on desktop — fine
-   on a trackpad, but it kicks off an annoying zoom on phones.
+:focus-visible {
+  outline: 2px solid var(--app-ring);
+  outline-offset: 1px;
+}
 
-   Force 16px on the actual form controls (input / textarea / select)
-   and the rich-text editor's contenteditable surface when the viewport
-   is in the mobile range. Above 640px the original utility classes
-   win again so the desktop look is unchanged. */
+/* iOS dá zoom no campo com fonte menor que 16 px: no celular os controles sobem
+   para 16 px; acima de 640 px valem as classes de cada tela. */
 @media (max-width: 639.98px) {
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
       [type="color"]
@@ -110,108 +170,10 @@ body {
   select,
   [contenteditable="true"],
   .notion-editor {
-    /* !important is required because Tailwind utility classes
-       (text-xs / text-sm) carry higher specificity than a bare
-       element selector. The point of this rule is to override
-       those at the mobile breakpoint only. */
     font-size: 16px !important;
   }
 }
 
-/* ── Brand utilities ─────────────────────────────────────────── */
-
-.font-script {
-  font-family: var(--font-script);
-}
-
-/* Subtle animated grain backdrop for public/auth surfaces */
-.brand-backdrop {
-  background-color: #0a0a0a;
-  background-image:
-    radial-gradient(
-      ellipse 80% 60% at 20% 10%,
-      rgba(124, 92, 252, 0.35),
-      transparent 60%
-    ),
-    radial-gradient(
-      ellipse 70% 50% at 80% 20%,
-      rgba(191, 255, 0, 0.12),
-      transparent 60%
-    ),
-    radial-gradient(
-      ellipse 60% 60% at 50% 100%,
-      rgba(99, 102, 241, 0.25),
-      transparent 70%
-    );
-}
-
-/* Animated faded-out backdrop for the dashboard.
-   Matches givefeedback.dev's app — soft lavender + lime + indigo bloom
-   that gently drifts. CSS-only, no shader runtime, no extra deps. */
-.dashboard-backdrop {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background-color: #f8f8f8;
-  background-image:
-    radial-gradient(
-      ellipse 50% 40% at 8% 12%,
-      rgba(196, 181, 253, 0.55),
-      transparent 65%
-    ),
-    radial-gradient(
-      ellipse 45% 35% at 92% 8%,
-      rgba(163, 230, 53, 0.35),
-      transparent 65%
-    ),
-    radial-gradient(
-      ellipse 55% 40% at 100% 65%,
-      rgba(129, 140, 248, 0.4),
-      transparent 65%
-    ),
-    radial-gradient(
-      ellipse 60% 45% at 35% 90%,
-      rgba(233, 213, 255, 0.55),
-      transparent 65%
-    );
-  background-size:
-    140% 140%,
-    140% 140%,
-    140% 140%,
-    140% 140%;
-  background-position:
-    0% 0%,
-    100% 0%,
-    100% 50%,
-    0% 100%;
-  animation: backdrop-drift 28s ease-in-out infinite alternate;
-  filter: blur(40px) saturate(1.05);
-  z-index: 0;
-}
-
-.dashboard-backdrop::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.45'/%3E%3C/svg%3E");
-  mix-blend-mode: overlay;
-  opacity: 0.25;
-  pointer-events: none;
-}
-
-/* Static variant — same gradient, no drift / no expensive blur / no
-   noise overlay. Used by useReducedAnimations() on low-spec devices. */
-.dashboard-backdrop-static {
-  animation: none !important;
-  filter: blur(24px) saturate(1) !important;
-}
-.dashboard-backdrop-static::after {
-  display: none !important;
-}
-
-/* Honor the user's reduced-motion preference globally — kills CSS
-   animations + transitions, drops scroll smoothing, neutralizes the
-   dashboard-backdrop drift and noise overlay. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -221,37 +183,12 @@ body {
     transition-duration: 0.05ms !important;
     scroll-behavior: auto !important;
   }
-  .dashboard-backdrop {
-    animation: none !important;
-    filter: blur(24px) saturate(1) !important;
-  }
-  .dashboard-backdrop::after {
-    display: none !important;
-  }
 }
 
-/* Fade the backdrop from full strength at top to plain background at bottom,
-   so content lower on the page reads on a clean white surface. Stops at
-   ~60vh so the footer area remains transparent (not painted over). */
-.dashboard-backdrop-mask {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background: linear-gradient(
-    to bottom,
-    transparent 0%,
-    rgba(248, 248, 248, 0.35) 35%,
-    rgba(248, 248, 248, 0.7) 60%,
-    rgba(248, 248, 248, 0.7) 100%
-  );
-}
-
-/* Slide-in / slide-out keyframes for the right-side drawer.
-   Pure CSS so we don't depend on tailwindcss-animate's exact set. */
+/* Gaveta lateral (menu no celular). */
 @keyframes drawer-slide-in {
   from {
-    transform: translateX(100%);
+    transform: translateX(-100%);
   }
   to {
     transform: translateX(0);
@@ -262,7 +199,7 @@ body {
     transform: translateX(0);
   }
   to {
-    transform: translateX(100%);
+    transform: translateX(-100%);
   }
 }
 @keyframes drawer-overlay-in {
@@ -281,30 +218,24 @@ body {
     opacity: 0;
   }
 }
-
 .drawer-content[data-state="open"] {
-  animation: drawer-slide-in 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  animation: drawer-slide-in 220ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 .drawer-content[data-state="closed"] {
-  animation: drawer-slide-out 240ms cubic-bezier(0.32, 0.72, 0, 1);
+  animation: drawer-slide-out 180ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 .drawer-overlay[data-state="open"] {
-  animation: drawer-overlay-in 200ms ease-out;
+  animation: drawer-overlay-in 180ms ease-out;
 }
 .drawer-overlay[data-state="closed"] {
-  animation: drawer-overlay-out 160ms ease-in;
+  animation: drawer-overlay-out 140ms ease-in;
 }
 
-/* Bottom-anchored tray modal (Gmail-style compose).
-   Slides up from the bottom edge, sits a bit off the right side, and
-   leaves the rest of the page interactive. Used for ComposeModal,
-   ReplyComposer, and EmailHtmlModal. Pair with `modal={false}` on
-   DialogPrimitive.Root and a transparent .tray-overlay so the inbox
-   stays clickable while the tray is open. */
+/* Bandeja de escrever/responder, presa embaixo à direita (como no Gmail). */
 @keyframes tray-slide-in {
   from {
-    transform: translateY(100%);
-    opacity: 0.4;
+    transform: translateY(24px);
+    opacity: 0;
   }
   to {
     transform: translateY(0);
@@ -317,75 +248,36 @@ body {
     opacity: 1;
   }
   to {
-    transform: translateY(100%);
+    transform: translateY(24px);
     opacity: 0;
   }
 }
 .tray-content[data-state="open"] {
-  animation: tray-slide-in 280ms cubic-bezier(0.32, 0.72, 0, 1);
+  animation: tray-slide-in 200ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 .tray-content[data-state="closed"] {
-  animation: tray-slide-out 200ms cubic-bezier(0.32, 0.72, 0, 1);
+  animation: tray-slide-out 160ms cubic-bezier(0.32, 0.72, 0, 1);
 }
-/* Transparent click-shield. Keeps Radix happy without dimming the
-   page; pointer-events-none lets clicks pass through to the inbox. */
 .tray-overlay {
   background: transparent;
   pointer-events: none;
 }
 
-/* Smooth, refined scrollbars on overflow containers.
-   Webkit + Firefox styling. Used by the inbox panes for independent,
-   non-jarring scroll. */
 .smooth-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(15, 23, 42, 0.18) transparent;
-  scroll-behavior: smooth;
+  scrollbar-color: color-mix(in oklab, var(--app-fg) 22%, transparent)
+    transparent;
   overscroll-behavior: contain;
 }
-.smooth-scroll::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-.smooth-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.smooth-scroll::-webkit-scrollbar-thumb {
-  background-color: rgba(15, 23, 42, 0.14);
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-  transition: background-color 200ms ease;
-}
-.smooth-scroll:hover::-webkit-scrollbar-thumb {
-  background-color: rgba(15, 23, 42, 0.28);
-}
 
-@keyframes backdrop-drift {
-  0% {
-    background-position:
-      0% 0%,
-      100% 0%,
-      100% 50%,
-      0% 100%;
-  }
-  100% {
-    background-position:
-      20% 15%,
-      80% 20%,
-      85% 65%,
-      15% 85%;
-  }
-}
-
-/* ── Rich Text Editor Styles ── */
+/* ── Editor de texto rico ── */
 
 .notion-editor-wrapper {
   display: flex;
   flex-direction: column;
   height: 100%;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--app-line);
+  border-radius: 6px;
   overflow: hidden;
 }
 
@@ -394,8 +286,8 @@ body {
   align-items: center;
   gap: 2px;
   padding: 6px 8px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-subtle);
+  border-bottom: 1px solid var(--app-line);
+  background: var(--app-subtle);
 }
 
 .notion-editor-content {
@@ -406,9 +298,13 @@ body {
 
 .notion-editor {
   padding: 6px 8px;
-  color: var(--color-text-primary);
+  color: var(--app-fg);
   line-height: 1.55;
   font-size: 14px;
+}
+
+.notion-editor:focus {
+  outline: none;
 }
 
 .notion-editor h1 {
@@ -417,7 +313,6 @@ body {
   margin-top: 1.5em;
   margin-bottom: 0.25em;
   line-height: 1.3;
-  color: var(--color-text-primary);
 }
 
 .notion-editor h2 {
@@ -426,7 +321,6 @@ body {
   margin-top: 1.25em;
   margin-bottom: 0.25em;
   line-height: 1.35;
-  color: var(--color-text-primary);
 }
 
 .notion-editor h3 {
@@ -435,7 +329,6 @@ body {
   margin-top: 1em;
   margin-bottom: 0.25em;
   line-height: 1.4;
-  color: var(--color-text-primary);
 }
 
 .notion-editor p {
@@ -449,6 +342,14 @@ body {
   margin: 0.25em 0;
 }
 
+.notion-editor ul {
+  list-style: disc;
+}
+
+.notion-editor ol {
+  list-style: decimal;
+}
+
 .notion-editor li {
   margin: 2px 0;
 }
@@ -458,45 +359,49 @@ body {
 }
 
 .notion-editor blockquote {
-  border-left: 3px solid var(--color-accent);
+  border-left: 3px solid var(--app-line);
   padding-left: 1em;
   margin: 0.5em 0;
-  color: var(--color-text-secondary);
+  color: var(--app-fg-3);
 }
 
 .notion-editor pre {
-  background: #f8fafc;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 16px;
+  background: var(--app-subtle);
+  border: 1px solid var(--app-line);
+  border-radius: 6px;
+  padding: 12px 14px;
   overflow-x: auto;
   font-size: 13px;
   line-height: 1.5;
   margin: 0.5em 0;
 }
 
-.notion-editor pre code {
-  font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, monospace;
-  color: var(--color-text-primary);
-}
-
 .notion-editor code {
-  background: #f1f5f9;
+  background: var(--app-muted);
   border-radius: 3px;
   padding: 2px 5px;
   font-size: 0.9em;
-  font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, monospace;
-  color: #e11d48;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.notion-editor pre code {
+  background: none;
+  padding: 0;
 }
 
 .notion-editor hr {
   border: none;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--app-line);
   margin: 1.5em 0;
 }
 
+.notion-editor a {
+  color: var(--app-primary-ink);
+  text-decoration: underline;
+}
+
 .notion-editor p.is-editor-empty:first-child::before {
-  color: var(--color-text-tertiary);
+  color: var(--app-fg-3);
   content: attr(data-placeholder);
   float: left;
   height: 0;
@@ -514,13 +419,11 @@ body {
 
 .notion-editor img.ProseMirror-selectednode,
 .notion-editor .notion-image-wrapper[data-selected="true"] .notion-image {
-  outline: 2px solid var(--color-accent, #7c5cfc);
+  outline: 2px solid var(--app-primary);
   outline-offset: 2px;
 }
 
 .notion-editor .notion-image-wrapper {
-  /* Margin moves up to the wrapper so the handle visually attaches to
-     the image rather than the surrounding block flow. */
   margin: 0.75em 0;
 }
 .notion-editor .notion-image-wrapper .notion-image {
@@ -533,8 +436,8 @@ body {
   bottom: -6px;
   width: 12px;
   height: 12px;
-  background: var(--color-accent, #7c5cfc);
-  border: 2px solid var(--color-bg, #fff);
+  background: var(--app-primary);
+  border: 2px solid var(--app-card);
   border-radius: 2px;
   cursor: nwse-resize;
   opacity: 0;
@@ -547,16 +450,15 @@ body {
   opacity: 1;
 }
 
-/* Deep-link landing flash — applied to a message bubble (id="m-<emailId>")
-   after PersonDetail scrolls to a `?#m=<id>` target so the user can see
-   which message the link pointed at. */
+/* Link direto para uma mensagem (/m/:id): destaca a mensagem por 2 s. */
 @keyframes message-link-flash {
   0% {
-    box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.55);
-    background-color: rgba(124, 92, 252, 0.12);
+    box-shadow: 0 0 0 2px
+      color-mix(in oklab, var(--app-primary) 60%, transparent);
+    background-color: color-mix(in oklab, var(--app-primary) 12%, transparent);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(124, 92, 252, 0);
+    box-shadow: 0 0 0 0 transparent;
     background-color: transparent;
   }
 }

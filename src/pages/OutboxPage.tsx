@@ -9,25 +9,35 @@ import { cn } from "@/lib/utils";
 function relativeTime(ts: number): string {
   const diff = ts - Date.now() / 1000;
   const abs = Math.abs(diff);
-  const suffix = diff >= 0 ? "from now" : "ago";
-  if (abs < 60) return diff >= 0 ? "any moment" : "just now";
-  if (abs < 3600) return `${Math.floor(abs / 60)}m ${suffix}`;
-  if (abs < 86400) return `${Math.floor(abs / 3600)}h ${suffix}`;
-  return `${Math.floor(abs / 86400)}d ${suffix}`;
+  if (abs < 60) return diff >= 0 ? "a qualquer momento" : "agora há pouco";
+  const n =
+    abs < 3600
+      ? `${Math.floor(abs / 60)} min`
+      : abs < 86400
+        ? `${Math.floor(abs / 3600)} h`
+        : `${Math.floor(abs / 86400)} d`;
+  return diff >= 0 ? `em ${n}` : `há ${n}`;
 }
 
-function StatusChip({ status }: { status: OutboxItem["status"] }) {
+function StatusChip({ item }: { item: OutboxItem }) {
+  const { status } = item;
+  // Agendado (horário comercial) é pendente que ainda não tentou nenhuma vez.
+  const agendado = status === "pending" && item.attempts === 0;
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1",
         status === "pending"
-          ? "bg-amber-50 text-amber-700 ring-amber-200"
-          : "bg-rose-50 text-rose-700 ring-rose-200",
+          ? "bg-warning-bg text-warning-text ring-warning-border"
+          : "bg-destructive-subtle text-destructive ring-destructive/30",
       )}
     >
       {status === "pending" ? <Clock size={10} /> : <X size={10} />}
-      {status === "pending" ? "Retrying" : "Failed"}
+      {agendado
+        ? "Agendado"
+        : status === "pending"
+          ? "Tentando de novo"
+          : "Falhou"}
     </span>
   );
 }
@@ -48,7 +58,7 @@ export default function OutboxPage() {
       setItems(res.items);
       setNextCursor(res.nextCursor);
     } catch {
-      setError("Failed to load the outbox.");
+      setError("Não deu para carregar a saída.");
     } finally {
       setLoading(false);
     }
@@ -61,7 +71,7 @@ export default function OutboxPage() {
       setItems((prev) => [...prev, ...res.items]);
       setNextCursor(res.nextCursor);
     } catch {
-      setError("Failed to load more.");
+      setError("Não deu para carregar mais.");
     }
   }
 
@@ -78,19 +88,19 @@ export default function OutboxPage() {
         setItems((prev) => prev.filter((i) => i.id !== item.id));
         setNotice(
           res.outcome === "sent"
-            ? `Sent to ${item.toAddress}.`
-            : `${item.toAddress} is suppressed — send cancelled.`,
+            ? `Enviado para ${item.toAddress}.`
+            : `${item.toAddress} está na lista de supressão; envio cancelado.`,
         );
       } else {
         setNotice(
           res.outcome === "failed"
-            ? `Still failing — the provider rejected the send again.`
-            : `Retry attempted — still waiting on the provider.`,
+            ? `Ainda falhando: o provedor recusou de novo.`
+            : `Tentativa feita; aguardando o provedor.`,
         );
         await loadInitial();
       }
     } catch {
-      setError("Retry failed.");
+      setError("A nova tentativa falhou.");
     } finally {
       setBusyId(null);
     }
@@ -102,9 +112,9 @@ export default function OutboxPage() {
     try {
       await cancelOutboxItem(item.id);
       setItems((prev) => prev.filter((i) => i.id !== item.id));
-      setNotice(`Cancelled the send to ${item.toAddress}.`);
+      setNotice(`Envio para ${item.toAddress} cancelado.`);
     } catch {
-      setError("Cancel failed.");
+      setError("Não deu para cancelar.");
     } finally {
       setBusyId(null);
     }
@@ -113,8 +123,8 @@ export default function OutboxPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Outbox"
-        subtitle="Sends the provider rejected. Retrying items are re-attempted every hour; failed items gave up and need a manual retry."
+        title="Saída"
+        subtitle="Envios agendados e os que o provedor recusou. Os em nova tentativa voltam a sair a cada hora; os que falharam precisam de reenvio manual."
       />
 
       <div className="space-y-6">
@@ -122,13 +132,13 @@ export default function OutboxPage() {
           <div className="border-b border-border px-5 py-4">
             <SectionHeader
               icon={Send}
-              title={`Outbox (${items.length}${nextCursor ? "+" : ""})`}
-              subtitle="Successful sends never appear here."
+              title={`Na fila (${items.length}${nextCursor ? "+" : ""})`}
+              subtitle="Envio que deu certo não aparece aqui."
             />
           </div>
 
           {error && (
-            <div className="border-b border-border bg-rose-50/60 px-5 py-2 text-xs font-medium text-rose-700">
+            <div className="border-b border-border bg-destructive-subtle/60 px-5 py-2 text-xs font-medium text-destructive">
               {error}
             </div>
           )}
@@ -140,11 +150,11 @@ export default function OutboxPage() {
 
           {loading ? (
             <p className="px-5 py-6 text-xs font-light text-text-tertiary">
-              Loading…
+              Carregando…
             </p>
           ) : items.length === 0 ? (
             <p className="px-5 py-10 text-center text-sm text-text-tertiary">
-              Nothing waiting to send.
+              Nada esperando para sair.
             </p>
           ) : (
             <>
@@ -162,17 +172,18 @@ export default function OutboxPage() {
                         <p className="truncate text-sm font-medium text-text-primary">
                           {item.subject}
                         </p>
-                        <StatusChip status={item.status} />
+                        <StatusChip item={item} />
                       </div>
                       <p className="truncate text-xs font-light text-text-tertiary">
-                        To {item.toAddress} · from {item.fromAddress} ·{" "}
-                        {item.attempts} attempt{item.attempts === 1 ? "" : "s"}
+                        Para {item.toAddress} · de {item.fromAddress} ·{" "}
+                        {item.attempts}{" "}
+                        {item.attempts === 1 ? "tentativa" : "tentativas"}
                         {item.status === "pending" && item.nextRetryAt
-                          ? ` · next retry ${relativeTime(item.nextRetryAt)}`
+                          ? ` · ${item.attempts === 0 ? "sai" : "próxima"} ${relativeTime(item.nextRetryAt)}`
                           : ""}
                       </p>
                       {item.lastError && (
-                        <p className="mt-0.5 truncate text-xs font-light text-rose-600">
+                        <p className="mt-0.5 truncate text-xs font-light text-destructive">
                           {item.lastError}
                         </p>
                       )}
@@ -187,15 +198,15 @@ export default function OutboxPage() {
                           size={12}
                           className={busyId === item.id ? "animate-spin" : ""}
                         />
-                        Retry now
+                        Tentar agora
                       </button>
                       <button
                         onClick={() => handleCancel(item)}
                         disabled={busyId === item.id}
-                        className="inline-flex h-8 items-center gap-1 rounded-[6px] px-2 text-xs font-medium text-text-tertiary transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:opacity-60"
+                        className="inline-flex h-8 items-center gap-1 rounded-[6px] px-2 text-xs font-medium text-text-tertiary transition-colors hover:bg-destructive-subtle hover:text-destructive disabled:opacity-60"
                       >
                         <X size={12} />
-                        Cancel
+                        Cancelar
                       </button>
                     </div>
                   </li>
@@ -207,7 +218,7 @@ export default function OutboxPage() {
                     onClick={loadMore}
                     className="w-full rounded-[6px] border border-border bg-card py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
                   >
-                    Load more
+                    Carregar mais
                   </button>
                 </div>
               )}

@@ -10,27 +10,23 @@ interface ToastItem extends ToastInit {
 
 const KIND_META: Record<
   ToastKind,
-  { Icon: React.ElementType; ringClass: string; iconColor: string }
+  { Icon: React.ElementType; ringClass: string; iconClass: string }
 > = {
-  info: {
-    Icon: Info,
-    ringClass: "ring-violet/30",
-    iconColor: "#7c5cfc",
-  },
+  info: { Icon: Info, ringClass: "ring-primary/25", iconClass: "text-primary" },
   success: {
     Icon: CheckCircle2,
-    ringClass: "ring-emerald-300/40",
-    iconColor: "#047857",
+    ringClass: "ring-success/30",
+    iconClass: "text-success",
   },
   warning: {
     Icon: AlertTriangle,
-    ringClass: "ring-amber-300/50",
-    iconColor: "#b45309",
+    ringClass: "ring-warning-border",
+    iconClass: "text-warning-text",
   },
   error: {
     Icon: XCircle,
-    ringClass: "ring-red-300/50",
-    iconColor: "#b91c1c",
+    ringClass: "ring-destructive/30",
+    iconClass: "text-destructive",
   },
 };
 
@@ -94,14 +90,13 @@ export default function Toaster() {
             key={it.id}
             role="status"
             className={cn(
-              "pointer-events-auto flex items-start gap-3 rounded-[10px] border border-border bg-card px-3.5 py-3 shadow-lg ring-1",
+              "pointer-events-auto flex items-start gap-3 rounded-[8px] bg-card px-3.5 py-3 shadow-lg ring-1",
               meta.ringClass,
             )}
           >
             <meta.Icon
               size={16}
-              className="mt-0.5 shrink-0"
-              style={{ color: meta.iconColor }}
+              className={cn("mt-0.5 shrink-0", meta.iconClass)}
               aria-hidden
             />
             <div className="min-w-0 flex-1">
@@ -109,7 +104,7 @@ export default function Toaster() {
                 {it.message}
               </p>
               {it.description && (
-                <p className="mt-0.5 text-xs font-light text-text-secondary">
+                <p className="mt-0.5 text-xs text-text-secondary">
                   {it.description}
                 </p>
               )}
@@ -126,7 +121,7 @@ export default function Toaster() {
             <button
               type="button"
               onClick={() => dismiss(it.id)}
-              aria-label="Dismiss"
+              aria-label="Fechar aviso"
               className="shrink-0 rounded-[6px] p-1 text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
             >
               <X size={12} />

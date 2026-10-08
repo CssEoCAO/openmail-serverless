@@ -69,11 +69,13 @@ export default function EmailHtmlFrame({
   const shown = clipped ? collapsedHeight : height;
 
   return (
-    <div className={className}>
+    // O e-mail foi feito para papel branco: a moldura inteira fica branca nos dois
+    // temas, e os links dela usam o azul escuro (o azul claro do tema escuro some no branco).
+    <div className={cn("bg-white", className)}>
       {imagesFor !== html && (
         <button
           type="button"
-          className="px-3 py-1.5 text-xs text-accent hover:underline"
+          className="px-3 py-1.5 text-xs font-medium text-[#1c4fc4] hover:underline"
           onClick={() => setImagesFor(html)}
         >
           Carregar imagens externas
@@ -82,7 +84,7 @@ export default function EmailHtmlFrame({
       <div className="relative">
         <iframe
           ref={ref}
-          title="Email"
+          title="Mensagem"
           sandbox={SANDBOX}
           srcDoc={doc}
           scrolling="no"
@@ -101,16 +103,16 @@ export default function EmailHtmlFrame({
             setExpanded((v) => !v);
           }}
           className={cn(
-            "inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium text-accent hover:underline",
+            "inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-[#1c4fc4] hover:underline",
           )}
         >
           {expanded ? (
             <>
-              Show less <ChevronUp size={11} />
+              Mostrar menos <ChevronUp size={11} />
             </>
           ) : (
             <>
-              Show full email <ChevronDown size={11} />
+              Mostrar a mensagem inteira <ChevronDown size={11} />
             </>
           )}
         </button>

@@ -3,6 +3,12 @@ import { useSearchParams } from "react-router-dom";
 import { AlertTriangle, Check, ShieldCheck } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { useBranding } from "@/lib/branding";
+import {
+  CartaoPublico,
+  ErroPublico,
+  botaoPrimario,
+  botaoSecundario,
+} from "@/components/Publico";
 
 /**
  * Copy shown for each scope on the authorization screen. Anything not listed
@@ -10,13 +16,13 @@ import { useBranding } from "@/lib/branding";
  * never approve a permission we failed to describe.
  */
 const SCOPE_DESCRIPTIONS: Record<string, string> = {
-  openid: "Verify your identity",
-  profile: "Read your name and profile details",
-  email: "Read your email address",
-  offline_access: "Stay connected when you are not using the app",
-  "email:read": "Read your mail, contacts, and templates",
-  "email:send": "Send mail and enroll contacts in sequences",
-  "email:manage": "Mark mail as read and delete mail",
+  openid: "Confirmar quem você é",
+  profile: "Ler seu nome e perfil",
+  email: "Ler seu endereço de e-mail",
+  offline_access: "Continuar conectado quando você não estiver usando o app",
+  "email:read": "Ler seus e-mails, contatos e modelos",
+  "email:send": "Enviar e-mails e inscrever contatos em sequências",
+  "email:manage": "Marcar e-mails como lidos e excluir e-mails",
 };
 
 /**
@@ -26,9 +32,6 @@ const SCOPE_DESCRIPTIONS: Record<string, string> = {
  * message or a deletion. They are called out rather than listed flatly.
  */
 const ELEVATED_SCOPES = new Set(["email:send", "email:manage"]);
-
-const CARD =
-  "rounded-2xl bg-white/10 p-8 shadow-2xl ring-1 ring-white/20 backdrop-blur-xl";
 
 export default function ConsentPage() {
   const { brandName } = useBranding();
@@ -49,7 +52,7 @@ export default function ConsentPage() {
         ? `${url.protocol}//${url.host}${url.pathname}`
         : url.origin;
     } catch {
-      return "Invalid or missing destination";
+      return "Destino inválido ou ausente";
     }
   };
 
@@ -97,7 +100,9 @@ export default function ConsentPage() {
       setResult(accept ? "allowed" : "denied");
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to process consent.",
+        err instanceof Error
+          ? err.message
+          : "Não deu para registrar a resposta.",
       );
       setLoading(null);
     }
@@ -105,165 +110,134 @@ export default function ConsentPage() {
 
   if (!clientId) {
     return (
-      <div className="relative z-10 mx-4 w-full max-w-sm">
-        <div className={`${CARD} text-center`}>
-          <h1 className="text-lg font-semibold text-white">Invalid request</h1>
-          <p className="mt-2 text-sm font-light text-white/50">
-            This authorization request is missing information or has expired.
-            Start again from the application you were connecting.
-          </p>
-        </div>
-      </div>
+      <CartaoPublico
+        titulo="Pedido inválido"
+        subtitulo="Este pedido de autorização está incompleto ou expirou. Comece de novo pelo aplicativo que você estava conectando."
+      >
+        {null}
+      </CartaoPublico>
     );
   }
 
   if (result) {
     return (
-      <div className="relative z-10 mx-4 w-full max-w-sm">
-        <div className={`${CARD} text-center`}>
-          <h1 className="text-lg font-semibold text-white">
-            {result === "allowed" ? "Access granted" : "Access denied"}
-          </h1>
-          <p className="mt-2 text-sm font-light text-white/50">
-            You can close this window and return to the application.
-          </p>
-        </div>
-      </div>
+      <CartaoPublico
+        titulo={result === "allowed" ? "Acesso liberado" : "Acesso negado"}
+        subtitulo="Pode fechar esta janela e voltar ao aplicativo."
+      >
+        {null}
+      </CartaoPublico>
     );
   }
 
   return (
-    <div className="relative z-10 mx-4 w-full max-w-sm">
-      <div className={CARD}>
-        <div className="mb-8 text-center">
-          <ShieldCheck
-            className="mx-auto mb-4 h-12 w-12"
-            strokeWidth={2}
-            style={{ color: "#BFFF00" }}
-            aria-hidden
-          />
-          <h1 className="text-2xl font-extrabold uppercase tracking-tight text-white">
-            Authorize
-          </h1>
-          <p className="mt-2 text-sm font-light text-white/50">
-            <span className="font-medium text-white/80">
-              {clientName ?? clientId}
-            </span>{" "}
-            wants access to your {brandName} account.
+    <CartaoPublico titulo="Autorizar acesso">
+      <div className="mb-4 flex items-start gap-3">
+        <ShieldCheck
+          className="mt-0.5 h-5 w-5 shrink-0 text-primary"
+          aria-hidden
+        />
+        <div className="min-w-0">
+          <p className="text-sm text-text-primary">
+            <span className="font-semibold">{clientName ?? clientId}</span> quer
+            acessar sua conta em {brandName}.
           </p>
           {clientName && (
-            <p className="mt-1 font-mono text-[11px] text-white/30">
+            <p className="mt-0.5 truncate font-mono text-[11px] text-text-tertiary">
               {clientId}
             </p>
           )}
         </div>
-
-        <div className="mb-4 rounded-md bg-amber-500/10 p-3 text-xs text-amber-100 ring-1 ring-amber-400/30">
-          <p className="font-semibold">Unverified application</p>
-          <p>
-            The name and website are supplied by the application. They do not
-            verify its publisher.
-          </p>
-          <p className="mt-2 break-all">
-            Authorization destination: {normalizedOrigin(redirectUri)}
-          </p>
-          <p className="mt-1 break-all">
-            Application website:{" "}
-            {clientUri ? normalizedOrigin(clientUri) : "Not provided"}
-          </p>
-          {clientUri &&
-            normalizedOrigin(clientUri) !== normalizedOrigin(redirectUri) && (
-              <p className="mt-2">
-                The website and authorization destination differ. Confirm both
-                before continuing.
-              </p>
-            )}
-        </div>
-
-        {error && (
-          <p
-            role="alert"
-            className="mb-4 rounded-md bg-red-500/15 px-3 py-2 text-center text-xs text-red-200 ring-1 ring-red-500/25"
-          >
-            {error}
-          </p>
-        )}
-
-        <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-white/50">
-          It will be able to
-        </p>
-        <ul className="mb-4 space-y-2">
-          {scopes.map((s) => {
-            const elevated = ELEVATED_SCOPES.has(s);
-            return (
-              <li
-                key={s}
-                className={
-                  elevated
-                    ? "flex items-start gap-2 rounded-md bg-amber-500/10 px-3 py-2 ring-1 ring-amber-400/30"
-                    : "flex items-start gap-2 rounded-md bg-white/5 px-3 py-2 ring-1 ring-white/10"
-                }
-              >
-                {elevated ? (
-                  <AlertTriangle
-                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300"
-                    strokeWidth={2.5}
-                    aria-hidden
-                  />
-                ) : (
-                  <Check
-                    className="mt-0.5 h-3.5 w-3.5 shrink-0"
-                    strokeWidth={2.5}
-                    style={{ color: "#BFFF00" }}
-                    aria-hidden
-                  />
-                )}
-                <span
-                  className={
-                    elevated
-                      ? "text-xs text-amber-100"
-                      : "text-xs text-white/80"
-                  }
-                >
-                  {SCOPE_DESCRIPTIONS[s] ?? s}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-
-        {scopes.some((s) => ELEVATED_SCOPES.has(s)) && (
-          <p className="mb-8 rounded-md bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-100 ring-1 ring-amber-400/30">
-            This app can act on your mailbox, not just read it. Anything it
-            reads — including mail sent to you by strangers — can influence what
-            it does next. Only continue if you trust it with sending and
-            deleting.
-          </p>
-        )}
-
-        <div className="space-y-3">
-          <button
-            type="button"
-            onClick={() => handleConsent(true)}
-            disabled={loading !== null}
-            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-md bg-white px-4 text-sm font-semibold text-[#0a0a0a] transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading === "allow" ? "Authorizing…" : "Authorize"}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleConsent(false)}
-            disabled={loading !== null}
-            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#24292f] px-4 text-sm font-semibold text-white ring-1 ring-white/15 transition-colors hover:bg-[#24292f]/80 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading === "deny" ? "Denying…" : "Deny"}
-          </button>
-        </div>
-
-        <p className="mt-6 text-center text-[11px] font-light text-white/40">
-          Only authorize applications you trust. You can revoke access later.
-        </p>
       </div>
-    </div>
+
+      <div className="mb-4 grid gap-1 rounded-[6px] border border-warning-border bg-warning-bg p-3 text-xs text-warning-text">
+        <p className="font-semibold">Aplicativo não verificado</p>
+        <p>
+          Nome e site são informados pelo próprio aplicativo; não confirmam quem
+          o publicou.
+        </p>
+        <p className="mt-1 break-all">
+          Destino da autorização: {normalizedOrigin(redirectUri)}
+        </p>
+        <p className="break-all">
+          Site do aplicativo:{" "}
+          {clientUri ? normalizedOrigin(clientUri) : "não informado"}
+        </p>
+        {clientUri &&
+          normalizedOrigin(clientUri) !== normalizedOrigin(redirectUri) && (
+            <p className="mt-1">
+              O site e o destino são diferentes. Confira os dois antes de
+              continuar.
+            </p>
+          )}
+      </div>
+
+      {error && <ErroPublico>{error}</ErroPublico>}
+
+      <p className="mb-2 text-xs font-medium text-text-secondary">
+        Ele vai poder
+      </p>
+      <ul className="mb-4 grid gap-1.5">
+        {scopes.map((s) => {
+          const elevated = ELEVATED_SCOPES.has(s);
+          return (
+            <li
+              key={s}
+              className={
+                elevated
+                  ? "flex items-start gap-2 rounded-[6px] border border-warning-border bg-warning-bg px-3 py-2 text-xs text-warning-text"
+                  : "flex items-start gap-2 rounded-[6px] border border-border bg-bg-subtle px-3 py-2 text-xs text-text-primary"
+              }
+            >
+              {elevated ? (
+                <AlertTriangle
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                  strokeWidth={2.5}
+                  aria-hidden
+                />
+              ) : (
+                <Check
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success"
+                  strokeWidth={2.5}
+                  aria-hidden
+                />
+              )}
+              <span>{SCOPE_DESCRIPTIONS[s] ?? s}</span>
+            </li>
+          );
+        })}
+      </ul>
+
+      {scopes.some((s) => ELEVATED_SCOPES.has(s)) && (
+        <p className="mb-5 rounded-[6px] border border-warning-border bg-warning-bg px-3 py-2 text-xs leading-relaxed text-warning-text">
+          Este aplicativo pode agir na sua caixa, não só ler. Tudo o que ele lê,
+          inclusive e-mail de desconhecidos, pode influenciar o que ele faz
+          depois. Só continue se confia nele para enviar e excluir.
+        </p>
+      )}
+
+      <div className="grid gap-2.5">
+        <button
+          type="button"
+          onClick={() => handleConsent(true)}
+          disabled={loading !== null}
+          className={botaoPrimario}
+        >
+          {loading === "allow" ? "Autorizando…" : "Autorizar"}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleConsent(false)}
+          disabled={loading !== null}
+          className={botaoSecundario}
+        >
+          {loading === "deny" ? "Negando…" : "Negar"}
+        </button>
+      </div>
+
+      <p className="mt-5 text-center text-xs text-text-tertiary">
+        Só autorize aplicativos em que você confia. Dá para revogar depois.
+      </p>
+    </CartaoPublico>
   );
 }

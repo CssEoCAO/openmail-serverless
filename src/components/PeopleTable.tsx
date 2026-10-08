@@ -9,6 +9,8 @@ import {
   ArrowUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { quandoCurto } from "@/lib/datas";
+import Monograma from "@/components/Monograma";
 import {
   defaultDirectionFor,
   type GroupedItem,
@@ -132,17 +134,7 @@ function initials(name: string | null, email: string) {
   const parts = source.split(/[\s.\-_]+/).filter(Boolean);
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
 }
-function relTime(ts: number): string {
-  const d = new Date(ts * 1000);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffH = diffMs / 3_600_000;
-  if (diffH < 1) return `${Math.max(1, Math.floor(diffMs / 60_000))}m ago`;
-  if (diffH < 24) return `${Math.floor(diffH)}h ago`;
-  const diffD = diffH / 24;
-  if (diffD < 7) return `${Math.floor(diffD)}d ago`;
-  return d.toLocaleDateString([], { month: "short", day: "numeric" });
-}
+const relTime = (ts: number) => quandoCurto(ts);
 
 interface RowCheckboxProps {
   checked: boolean;
@@ -163,7 +155,7 @@ function RowCheckbox({ checked, onChange, ariaLabel }: RowCheckboxProps) {
       className={cn(
         "flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
         checked
-          ? "border-text-primary bg-text-primary text-white"
+          ? "border-text-primary bg-text-primary text-card"
           : "border-border bg-card hover:border-text-primary/40",
       )}
     >
@@ -281,30 +273,30 @@ export default function PeopleTable({
     <div className="flex h-full min-h-0 w-full flex-col">
       {/* Stats strip */}
       <div className="grid shrink-0 grid-cols-4 gap-px border-b border-border bg-border">
-        <StatTile label="People" value={stats.total} />
-        <StatTile label="Unread" value={stats.unread} accent />
-        <StatTile label="Multi-inbox" value={stats.multiInbox} />
-        <StatTile label="With attachments" value={stats.withAttachments} />
+        <StatTile label="Conversas" value={stats.total} />
+        <StatTile label="Com não lidas" value={stats.unread} accent />
+        <StatTile label="Em mais de uma caixa" value={stats.multiInbox} />
+        <StatTile label="Com anexo" value={stats.withAttachments} />
       </div>
 
       {/* Table */}
       <div className="smooth-scroll min-h-0 flex-1 overflow-auto">
         {loading ? (
           <div className="flex h-full items-center justify-center text-sm text-text-tertiary">
-            Loading…
+            Carregando…
           </div>
         ) : items.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
             <p className="text-sm font-medium text-text-primary">
-              No people match your filters
+              Nenhuma conversa com esses filtros
             </p>
             <p className="text-xs font-light text-text-tertiary">
-              Try clearing a filter or broadening your search.
+              Tire um filtro ou amplie a busca.
             </p>
           </div>
         ) : (
           <table className="w-full text-left text-sm">
-            <thead className="sticky top-0 z-10 bg-card/90 backdrop-blur-sm">
+            <thead className="sticky top-0 z-10 bg-card/90">
               <tr className="border-b border-border text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
                 {selectedIds !== undefined && (
                   <th className="w-10 px-4 py-2.5">
@@ -314,18 +306,18 @@ export default function PeopleTable({
                       ariaLabel={
                         allOnPageSelected
                           ? "Deselect all on page"
-                          : "Select all on page"
+                          : "Marcar todas da página"
                       }
                     />
                     {someOnPageSelected && (
-                      <span className="sr-only">Some selected</span>
+                      <span className="sr-only">Algumas marcadas</span>
                     )}
                   </th>
                 )}
-                <th className="px-4 py-2.5 font-semibold">Person</th>
+                <th className="px-4 py-2.5 font-semibold">Pessoa</th>
                 <th className="px-3 py-2.5 font-semibold">
                   <SortHeader
-                    label="Inboxes"
+                    label="Caixas"
                     sortKey="inbox"
                     active={sortSpec}
                     onClick={onSortChange}
@@ -333,7 +325,7 @@ export default function PeopleTable({
                 </th>
                 <th className="px-3 py-2.5 text-right font-semibold">
                   <SortHeader
-                    label="Emails"
+                    label="Mensagens"
                     sortKey="attachments"
                     active={sortSpec}
                     onClick={onSortChange}
@@ -342,7 +334,7 @@ export default function PeopleTable({
                 </th>
                 <th className="px-3 py-2.5 text-right font-semibold">
                   <SortHeader
-                    label="Unread"
+                    label="Não lidas"
                     sortKey="unread"
                     active={sortSpec}
                     onClick={onSortChange}
@@ -351,7 +343,7 @@ export default function PeopleTable({
                 </th>
                 <th className="px-3 py-2.5 text-right font-semibold">
                   <SortHeader
-                    label="Last"
+                    label="Última"
                     sortKey="recency"
                     active={sortSpec}
                     onClick={onSortChange}
@@ -378,7 +370,6 @@ export default function PeopleTable({
                   );
                 }
                 const person = item;
-                const color = avatarColor(person.email);
                 const isSelected = selectedIds?.has(person.id) ?? false;
                 return (
                   <tr
@@ -396,21 +387,13 @@ export default function PeopleTable({
                         <RowCheckbox
                           checked={isSelected}
                           onChange={() => onToggleSelected?.(person.id)}
-                          ariaLabel={`Select ${person.name || person.email}`}
+                          ariaLabel={`Marcar ${person.name || person.email}`}
                         />
                       </td>
                     )}
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-3">
-                        <span
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
-                          style={{
-                            backgroundColor: color.bg,
-                            color: color.fg,
-                          }}
-                        >
-                          {initials(person.name, person.email)}
-                        </span>
+                        <Monograma nome={person.name} email={person.email} />
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium text-text-primary">
                             {person.name || person.email}
@@ -455,7 +438,7 @@ export default function PeopleTable({
                           <Paperclip
                             size={11}
                             className="text-text-tertiary"
-                            aria-label="Has attachment"
+                            aria-label="Tem anexo"
                           />
                         )}
                         {person.totalCount}
@@ -469,9 +452,8 @@ export default function PeopleTable({
                             e.stopPropagation();
                             onMarkPersonRead?.(person.id);
                           }}
-                          title="Mark all as read"
-                          className="group/badge inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold tabular-nums text-white transition-all hover:scale-110"
-                          style={{ backgroundColor: "#7c5cfc" }}
+                          title="Marcar como lida"
+                          className="group/badge inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-soft px-1.5 text-[11px] font-semibold tabular-nums text-primary-ink hover:bg-primary hover:text-primary-foreground"
                         >
                           <span className="group-hover/badge:hidden">
                             {person.unreadCount}
@@ -539,8 +521,8 @@ function PageFooter({
     <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-bg-subtle/40 px-4 py-2">
       <span className="text-[11px] font-medium text-text-tertiary">
         {total === 0
-          ? "No results"
-          : `Showing ${start}–${end} of ${total.toLocaleString()}`}
+          ? "Nenhum resultado"
+          : `${start}–${end} de ${total.toLocaleString("pt-BR")}`}
       </span>
       {totalPages > 1 && (
         <div className="flex items-center gap-2">
@@ -548,7 +530,7 @@ function PageFooter({
             onClick={() => onPageChange(Math.max(1, page - 1))}
             disabled={page <= 1}
             className="flex h-7 w-7 items-center justify-center rounded-[6px] text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary disabled:opacity-30 disabled:hover:bg-transparent"
-            aria-label="Previous page"
+            aria-label="Página anterior"
           >
             <ChevronLeft size={14} />
           </button>
@@ -559,7 +541,7 @@ function PageFooter({
             onClick={() => onPageChange(Math.min(totalPages, page + 1))}
             disabled={page >= totalPages}
             className="flex h-7 w-7 items-center justify-center rounded-[6px] text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary disabled:opacity-30 disabled:hover:bg-transparent"
-            aria-label="Next page"
+            aria-label="Próxima página"
           >
             <ChevronRight size={14} />
           </button>
@@ -645,7 +627,7 @@ function GroupTableRow({
           <RowCheckbox
             checked={isSelected}
             onChange={() => onToggleSelected?.(group.id)}
-            ariaLabel={`Select group ${group.id}`}
+            ariaLabel="Marcar conversa em grupo"
           />
         </td>
       )}
@@ -682,7 +664,7 @@ function GroupTableRow({
                   top: 0,
                   zIndex: 10 - visible.length,
                 }}
-                title={`+${overflow} more participants`}
+                title={`+${overflow} participantes`}
               >
                 +{overflow}
               </span>
@@ -697,7 +679,7 @@ function GroupTableRow({
               </span>
             </p>
             <p className="truncate text-xs font-light text-text-tertiary">
-              {group.participants.length} participants
+              {group.participants.length} participantes
             </p>
             <p
               className="max-w-[28rem] truncate text-xs text-text-secondary"
@@ -732,9 +714,8 @@ function GroupTableRow({
               e.stopPropagation();
               onMarkRead?.(group.id);
             }}
-            title="Mark all as read"
-            className="inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold tabular-nums text-white transition-all hover:scale-110"
-            style={{ backgroundColor: "#7c5cfc" }}
+            title="Marcar como lida"
+            className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-soft px-1.5 text-[11px] font-semibold tabular-nums text-primary-ink hover:bg-primary hover:text-primary-foreground"
           >
             {group.unreadCount}
           </button>
@@ -759,16 +740,14 @@ interface StatTileProps {
 function StatTile({ label, value, accent }: StatTileProps) {
   return (
     <div className="bg-card px-4 py-3">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
-        {label}
-      </p>
+      <p className="text-xs font-medium text-text-tertiary">{label}</p>
       <p
         className={cn(
-          "mt-0.5 text-xl font-extrabold tabular-nums tracking-tight text-text-primary",
+          "mt-0.5 text-xl font-semibold tabular-nums text-text-primary",
+          accent && value > 0 && "text-primary-ink",
         )}
-        style={accent && value > 0 ? { color: "#7c5cfc" } : undefined}
       >
-        {value.toLocaleString()}
+        {value.toLocaleString("pt-BR")}
       </p>
     </div>
   );

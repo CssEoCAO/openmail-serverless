@@ -238,16 +238,16 @@ export default function EmailHtmlModal({
       showToast({
         kind: "success",
         message: body.email
-          ? `Recipient set to ${body.email}`
-          : "Sending address updated",
+          ? `Destinatário trocado para ${body.email}`
+          : "Remetente atualizado",
         description: body.email
-          ? "Replies to this message will now go there."
+          ? "As respostas a esta mensagem passam a ir para lá."
           : undefined,
         durationMs: 4500,
       });
       onUpdated?.();
     } catch {
-      setEditErr("Couldn't save — check the addresses and try again.");
+      setEditErr("Não deu para salvar. Confira os endereços e tente de novo.");
     } finally {
       setSaving(false);
     }
@@ -284,17 +284,18 @@ export default function EmailHtmlModal({
                 {avatarInitial(senderForAvatar)}
               </span>
               <DialogPrimitive.Title className="truncate text-sm font-semibold text-text-primary">
-                {email.subject || "(no subject)"}
+                {email.subject || "(sem assunto)"}
               </DialogPrimitive.Title>
               <span
                 className={cn(
-                  "hidden shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider sm:inline-flex",
-                  isSent ? "bg-bg-muted text-text-secondary" : "bg-violet/10",
+                  "hidden shrink-0 items-center gap-1 rounded-[4px] px-1.5 py-0.5 text-[11px] font-medium sm:inline-flex",
+                  isSent
+                    ? "bg-bg-muted text-text-secondary"
+                    : "bg-primary-soft text-primary-ink",
                 )}
-                style={!isSent ? { color: "#7c5cfc" } : undefined}
               >
                 {isSent ? <Send size={9} /> : <InboxIcon size={9} />}
-                {isSent ? "Sent" : "Received"}
+                {isSent ? "Enviada" : "Recebida"}
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
@@ -316,7 +317,7 @@ export default function EmailHtmlModal({
               />
               <DialogPrimitive.Close
                 className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
-                aria-label="Close"
+                aria-label="Fechar"
               >
                 <X size={14} />
               </DialogPrimitive.Close>
@@ -325,12 +326,12 @@ export default function EmailHtmlModal({
 
           {/* Compact metadata. */}
           <div className="shrink-0 divide-y divide-border/60 border-b border-border bg-bg-subtle/30">
-            <TrayMetaRow label="From">
+            <TrayMetaRow label="De">
               {editing && canEdit ? (
                 <select
                   value={fromVal}
                   onChange={(e) => setFromVal(e.target.value)}
-                  className="my-1 w-full rounded-md border border-border bg-white px-2 py-1 text-sm text-text-primary ring-1 ring-gray-200"
+                  className="my-1 h-8 w-full rounded-[6px] border border-border bg-card px-2 text-sm text-text-primary focus:border-primary focus:outline-none"
                 >
                   {fromOptions.map((o) => (
                     <option key={o} value={o}>
@@ -341,14 +342,14 @@ export default function EmailHtmlModal({
               ) : (
                 <div className="flex items-center justify-between gap-2 pr-3">
                   <span className="block truncate py-2 text-sm text-text-primary">
-                    {fromAddr || (isSent ? "you" : "—")}
+                    {fromAddr || (isSent ? "você" : "—")}
                   </span>
                   {canEdit && (
                     <button
                       type="button"
                       onClick={startEdit}
                       data-testid="view-edit-recipient"
-                      title="Change From / To"
+                      title="Trocar De / Para"
                       className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
                     >
                       <UserPen size={13} />
@@ -357,7 +358,7 @@ export default function EmailHtmlModal({
                 </div>
               )}
             </TrayMetaRow>
-            <TrayMetaRow label="To">
+            <TrayMetaRow label="Para">
               {editing && canEdit ? (
                 <input
                   type="email"
@@ -366,8 +367,8 @@ export default function EmailHtmlModal({
                   onKeyDown={(e) => {
                     if (e.key === "Enter") void saveEdit();
                   }}
-                  placeholder="recipient@example.com"
-                  className="my-1 w-full rounded-md border border-border bg-white px-2 py-1 text-sm text-text-primary ring-1 ring-gray-200"
+                  placeholder="nome@exemplo.com"
+                  className="my-1 h-8 w-full rounded-[6px] border border-border bg-card px-2 text-sm text-text-primary focus:border-primary focus:outline-none"
                 />
               ) : (
                 <span className="block truncate py-2 pr-3 text-sm text-text-primary">
@@ -378,7 +379,7 @@ export default function EmailHtmlModal({
             {editing && canEdit && (
               <div className="flex items-center justify-end gap-2 px-3 py-2">
                 {editErr && (
-                  <span className="mr-auto text-xs text-red-400">
+                  <span className="mr-auto text-xs text-destructive">
                     {editErr}
                   </span>
                 )}
@@ -387,20 +388,20 @@ export default function EmailHtmlModal({
                   onClick={() => setEditing(false)}
                   className="rounded-md border border-border px-2.5 py-1 text-xs text-text-secondary hover:bg-bg-muted"
                 >
-                  Cancel
+                  Cancelar
                 </button>
                 <button
                   type="button"
                   onClick={saveEdit}
                   disabled={saving}
-                  className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 rounded-[6px] bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
                 >
                   <Check size={12} />
-                  {saving ? "Saving…" : "Save"}
+                  {saving ? "Salvando…" : "Salvar"}
                 </button>
               </div>
             )}
-            <TrayMetaRow label="Time">
+            <TrayMetaRow label="Data">
               <span className="block truncate py-2 pr-3 text-sm text-text-primary">
                 {fullDate} · {fullTime}
               </span>
@@ -415,9 +416,9 @@ export default function EmailHtmlModal({
           {/* Attachments */}
           {downloadable.length > 0 && (
             <div className="shrink-0 border-b border-border bg-card px-4 py-2.5 sm:px-5">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
-                {downloadable.length} attachment
-                {downloadable.length !== 1 ? "s" : ""}
+              <p className="mb-2 text-xs font-medium text-text-tertiary">
+                {downloadable.length}{" "}
+                {downloadable.length !== 1 ? "anexos" : "anexo"}
               </p>
               <AttachmentList variant="list" attachments={downloadable} />
             </div>
@@ -437,7 +438,7 @@ export default function EmailHtmlModal({
                   )}
                 >
                   <FileText size={12} />
-                  Rendered
+                  Original
                 </button>
                 <button
                   onClick={() => setView("plain")}
@@ -449,7 +450,7 @@ export default function EmailHtmlModal({
                   )}
                 >
                   <Code size={12} />
-                  Plain text
+                  Só texto
                 </button>
               </div>
               {/* Thread expansion. Always available when this email is
@@ -463,8 +464,8 @@ export default function EmailHtmlModal({
                   className="inline-flex items-center gap-1.5 rounded-[6px] border border-border bg-card px-2.5 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
                 >
                   <MessageSquare size={12} />
-                  {threadExpanded ? "Hide" : "Show"} {priorEmails.length}{" "}
-                  earlier
+                  {threadExpanded ? "Esconder" : "Mostrar"} {priorEmails.length}{" "}
+                  {priorEmails.length === 1 ? "anterior" : "anteriores"}
                   {threadExpanded ? (
                     <ChevronUp size={12} />
                   ) : (
@@ -475,7 +476,7 @@ export default function EmailHtmlModal({
               {!hasThreadContext && threadLoading && (
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-light text-text-tertiary">
                   <MessageSquare size={11} />
-                  Loading thread…
+                  Carregando a conversa…
                 </span>
               )}
             </div>
@@ -486,12 +487,12 @@ export default function EmailHtmlModal({
               {copied ? (
                 <>
                   <CheckCircle2 size={12} className="text-success" />
-                  Copied
+                  Copiado
                 </>
               ) : (
                 <>
                   <Copy size={12} />
-                  Copy text
+                  Copiar texto
                 </>
               )}
             </button>
@@ -505,9 +506,11 @@ export default function EmailHtmlModal({
               <div className="border-b border-border bg-bg-subtle/30">
                 <div className="flex items-center gap-2 px-4 py-2 sm:px-5">
                   <MessageSquare size={11} className="text-text-tertiary" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
-                    {priorEmails.length} earlier message
-                    {priorEmails.length === 1 ? "" : "s"} in this thread
+                  <span className="text-[11px] font-medium text-text-tertiary">
+                    {priorEmails.length}{" "}
+                    {priorEmails.length === 1
+                      ? "mensagem anterior nesta conversa"
+                      : "mensagens anteriores nesta conversa"}
                   </span>
                 </div>
                 <div className="divide-y divide-border/60">
@@ -517,8 +520,8 @@ export default function EmailHtmlModal({
                 </div>
                 <div className="flex items-center gap-2 border-t border-border bg-card px-4 py-2 sm:px-5">
                   <ChevronDown size={11} className="text-text-tertiary" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
-                    This message
+                  <span className="text-[11px] font-medium text-text-tertiary">
+                    Esta mensagem
                   </span>
                 </div>
               </div>
@@ -530,19 +533,18 @@ export default function EmailHtmlModal({
               />
             ) : (
               <pre className="whitespace-pre-wrap break-words px-5 py-4 font-sans text-sm leading-relaxed text-text-primary sm:px-7 sm:py-5">
-                {plainText || "(empty)"}
+                {plainText || "(vazia)"}
               </pre>
             )}
           </div>
 
           {/* Slim footer — single-line Esc hint. */}
           <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border bg-card px-4 py-2 sm:px-5">
-            <p className="text-[11px] font-light text-text-tertiary">
-              Press{" "}
+            <p className="text-[11px] text-text-tertiary">
               <kbd className="rounded border border-border bg-bg-muted px-1 font-mono text-[10px]">
                 Esc
               </kbd>{" "}
-              to close
+              fecha
             </p>
           </div>
         </DialogPrimitive.Content>

@@ -6,10 +6,10 @@ import PageHeader, { PageContainer } from "@/components/PageHeader";
 
 /** Round delay-hours into a friendlier string for the row chip. */
 function formatTotalDelay(hours: number): string {
-  if (hours <= 0) return "instant";
+  if (hours <= 0) return "na hora";
   if (hours < 24) return `${hours}h`;
   const days = Math.round((hours / 24) * 10) / 10;
-  return days === 1 ? "1 day" : `${days} days`;
+  return days === 1 ? "1 dia" : `${days} dias`;
 }
 
 function totalDurationHours(seq: Sequence): number {
@@ -28,45 +28,42 @@ export default function SequencesPage() {
   }, []);
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this sequence?")) return;
+    if (!confirm("Excluir esta sequência?")) return;
     try {
       await deleteSequence(id);
       setSequences((prev) => prev.filter((s) => s.id !== id));
     } catch {
-      alert("Cannot delete — sequence may have active enrollments.");
+      alert("Não deu para excluir: a sequência pode ter inscrições ativas.");
     }
   }
 
   return (
     <PageContainer>
       <PageHeader
-        title="Sequences"
-        subtitle="Multi-step drip campaigns. Enroll a contact and saasmail sends templated emails on a schedule."
+        title="Sequências"
+        subtitle="Campanhas em etapas: inscreva um contato e os modelos saem na agenda definida."
         action={
           <button
             onClick={() => navigate("/sequences/new")}
-            className="inline-flex items-center gap-1.5 rounded-[8px] bg-text-primary px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-text-primary/90"
+            className="inline-flex items-center gap-1.5 rounded-[6px] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             <Plus size={14} />
-            New sequence
+            Nova sequência
           </button>
         }
       />
 
       <div className="max-w-4xl">
         {loading ? (
-          <p className="text-sm font-light text-text-tertiary">Loading…</p>
+          <p className="text-sm text-text-tertiary">Carregando…</p>
         ) : sequences.length === 0 ? (
           <div className="rounded-[8px] bg-card p-10 text-center ring-1 ring-border">
-            <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-violet/10">
-              <ListOrdered size={20} style={{ color: "#7c5cfc" }} />
-            </span>
             <p className="mb-1 text-sm font-medium text-text-primary">
-              No sequences yet
+              Nenhuma sequência ainda
             </p>
             <p className="mb-4 text-xs font-light text-text-tertiary">
-              Build your first multi-step campaign to nurture contacts
-              automatically.
+              Monte a primeira campanha em etapas para acompanhar contatos sem
+              esforço.
             </p>
           </div>
         ) : (
@@ -93,18 +90,14 @@ export default function SequencesPage() {
                           <p className="truncate text-sm font-medium text-text-primary">
                             {seq.name}
                           </p>
-                          <span
-                            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-violet/10 px-2 py-0.5 text-[10px] font-medium tabular-nums"
-                            style={{ color: "#7c5cfc" }}
-                            title={`${seq.steps.length} step${seq.steps.length === 1 ? "" : "s"}`}
-                          >
-                            {seq.steps.length} step
-                            {seq.steps.length === 1 ? "" : "s"}
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-medium tabular-nums text-primary-ink">
+                            {seq.steps.length}{" "}
+                            {seq.steps.length === 1 ? "etapa" : "etapas"}
                           </span>
                         </div>
                         <p className="mt-0.5 inline-flex items-center gap-1 text-xs font-light text-text-tertiary">
                           <Clock size={10} />
-                          spans {formatTotalDelay(total)}
+                          dura {formatTotalDelay(total)}
                         </p>
                       </div>
                     </Link>
@@ -114,11 +107,11 @@ export default function SequencesPage() {
                         className="inline-flex h-8 items-center gap-1.5 rounded-[6px] px-2.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
                       >
                         <Pencil size={12} />
-                        Edit
+                        Editar
                       </button>
                       <button
                         onClick={() => handleDelete(seq.id)}
-                        aria-label="Delete"
+                        aria-label="Excluir"
                         className="inline-flex h-8 items-center gap-1.5 rounded-[6px] px-2.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
                       >
                         <Trash2 size={12} />

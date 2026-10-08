@@ -17,7 +17,7 @@ export default function MessageLinkPage() {
 
   useEffect(() => {
     if (!emailId) {
-      setError("Missing message id");
+      setError("Link sem o identificador da mensagem.");
       return;
     }
     let cancelled = false;
@@ -31,7 +31,7 @@ export default function MessageLinkPage() {
           email.type === "received" ? email.recipient : email.fromAddress;
         const personId = email.personId;
         if (!personId || !inbox) {
-          setError("This message can't be opened in the inbox view.");
+          setError("Esta mensagem não abre na caixa.");
           return;
         }
         navigate(
@@ -41,7 +41,7 @@ export default function MessageLinkPage() {
       })
       .catch(() => {
         if (cancelled) return;
-        setError("Message not found, or you don't have access to it.");
+        setError("Mensagem não encontrada, ou você não tem acesso a ela.");
       });
     return () => {
       cancelled = true;
@@ -51,16 +51,16 @@ export default function MessageLinkPage() {
   if (error) {
     return (
       <div className="flex h-full flex-1 items-center justify-center px-6 py-16">
-        <div className="max-w-sm rounded-2xl bg-card p-8 text-center ring-1 ring-border">
+        <div className="max-w-sm rounded-[12px] bg-card p-8 text-center ring-1 ring-border">
           <h2 className="text-base font-semibold text-text-primary">
-            Can't open this message
+            Não deu para abrir a mensagem
           </h2>
           <p className="mt-2 text-sm text-text-secondary">{error}</p>
           <Link
             to="/"
-            className="mt-4 inline-block text-sm font-medium text-accent hover:underline"
+            className="mt-4 inline-block text-sm font-medium text-primary-ink hover:underline"
           >
-            Back to inbox
+            Voltar à caixa
           </Link>
         </div>
       </div>
@@ -69,7 +69,7 @@ export default function MessageLinkPage() {
 
   return (
     <div className="flex h-full flex-1 items-center justify-center text-sm text-text-tertiary">
-      Opening message…
+      Abrindo a mensagem…
     </div>
   );
 }

@@ -103,6 +103,15 @@ Backend routes are Hono + Zod OpenAPI under `worker/src/routers/`. Spec is serve
   `.secrets/backups/email-routing-*.json` (gitignored). The repeatable migrator is
   `scripts/configura-email-routing.mjs` in the parent workspace; it preserves the
   original backup when applying and supports `--dominio=<zone>` for a pilot.
+- Placement: the production `wrangler.jsonc` takes
+  `"placement": { "region": "aws:us-west-1" }`. The D1 primary runs in WNAM
+  (read replication off) and every D1 query is a round trip: from the Brazilian
+  edge each one costs ~190 ms and the inbox routes make 6–11 of them
+  (`/api/people/grouped` measured 2.3 s, `/api/emails/by-person` 2.0 s on
+  2026-10-08). Placed next to D1, a request crosses the continent once. Because
+  `run_worker_first` is `true`, assets cross too; `/assets/*` and `/fonts/*` are
+  served `immutable` by the SPA fallback in `worker/src/index.ts`, so after the
+  first visit only `index.html` pays it. Drop the hint if D1 ever moves.
 - Deploy: `yarn tsc --noEmit && yarn test && yarn deploy`.
 - Apply D1 migrations before first deploy and after pulling schema changes:
   `yarn db:migrate:prod`.

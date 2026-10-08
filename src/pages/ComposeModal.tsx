@@ -8,7 +8,9 @@ import {
   TrayMetaRow,
   trayContentClass,
 } from "@/components/Tray";
+import { useQueryClient } from "@tanstack/react-query";
 import { sendEmail, fetchStats, type CcEntry } from "@/lib/api";
+import { chaves } from "@/lib/queries";
 import {
   proximoHorarioComercial,
   rotuloBrasilia,
@@ -57,6 +59,7 @@ export default function ComposeModal({
   onClose,
   prefill,
 }: ComposeModalProps) {
+  const qc = useQueryClient();
   const [to, setTo] = useState("");
   const [fromAddress, setFromAddress] = useState("");
   const [cc, setCc] = useState<CcEntry[]>([]);
@@ -111,7 +114,11 @@ export default function ComposeModal({
 
   useEffect(() => {
     if (open) {
-      fetchStats().then((stats) => {
+      // Do cache quando já tem (a lateral acabou de pedir): abre sem esperar a API.
+      qc.ensureQueryData({
+        queryKey: chaves.stats,
+        queryFn: () => fetchStats(),
+      }).then((stats) => {
         setRecipients(stats.recipients);
         setSenderIdentities(stats.senderIdentities ?? []);
         // Prefill `from` wins; otherwise keep whatever was sticky from
@@ -191,7 +198,7 @@ export default function ComposeModal({
       setFiles([]);
       onClose();
     } catch {
-      setError("Failed to send email");
+      setError("Não deu para enviar. Tente de novo.");
     } finally {
       setSending(false);
     }
@@ -227,13 +234,12 @@ export default function ComposeModal({
           <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 pl-4">
             <div className="flex min-w-0 items-center gap-2">
               <PenSquare
-                size={13}
-                className="shrink-0"
-                style={{ color: "#7c5cfc" }}
+                size={14}
+                className="shrink-0 text-primary"
                 aria-hidden
               />
               <DialogPrimitive.Title className="truncate text-sm font-semibold text-text-primary">
-                {to ? `New message · ${to}` : "New message"}
+                {to ? `Nova mensagem · ${to}` : "Nova mensagem"}
               </DialogPrimitive.Title>
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
@@ -243,7 +249,7 @@ export default function ComposeModal({
               />
               <DialogPrimitive.Close
                 className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
-                aria-label="Close"
+                aria-label="Fechar"
               >
                 <X size={14} />
               </DialogPrimitive.Close>
@@ -257,7 +263,7 @@ export default function ComposeModal({
             className="shrink-0 divide-y divide-border/60 border-b border-border bg-bg-subtle/30"
             data-testid="compose-metadata"
           >
-            <TrayMetaRow label="From">
+            <TrayMetaRow label="De">
               <select
                 value={fromAddress}
                 onChange={(e) => setFromAddress(e.target.value)}
@@ -271,15 +277,15 @@ export default function ComposeModal({
                 ))}
               </select>
             </TrayMetaRow>
-            <TrayMetaRow label="To" htmlFor="compose-to">
+            <TrayMetaRow label="Para" htmlFor="compose-to">
               <input
                 id="compose-to"
                 type="email"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
                 required
-                placeholder="recipient@example.com"
-                aria-label="To"
+                placeholder="nome@exemplo.com"
+                aria-label="Para"
                 className="w-full bg-transparent py-2 pr-3 text-sm text-text-primary outline-none placeholder:text-text-tertiary"
               />
             </TrayMetaRow>
@@ -291,14 +297,14 @@ export default function ComposeModal({
                 testId="compose-cc-input"
               />
             </TrayMetaRow>
-            <TrayMetaRow label="Subject" htmlFor="compose-subject">
+            <TrayMetaRow label="Assunto" htmlFor="compose-subject">
               <input
                 id="compose-subject"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 required
-                placeholder="What's it about?"
-                aria-label="Subject"
+                placeholder="Sobre o quê?"
+                aria-label="Assunto"
                 className="w-full bg-transparent py-2 pr-3 text-sm text-text-primary outline-none placeholder:text-text-tertiary"
               />
             </TrayMetaRow>
@@ -345,7 +351,7 @@ export default function ComposeModal({
 
           {/* Slim footer — single row, just send + cancel + hint. */}
           <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-card px-4 py-2.5 sm:px-5">
-            <div className="min-w-0 truncate text-[11px] font-light text-text-tertiary">
+            <div className="min-w-0 truncate text-[11px] text-text-tertiary">
               {error ? (
                 <span className="text-destructive" role="alert">
                   {error}
@@ -353,12 +359,12 @@ export default function ComposeModal({
               ) : (
                 <span className="hidden sm:inline">
                   <kbd className="rounded border border-border bg-bg-muted px-1 font-mono text-[10px]">
-                    ⌘
+                    Ctrl
                   </kbd>
                   <kbd className="ml-1 rounded border border-border bg-bg-muted px-1 font-mono text-[10px]">
                     Enter
                   </kbd>{" "}
-                  to send
+                  envia
                 </span>
               )}
             </div>
@@ -374,7 +380,7 @@ export default function ComposeModal({
                 onClick={onClose}
                 className="rounded-[6px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
               >
-                Cancel
+                Cancelar
               </button>
               <button
                 type="button"
@@ -402,10 +408,10 @@ export default function ComposeModal({
                   !to ||
                   totalAttachmentBytes > ATTACHMENT_CAP_BYTES
                 }
-                className="inline-flex items-center gap-1.5 rounded-[6px] bg-text-primary px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-text-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-[6px] bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send size={12} />
-                {sending ? "Sending…" : "Send"}
+                {sending ? "Enviando…" : "Enviar"}
               </button>
             </div>
           </div>
