@@ -93,11 +93,12 @@ export function lerOrdem(): InboxSortSpec {
 /**
  * Abertura do app: a caixa pede contagens e lista assim que monta, mas só monta
  * depois da checagem de sessão. Pedir junto com a sessão poupa uma ida e volta
- * inteira (~0,8 s na latência de hoje). Sem sessão, viram 401 e ninguém usa.
+ * inteira (~0,8 s na latência de hoje). Sem sessão viram 401, e 401 não se
+ * repete (o retry padrão pediria tudo de novo 1 s depois, já na tela de login).
  * A chave tem que ser a mesma que a InboxPage monta, senão baixa duas vezes.
  */
 export function preCarregarAbertura(qc: QueryClient, caminho: string) {
-  void qc.prefetchQuery(opcoesStats);
+  void qc.prefetchQuery({ ...opcoesStats, retry: false });
   const m = caminho.match(/^\/(?:inbox\/([^/]+)(?:\/[^/]+)?)?\/?$/);
   if (!m) return;
   let caixa: string | undefined;
@@ -107,15 +108,16 @@ export function preCarregarAbertura(qc: QueryClient, caminho: string) {
     return;
   }
   const { key, direction } = lerOrdem();
-  void qc.prefetchQuery(
-    opcoesLista({
+  void qc.prefetchQuery({
+    ...opcoesLista({
       recipient: caixa,
       sort: key,
       direction,
       page: 1,
       limit: POR_PAGINA_LISTA,
     }),
-  );
+    retry: false,
+  });
 }
 
 export function useOutboxCount() {
