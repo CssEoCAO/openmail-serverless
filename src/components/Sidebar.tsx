@@ -14,6 +14,7 @@ import {
   Search,
   Settings,
   Shield,
+  ShieldAlert,
   X,
 } from "lucide-react";
 import { signOut, useSession } from "@/lib/auth-client";
@@ -196,6 +197,16 @@ export default function Sidebar({
           <Clock size={15} className="shrink-0" />
           <span className="truncate">{tx("Saída")}</span>
           <Contador n={saida?.pending ?? 0} />
+        </NavLink>
+        <NavLink
+          to="/spam"
+          onClick={ir}
+          data-testid="nav-spam"
+          className={({ isActive }) => cn(itemBase, isActive && itemAtivo)}
+        >
+          <ShieldAlert size={15} className="shrink-0" />
+          <span className="truncate">Spam</span>
+          <Contador n={stats?.spamCount ?? 0} />
         </NavLink>
       </nav>
 

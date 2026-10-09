@@ -2,6 +2,8 @@
 -- Users are created via HTTP APIs in e2e/global-setup.ts.
 
 -- Clean tables (idempotent for repeated runs)
+DELETE FROM spam_emails;
+DELETE FROM trusted_senders;
 DELETE FROM sequence_emails;
 DELETE FROM sequence_enrollments;
 DELETE FROM sequences;

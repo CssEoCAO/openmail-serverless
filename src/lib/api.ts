@@ -106,6 +106,8 @@ export interface Stats {
   totalPeople: number;
   totalEmails: number;
   unreadCount: number;
+  /** Mensagens no Spam das caixas visíveis. */
+  spamCount?: number;
   /** Addresses the caller may send AS — only these have a sender_identities row,
    *  which is where `outbound_provider` lives. Feeds every "From" picker. */
   recipients: string[];
@@ -1130,16 +1132,74 @@ export async function fetchBlocklist(
   return apiFetch(`/api/blocklist${qs}`);
 }
 
+/** A recusa do servidor (domínio nosso, e-mail gratuito) chega na mensagem do erro. */
 export async function addBlock(input: {
   type: BlockRuleType;
   value: string;
   note?: string;
 }): Promise<BlockRule> {
-  return apiFetch("/api/blocklist", {
+  const res = await fetch("/api/blocklist", {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
+  if (!res.ok) {
+    const corpo = (await res.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(corpo?.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export type CategoriaSpam = "golpe" | "prospeccao" | "bloqueio" | "reincidente";
+
+export interface SpamItem {
+  id: string;
+  from: string;
+  fromName: string | null;
+  recipient: string;
+  subject: string | null;
+  snippet: string;
+  category: CategoriaSpam;
+  reason: string | null;
+  confidence: number | null;
+  receivedAt: number;
+  attachmentCount: number;
+}
+
+export interface SpamDetail extends SpamItem {
+  bodyHtml: string | null;
+  bodyText: string | null;
+  attachments: Array<{ filename: string; contentType: string; size: number }>;
+}
+
+export async function fetchSpam(page = 1): Promise<{
+  data: SpamItem[];
+  total: number;
+  page: number;
+  limit: number;
+}> {
+  return apiFetch(`/api/spam?page=${page}`);
+}
+
+export async function fetchSpamEmail(id: string): Promise<SpamDetail> {
+  return apiFetch(`/api/spam/${encodeURIComponent(id)}`);
+}
+
+export async function naoEhSpam(id: string): Promise<{ restored: number }> {
+  return apiFetch(`/api/spam/${encodeURIComponent(id)}/not-spam`, {
+    method: "POST",
+  });
+}
+
+export async function apagarDoSpam(id: string): Promise<{ deleted: number }> {
+  return apiFetch(`/api/spam/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function esvaziarSpam(): Promise<{ deleted: number }> {
+  return apiFetch("/api/spam", { method: "DELETE" });
 }
 
 export async function removeBlock(id: string): Promise<{ deleted: true }> {

@@ -1,4 +1,7 @@
 {
+  // Required for automatic first-contact spam classification (Workers AI).
+  // Omit in offline test fixtures; explicit block rules still quarantine mail.
+  "ai": { "binding": "AI" },
   // Copy this file to wrangler.jsonc and fill in your values.
   // wrangler.jsonc is gitignored so each deployer has their own config.
   "name": "saasmail",
@@ -109,7 +112,12 @@
     // VAPID_PUBLIC_KEY and VAPID_SUBJECT are public config (safe to commit here).
     // Generate all three with `yarn vapid:generate`. Leave blank to disable push.
     "VAPID_PUBLIC_KEY": "",
-    "VAPID_SUBJECT": "mailto:admin@<your-domain>"
+    "VAPID_SUBJECT": "mailto:admin@<your-domain>",
+
+    /* spam (optional) */
+    // Who you are and who really writes to you, in two lines: it opens the AI
+    // classifier's prompt. Unset, a generic small-company description is used.
+    // "SPAM_AI_CONTEXT": "Você classifica e-mails que chegam nas caixas de <empresa>, que <faz o quê>.\nQuem escreve de verdade: <clientes, parceiros, plataformas…>"
     // DO NOT set DISABLE_PASSKEY_GATE in production. It's intended for local
     // dev only (see .dev.vars.example) and turns off the server-side passkey
     // requirement for /api/* when set to "true".

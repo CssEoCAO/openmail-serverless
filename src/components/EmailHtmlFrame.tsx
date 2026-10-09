@@ -12,6 +12,11 @@ interface EmailHtmlFrameProps {
   /** When set, taller content is clipped to this height with a "Show full email" toggle. */
   collapsedHeight?: number;
   className?: string;
+  /**
+   * Pointer or key interaction inside the email. The iframe swallows the event,
+   * so the bubble's "clicked the message, mark it read" never fired from the text.
+   */
+  onInteract?: () => void;
 }
 
 // Same-origin (so /api/attachments/*/inline gets the session cookie) but no
@@ -19,6 +24,10 @@ interface EmailHtmlFrameProps {
 // so links open normally; every link carries rel=noopener (see email-frame.ts).
 const SANDBOX = "allow-same-origin allow-popups allow-popups-to-escape-sandbox";
 const OVERFLOW_SLACK = 48;
+// A remote image or background: only then does the load button make sense.
+// Without this it showed on every message, plain-text ones included.
+const IMAGEM_EXTERNA =
+  /<(?:img|source)[^>]+src(?:set)?\s*=\s*["']?(?:https?:)?\/\/|url\(\s*["']?(?:https?:)?\/\/|background\s*=\s*["']?(?:https?:)?\/\//i;
 
 /** Renders an email's original HTML (styles, tables, images) in a sandboxed iframe sized to its content. */
 export default function EmailHtmlFrame({
@@ -26,8 +35,11 @@ export default function EmailHtmlFrame({
   attachments,
   collapsedHeight,
   className,
+  onInteract,
 }: EmailHtmlFrameProps) {
   const ref = useRef<HTMLIFrameElement>(null);
+  const interagiu = useRef(onInteract);
+  interagiu.current = onInteract;
   const [height, setHeight] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [imagesFor, setImagesFor] = useState<string | null>(null);
@@ -40,6 +52,12 @@ export default function EmailHtmlFrame({
     const frame = ref.current;
     if (!frame) return;
     let observer: ResizeObserver | null = null;
+    let document: Document | null = null;
+    const interagir = () => interagiu.current?.();
+    function soltar() {
+      document?.removeEventListener("pointerdown", interagir);
+      document?.removeEventListener("keydown", interagir);
+    }
     function measure() {
       const d = frame?.contentDocument;
       if (!d?.documentElement) return;
@@ -50,11 +68,11 @@ export default function EmailHtmlFrame({
     function onLoad() {
       measure();
       const d = frame?.contentDocument;
-      // Clicks inside the frame never reach the page; re-dispatch them so the
-      // message around it still reacts (e.g. marking it read).
-      d?.addEventListener("click", () =>
-        frame?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
-      );
+      // Same origin and no script in the email: the page does the listening.
+      soltar();
+      document = d ?? null;
+      d?.addEventListener("pointerdown", interagir);
+      d?.addEventListener("keydown", interagir);
       observer?.disconnect();
       if (d?.body && typeof ResizeObserver !== "undefined") {
         observer = new ResizeObserver(measure);
@@ -65,6 +83,7 @@ export default function EmailHtmlFrame({
     frame.addEventListener("load", onLoad);
     return () => {
       frame.removeEventListener("load", onLoad);
+      soltar();
       observer?.disconnect();
     };
   }, [doc]);
@@ -78,7 +97,7 @@ export default function EmailHtmlFrame({
     // O e-mail foi feito para papel branco: a moldura inteira fica branca nos dois
     // temas, e os links dela usam o azul escuro (o azul claro do tema escuro some no branco).
     <div className={cn("bg-white", className)}>
-      {imagesFor !== html && (
+      {imagesFor !== html && IMAGEM_EXTERNA.test(html) && (
         <button
           type="button"
           className="px-3 py-1.5 text-xs font-medium text-[#1c4fc4] hover:underline"

@@ -235,13 +235,16 @@ peopleRouter.openapi(listGroupedPeopleRoute, async (c) => {
     );
   }
   // Hide senders that are on the global blocklist (exact email or domain).
-  // The blocklist is the source of truth; unblocking makes rows reappear.
+  // A exceção de "Não é spam" vale só nas caixas que este usuário pode ver.
   personConditions.push(
-    sql`NOT EXISTS (
+    sql`(NOT EXISTS (
       SELECT 1 FROM blocklist b
       WHERE (b.type = 'email'  AND b.value = s.email)
          OR (b.type = 'domain' AND b.value = lower(substr(s.email, instr(s.email, '@') + 1)))
-    )`,
+    ) OR EXISTS (
+      SELECT 1 FROM trusted_senders t WHERE t.email = s.email
+      AND (t.recipient = '*' OR (1=1 ${inboxScopeSql(allowed, sql`t.recipient`)} ${recipient ? sql`AND t.recipient = ${recipient}` : sql``}))
+    ))`,
   );
   const scopeClause = peopleScopeClause(allowed);
   const personExtraConditions =
@@ -280,11 +283,28 @@ peopleRouter.openapi(listGroupedPeopleRoute, async (c) => {
       s.email,
       s.name,
       MAX(e.at) AS lastEmailAt,
+      -- Último assunto: um LIMIT 1 por tabela, cada um no índice (person_id,
+      -- data), e o mais novo dos dois. Sobre a união inteira o SQLite não usa
+      -- índice e varria a caixa uma vez por pessoa: 111 mil linhas e ~850 ms em
+      -- produção (08/10/2026); assim, 3,7 mil linhas e ~20 ms, mesmo resultado.
       (
-        SELECT latest.subject FROM ${activity} latest
-        WHERE latest.person_id = s.id AND latest.conversation_id IS NULL
-        ${inboxScopeSql(allowed, sql`latest.inbox`)}
-        ${recipient ? sql`AND latest.inbox = ${recipient}` : sql``}
+        SELECT latest.subject FROM (
+          SELECT * FROM (
+            SELECT subject, received_at AS at, id FROM ${emails}
+            WHERE person_id = s.id AND conversation_id IS NULL
+            ${inboxScopeSql(allowed, sql`recipient`)}
+            ${recipient ? sql`AND recipient = ${recipient}` : sql``}
+            ORDER BY received_at DESC, id DESC LIMIT 1
+          )
+          UNION ALL
+          SELECT * FROM (
+            SELECT subject, sent_at AS at, id FROM ${sentEmails}
+            WHERE person_id = s.id AND conversation_id IS NULL
+            ${inboxScopeSql(allowed, sql`from_address`)}
+            ${recipient ? sql`AND from_address = ${recipient}` : sql``}
+            ORDER BY sent_at DESC, id DESC LIMIT 1
+          )
+        ) latest
         ORDER BY latest.at DESC, latest.id DESC LIMIT 1
       ) AS latestSubject,
       SUM(CASE WHEN e.is_read = 0 THEN 1 ELSE 0 END) AS unreadCount,

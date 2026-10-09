@@ -128,7 +128,18 @@ Give a mailbox a **Forward to** address and every message it receives is re-sent
 
 - The copy comes **from** the mailbox address, with the original sender in the display name, and carries a signed `Reply-To`. Replying from your personal mailbox sends the answer as the original mailbox and records it in Sent.
 - The original `From`, `Date`, `Subject`, `Cc` and SPF/DKIM/DMARC results are listed at the top of the body. Attachments are included up to the provider's size limit.
-- Forwarding runs after the message is stored and after the blocklist and duplicate checks. It is best effort, never blocks inbound mail, and cannot loop: a mailbox cannot forward to itself or to another mailbox on the same instance, and already-forwarded messages are never forwarded again.
+- Forwarding runs after the message is stored and after the spam and duplicate checks. It is best effort, never blocks inbound mail, and cannot loop: a mailbox cannot forward to itself or to another mailbox on the same instance, and already-forwarded messages are never forwarded again.
+
+### Spam
+
+New mail from blocked senders, repeat offenders and what Workers AI (`@cf/openai/gpt-oss-120b`) flags as phishing (confidence ≥ 0.85) or an unsolicited sales pitch (≥ 0.90) goes to **Spam** instead of the inbox. Newsletters stay in the inbox. Spam is kept apart from the inbox, search, MCP, notifications, webhooks and forwarding, and the hourly cron deletes it after 30 days.
+
+- **Not spam** puts every message from that sender back, attachments included, with the same ids. An admin trusts the sender everywhere; a member only in the mailboxes they restored. Later mail needs an aligned DMARC pass to use that trust, and a new block revokes it.
+- Senders with authenticated history (they wrote before, or you wrote to them) skip the AI. If the `AI` binding is missing, slow (20 s) or answers off-format, the message reaches the inbox; block rules still quarantine.
+- Free providers (Gmail, Outlook and the like) can only be blocked by address, never as a whole domain.
+- The Gmail import of old mail never calls the AI; blocked senders still land in Spam, at the message's own date.
+
+Add `"ai": { "binding": "AI" }` to `wrangler.jsonc` (see `wrangler.jsonc.example`) and apply migration `0043_spam`. Describe your company and who really writes to you in the `SPAM_AI_CONTEXT` var: it opens the classifier's prompt, and without it the AI only knows it reads a small company's mail. Keep the binding out of offline test configs: locally it calls the remote model. Review Spam now and then; the model can be wrong.
 
 ### Templates
 

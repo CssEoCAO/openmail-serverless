@@ -265,14 +265,8 @@ export const EN: Record<string, string> = {
   "E-mail da pessoa": "Person's email",
   "E-mail HTML reaproveitável com {{variável}}.":
     "Reusable HTML email with {{variable}}.",
-  "E-mail novo desse domínio é descartado e as conversas dele somem da caixa.":
-    "New mail from this domain is discarded and its conversations disappear from the inbox.",
-  "E-mail novo desse endereço é descartado e as conversas dele somem da caixa.":
-    "New mail from this address is discarded and its conversations disappear from the inbox.",
   "E-mail ou senha não conferem. Tente de novo.":
     "Email or password doesn't match. Try again.",
-  "E-mail que chega desses remetentes é descartado.":
-    "Mail from these senders is discarded.",
   Editar: "Edit",
   "Editar modelo": "Edit template",
   "Editar sequência": "Edit sequence",
@@ -286,8 +280,6 @@ export const EN: Record<string, string> = {
   "Encaminhar {0} para": "Forward {0} to",
   "Encaminhar para": "Forward to",
   Endereço: "Address",
-  "Endereços e domínios bloqueados somem da caixa, e o e-mail novo deles é descartado.":
-    "Blocked addresses and domains disappear from the inbox, and their new mail is discarded.",
   "Endereços que não recebem envio de sequência nem de marketing.":
     "Addresses that receive no sequence or marketing sends.",
   "Endereços suprimidos ({0}{1})": "Suppressed addresses ({0}{1})",
@@ -331,10 +323,6 @@ export const EN: Record<string, string> = {
   "Escreva uma mensagem…": "Write a message…",
   "Escreva uma resposta…": "Write a reply…",
   Escrever: "Compose",
-  "Esse domínio não pode ser bloqueado; pode ser um dos nossos.":
-    "This domain can't be blocked; it may be one of ours.",
-  "Esse endereço não pode ser bloqueado; pode ser um dos nossos.":
-    "This address can't be blocked; it may be one of ours.",
   "Esta caixa ainda não tem identidade de envio":
     "This mailbox has no sending identity yet",
   "Esta conversa é de {0}; resposta por outra caixa começa outra conversa.":
@@ -890,4 +878,47 @@ export const EN: Record<string, string> = {
   "Ler seu nome e perfil": "Read your name and profile",
   "Ler seus e-mails, contatos e modelos":
     "Read your emails, contacts and templates",
+  // Spam
+  Golpe: "Scam",
+  Prospecção: "Cold outreach",
+  Bloqueado: "Blocked",
+  Reincidente: "Repeat sender",
+  "Remetente bloqueado": "Blocked sender",
+  "Já tinha ido para o Spam": "Already went to Spam before",
+  "Detectado pela IA": "Flagged by AI",
+  "Não deu para carregar o Spam.": "Couldn't load Spam.",
+  "1 mensagem de {0} voltou para a caixa. Remetente liberado para as caixas restauradas.":
+    "1 message from {0} went back to the inbox. The sender is allowed in the restored inboxes.",
+  "{0} mensagens de {1} voltaram para a caixa. Remetente liberado para as caixas restauradas.":
+    "{0} messages from {1} went back to the inbox. The sender is allowed in the restored inboxes.",
+  "Não deu para tirar do Spam.": "Couldn't move it out of Spam.",
+  "Não deu para apagar.": "Couldn't delete it.",
+  "Não deu para esvaziar o Spam.": "Couldn't empty Spam.",
+  "Golpe e prospecção que a IA reconheceu, e o que chega de remetente bloqueado. Fica 30 dias e depois some sozinho.":
+    "Scams and cold outreach the AI caught, plus mail from blocked senders. It stays 30 days, then goes away on its own.",
+  "Apagar a mensagem?": "Delete the message?",
+  "Apagar as {0} mensagens?": "Delete all {0} messages?",
+  Esvaziar: "Empty",
+  "Esvaziar spam": "Empty spam",
+  "Mensagens no Spam": "Messages in Spam",
+  "Spam vazio": "Spam is empty",
+  "Golpe e prospecção que chegarem caem aqui em vez da caixa. Bloquear um remetente também manda o que ele escrever para cá.":
+    "Incoming scams and cold outreach land here instead of the inbox. Blocking a sender also sends what they write here.",
+  "{0} · para {1}": "{0} · to {1}",
+  "Não é spam": "Not spam",
+  "Apagar a mensagem de {0}": "Delete the message from {0}",
+  "Não deu para abrir a mensagem.": "Couldn't open the message.",
+  ". Ficam guardados e voltam junto se você tirar a mensagem do Spam.":
+    ". They are kept and come back if you move the message out of Spam.",
+  "mensagem apagada": "message deleted",
+  "mensagens apagadas": "messages deleted",
+  "Endereços e domínios bloqueados somem da caixa, e o e-mail novo deles vai para o Spam, onde fica 30 dias.":
+    "Blocked addresses and domains disappear from the inbox, and their new mail goes to Spam, where it stays 30 days.",
+  "O que chega desses remetentes vai para o Spam.":
+    "Mail from these senders goes to Spam.",
+  "As conversas desse domínio somem da caixa, e o que chegar dele vai para o Spam (fica 30 dias).":
+    "This domain's conversations disappear from the inbox, and anything it sends goes to Spam (kept 30 days).",
+  "As conversas desse endereço somem da caixa, e o que chegar dele vai para o Spam (fica 30 dias).":
+    "This address's conversations disappear from the inbox, and anything it sends goes to Spam (kept 30 days).",
+  "O servidor recusou o bloqueio.": "The server refused the block.",
 };

@@ -313,27 +313,34 @@ export default function InboxPage() {
 
   // Pessoa da rota (link de notificação push ou recarga): usa a da lista se já
   // estiver nela; senão busca a pessoa direto para abrir a conversa mesmo assim.
+  // Só marca como resolvida quando abre de fato: marcar antes deixava a busca
+  // cancelada pela chegada da lista sem nova tentativa, e o link não abria nada.
   const lastProcessedPersonId = useRef<string | null>(null);
   useEffect(() => {
-    if (!routePersonId) return;
+    if (!routePersonId) {
+      lastProcessedPersonId.current = null;
+      return;
+    }
     if (lastProcessedPersonId.current === routePersonId) return;
     if (selectedPerson?.id === routePersonId) {
       lastProcessedPersonId.current = routePersonId;
       return;
     }
-    lastProcessedPersonId.current = routePersonId;
     const found = items.find(
       (it): it is GroupedPerson =>
         it.type === "person" && it.id === routePersonId,
     );
     if (found) {
+      lastProcessedPersonId.current = routePersonId;
       setSelectedPerson(found);
       return;
     }
     let cancelled = false;
     fetchPerson(routePersonId)
       .then((p) => {
-        if (cancelled) return;
+        if (cancelled || lastProcessedPersonId.current === routePersonId)
+          return;
+        lastProcessedPersonId.current = routePersonId;
         setSelectedPerson({
           type: "person",
           id: p.id,
@@ -485,6 +492,7 @@ export default function InboxPage() {
     <PersonDetail
       key={selectedPerson.id}
       person={selectedPerson}
+      caixaPreferida={caixaDaRota}
       onEmailRead={handleEmailRead}
       onEmailDelete={handleEmailDelete}
       onOpenCompose={onCompose}

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { messageDomId, readMessageHash } from "@/lib/message-link";
 import EnrollSequenceModal from "@/components/EnrollSequenceModal";
+import { ehDominioGratuito } from "@/lib/dominios-gratuitos";
 import ReassignPersonModal from "@/components/ReassignPersonModal";
 import SequenceStatus from "@/components/SequenceStatus";
 import EmailHtmlModal from "@/components/EmailHtmlModal";
@@ -58,6 +59,8 @@ interface PersonDetailProps {
   onBlock?: () => void;
   /** Voltar à lista (celular). */
   onBack?: () => void;
+  /** Caixa aberta na lista: a conversa abre na aba dela, se a pessoa escreveu lá. */
+  caixaPreferida?: string;
 }
 
 function inboxOf(email: Email): string {
@@ -107,6 +110,7 @@ export default function PersonDetail({
   onOpenCompose,
   onBlock,
   onBack,
+  caixaPreferida,
 }: PersonDetailProps) {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -162,26 +166,24 @@ export default function PersonDetail({
         description:
           type === "domain"
             ? tx(
-                "E-mail novo desse domínio é descartado e as conversas dele somem da caixa.",
+                "As conversas desse domínio somem da caixa, e o que chegar dele vai para o Spam (fica 30 dias).",
               )
             : tx(
-                "E-mail novo desse endereço é descartado e as conversas dele somem da caixa.",
+                "As conversas desse endereço somem da caixa, e o que chegar dele vai para o Spam (fica 30 dias).",
               ),
         durationMs: 5000,
       });
       if (onBlock) onBlock();
       else navigate("/");
-    } catch {
-      // Quase sempre a trava que impede bloquear um domínio nosso.
+    } catch (err) {
+      // A trava do servidor diz o motivo: endereço nosso, e-mail gratuito.
+      const motivo = err instanceof Error ? err.message : "";
       showToast({
         kind: "error",
         message: tx("Não deu para bloquear"),
-        description:
-          type === "domain"
-            ? tx("Esse domínio não pode ser bloqueado; pode ser um dos nossos.")
-            : tx(
-                "Esse endereço não pode ser bloqueado; pode ser um dos nossos.",
-              ),
+        description: motivo.startsWith("API error")
+          ? tx("O servidor recusou o bloqueio.")
+          : motivo,
       });
     }
   }
@@ -274,16 +276,20 @@ export default function PersonDetail({
     [senderIdentities],
   );
 
-  // Abre na caixa da mensagem mais recente.
+  // Abre na caixa que está aberta na lista; fora dela, na da mensagem mais recente.
   useEffect(() => {
     if (inboxGroups.length === 0) {
       setActiveInbox(null);
       return;
     }
     if (!activeInbox || !inboxGroups.find((g) => g.inbox === activeInbox)) {
-      setActiveInbox(inboxGroups[0].inbox);
+      const preferida = caixaPreferida?.toLowerCase();
+      setActiveInbox(
+        inboxGroups.find((g) => g.inbox.toLowerCase() === preferida)?.inbox ??
+          inboxGroups[0].inbox,
+      );
     }
-  }, [inboxGroups, activeInbox]);
+  }, [inboxGroups, activeInbox, caixaPreferida]);
 
   // Link para uma mensagem (#m=<id>): troca para a aba dela, abre as anteriores se
   // preciso, rola e pisca. Uma vez por (pessoa, hash).
@@ -428,9 +434,12 @@ export default function PersonDetail({
             <DropdownMenuItem onClick={() => handleBlock("email")}>
               {tx("Bloquear")} {person.email}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleBlock("domain")}>
-              {tx("Bloquear o domínio")} {dominioDe(person.email)}
-            </DropdownMenuItem>
+            {/* Domínio de e-mail gratuito é de muita gente: só o endereço. */}
+            {!ehDominioGratuito(dominioDe(person.email)) && (
+              <DropdownMenuItem onClick={() => handleBlock("domain")}>
+                {tx("Bloquear o domínio")} {dominioDe(person.email)}
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

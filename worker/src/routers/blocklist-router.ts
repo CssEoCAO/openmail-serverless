@@ -1,9 +1,14 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { desc, eq, lt, and } from "drizzle-orm";
+import { desc, eq, lt, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { blocklist } from "../db/blocklist.schema";
+import { trustedSenders } from "../db/spam.schema";
 import { senderIdentities } from "../db/sender-identities.schema";
-import { domainOf, markBlockedSendersRead } from "../lib/blocklist";
+import {
+  domainOf,
+  ehDominioGratuito,
+  markBlockedSendersRead,
+} from "../lib/blocklist";
 import { json200Response, json201Response } from "../lib/helpers";
 import { purgeBlockedMail } from "../lib/purge-blocked";
 import type { Variables } from "../variables";
@@ -137,6 +142,14 @@ blocklistRouter.openapi(createRouteDef, async (c) => {
   if (type === "domain" && (value.includes("@") || !value.includes("."))) {
     return c.json({ error: "Enter a bare domain, e.g. spammer.com." }, 400);
   }
+  if (type === "domain" && ehDominioGratuito(value)) {
+    return c.json(
+      {
+        error: `${value} is a free email provider: each address is a different person. Block the address, not the domain.`,
+      },
+      400,
+    );
+  }
 
   // Self-lockout guard: never let a rule block one of our own sender identities.
   const identities = await db
@@ -154,6 +167,15 @@ blocklistRouter.openapi(createRouteDef, async (c) => {
   if (type === "domain" && ownDomains.has(value)) {
     return c.json({ error: "You can't block your own sending domain." }, 400);
   }
+
+  // Um novo bloqueio explícito revoga as exceções criadas por "Não é spam".
+  await db
+    .delete(trustedSenders)
+    .where(
+      type === "email"
+        ? eq(trustedSenders.email, value)
+        : sql`lower(substr(${trustedSenders.email}, instr(${trustedSenders.email}, '@') + 1)) = ${value}`,
+    );
 
   const existing = await db
     .select()

@@ -24,7 +24,7 @@ export async function purgeBlockedMail(
       SELECT 1 FROM blocklist b
       WHERE (b.type = 'email'  AND b.value = p.email)
          OR (b.type = 'domain' AND b.value = lower(substr(p.email, instr(p.email, '@') + 1)))
-    )
+    ) AND NOT EXISTS (SELECT 1 FROM trusted_senders t WHERE t.email = p.email)
   `);
 
   let emailsDeleted = 0;

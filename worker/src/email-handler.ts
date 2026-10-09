@@ -12,7 +12,8 @@ import { users } from "./db/auth.schema";
 import { parseEmail } from "./lib/email-parser";
 import type { ParsedEmail } from "./lib/email-parser";
 import { internalDomainsFrom } from "./lib/internal-domains";
-import { isBlocked } from "./lib/blocklist";
+import { spamEmails } from "./db/spam.schema";
+import { decidirSpam } from "./lib/spam";
 import { computeConversationId, externalsOnly } from "./lib/conversation-id";
 import { cancelSequencesForPerson } from "./lib/cancel-sequence";
 import {
@@ -64,8 +65,12 @@ export async function handleEmail(
 export type IngestOutcome =
   /** A new `emails` row was written; `emailId` is its primary key. */
   | { status: "stored"; emailId: string }
-  /** The sender is on the blocklist. Nothing was written. */
-  | { status: "blocked" }
+  /**
+   * Quarantined: blocked sender, repeat offender or AI verdict. Written to
+   * `spam_emails` (kept 30 days, recoverable), never to `emails`, and no side
+   * effect runs.
+   */
+  | { status: "spam"; spamId: string }
   /**
    * This inbox already holds this Message-ID — a retry, a replayed Gmail
    * history page, or two overlapping cron ticks. Nothing was written;
@@ -162,11 +167,49 @@ export async function ingestParsedEmail(
     }
   }
 
-  // Drop new mail from blocked senders/domains before storage or side effects.
-  if (await isBlocked(db, fromAddressCanonical)) {
-    console.log(`Dropped blocked email from ${fromAddressCanonical}`);
-    return { status: "blocked" };
+  // A mesma mensagem pode já ter ido pro Spam numa entrega anterior.
+  if (parsed.messageId) {
+    const noSpam = await db
+      .select({ id: spamEmails.id })
+      .from(spamEmails)
+      .where(
+        and(
+          eq(spamEmails.messageId, parsed.messageId),
+          eq(spamEmails.recipient, recipientCanonical),
+        ),
+      )
+      .limit(1);
+    if (noSpam.length > 0) {
+      console.log(`Duplicate spam with Message-ID: ${parsed.messageId}`);
+      return { status: "spam", spamId: noSpam[0].id };
+    }
   }
+
+  // Bloqueado, golpe ou prospecção vai para o Spam (30 dias, recuperável), antes
+  // de criar pessoa, notificar, chamar webhook ou encaminhar. Até 08/10/2026 o
+  // bloqueio descartava aqui sem rastro.
+  const decisao = await decidirSpam(
+    db,
+    historical ? undefined : (env as unknown as { AI?: Ai }).AI,
+    {
+      from: fromAddressCanonical,
+      fromName: parsed.from.name || null,
+      to: recipientCanonical,
+      subject: parsed.subject,
+      text: parsed.bodyText,
+      html: parsed.bodyHtml,
+      dmarc: parsed.auth.dmarc,
+      spf: parsed.auth.spf,
+      listUnsubscribe: Object.keys(parsed.headers).some(
+        (k) => k.toLowerCase() === "list-unsubscribe",
+      ),
+      anexos: parsed.attachments
+        .filter((a) => a.disposition !== "inline")
+        .map((a) => a.filename)
+        .slice(0, 10),
+    },
+    (env as unknown as { SPAM_AI_CONTEXT?: string }).SPAM_AI_CONTEXT,
+  );
 
   const rawHeadersJson = JSON.stringify(parsed.headers);
   const ccJson = parsed.cc.length > 0 ? JSON.stringify(parsed.cc) : null;
@@ -188,31 +231,34 @@ export async function ingestParsedEmail(
   // Ensure the sender row exists without incrementing counters yet. The email
   // insert is the idempotency claim; counters and attachment metadata join it
   // in one D1 batch below so concurrent delivery of the same Message-ID cannot
-  // increment twice or leave orphan D1 rows.
-  const personId = nanoid();
-  await db
-    .insert(people)
-    .values({
-      id: personId,
-      email: fromAddressCanonical,
-      name: parsed.from.name || null,
-      lastEmailAt: receivedAt,
-      unreadCount: 0,
-      totalCount: 0,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoNothing({ target: people.email });
+  // increment twice or leave orphan D1 rows. Spam não vira pessoa: remetente de
+  // golpe não aparece em busca nem em sugestão de destinatário.
+  let actualPersonId = "";
+  if (!decisao.spam) {
+    await db
+      .insert(people)
+      .values({
+        id: nanoid(),
+        email: fromAddressCanonical,
+        name: parsed.from.name || null,
+        lastEmailAt: receivedAt,
+        unreadCount: 0,
+        totalCount: 0,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: people.email });
 
-  // Get the actual person ID (could be existing). Lookup by the
-  // canonical (lowercased) email so legacy mixed-case rows still
-  // resolve to the same person.
-  const personRow = await db
-    .select({ id: people.id })
-    .from(people)
-    .where(eq(people.email, fromAddressCanonical))
-    .limit(1);
-  const actualPersonId = personRow[0]!.id;
+    // Get the actual person ID (could be existing). Lookup by the
+    // canonical (lowercased) email so legacy mixed-case rows still
+    // resolve to the same person.
+    const personRow = await db
+      .select({ id: people.id })
+      .from(people)
+      .where(eq(people.email, fromAddressCanonical))
+      .limit(1);
+    actualPersonId = personRow[0]!.id;
+  }
 
   // Prepare attachment ids first (needed for CID rewriting), but don't write
   // D1 metadata until the email's unique Message-ID claim succeeds.
@@ -341,6 +387,65 @@ export async function ingestParsedEmail(
   } catch (err) {
     await Promise.allSettled(uploadedKeys.map((key) => env.R2.delete(key)));
     throw err;
+  }
+
+  if (decisao.spam) {
+    const guardado = await db
+      .insert(spamEmails)
+      .values({
+        id: emailId,
+        recipient: recipientCanonical,
+        fromAddress: fromAddressCanonical,
+        fromName: parsed.from.name || null,
+        subject: parsed.subject,
+        bodyHtml,
+        bodyText: parsed.bodyText,
+        rawHeaders: rawHeadersJson,
+        messageId: parsed.messageId,
+        spf: parsed.auth.spf,
+        dkim: parsed.auth.dkim,
+        dmarc: parsed.auth.dmarc,
+        cc: ccJson,
+        conversationId,
+        attachments: storedAttachments.length
+          ? JSON.stringify(
+              storedAttachments.map(({ content: _, emailId: __, ...a }) => ({
+                id: a.id,
+                filename: a.filename,
+                contentType: a.contentType,
+                size: a.size,
+                r2Key: a.r2Key,
+                contentId: a.contentId,
+              })),
+            )
+          : null,
+        category: decisao.category,
+        reason: decisao.reason,
+        confidence: decisao.confidence,
+        receivedAt,
+        createdAt: now,
+      })
+      .onConflictDoNothing()
+      .returning({ id: spamEmails.id })
+      .catch(async (err) => {
+        // Resposta perdida pode ser gravação concluída: preserve os anexos nesse caso.
+        const ownRow = await db
+          .select({ id: spamEmails.id })
+          .from(spamEmails)
+          .where(eq(spamEmails.id, emailId))
+          .limit(1);
+        if (ownRow.length > 0) return ownRow;
+        await Promise.allSettled(uploadedKeys.map((key) => env.R2.delete(key)));
+        throw err;
+      });
+    if (guardado.length === 0) {
+      // Entrega concorrente da mesma mensagem ganhou: só os nossos objetos saem.
+      await Promise.allSettled(uploadedKeys.map((key) => env.R2.delete(key)));
+    }
+    console.log(
+      `Spam (${decisao.category}) from ${fromAddressCanonical}: ${decisao.reason}`,
+    );
+    return { status: "spam", spamId: emailId };
   }
 
   const emailInsert = db.insert(emails).values({

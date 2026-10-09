@@ -44,6 +44,8 @@ import { webhooksRouter } from "./routers/webhooks-router";
 import { unsubscribeRouter } from "./routers/unsubscribe-router";
 import { outboxRouter } from "./routers/outbox-router";
 import { draftsRouter } from "./routers/drafts-router";
+import { spamRouter } from "./routers/spam-router";
+import { expurgarSpamAntigo } from "./lib/spam";
 import { bootstrapRouter } from "./routers/bootstrap-router";
 export { NotificationsHub } from "./do/notifications";
 import type { Variables } from "./variables";
@@ -348,6 +350,8 @@ app.use("/api/blocklist/*", requireAdmin);
 app.route("/api/blocklist", blocklistRouter);
 app.route("/api/outbox", outboxRouter);
 app.route("/api/drafts", draftsRouter);
+// Escopo por caixa dentro do router; confiar/desbloquear só vale para admin.
+app.route("/api/spam", spamRouter);
 
 // Admin routes (require admin role)
 app.use("/api/admin/*", requireAdmin);
@@ -507,6 +511,11 @@ export default {
         console.error(
           `[cron] gmail sync failed: ${err instanceof Error ? err.message : "unknown error"}`,
         ),
+      ),
+    );
+    ctx.waitUntil(
+      expurgarSpamAntigo(drizzle(env.DB, { schema }), env.R2).catch((err) =>
+        console.error("[cron] spam purge failed:", err),
       ),
     );
   },

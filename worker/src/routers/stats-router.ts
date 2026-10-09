@@ -3,6 +3,7 @@ import { and, sql } from "drizzle-orm";
 import { people } from "../db/people.schema";
 import { emails } from "../db/emails.schema";
 import { senderIdentities } from "../db/sender-identities.schema";
+import { spamEmails } from "../db/spam.schema";
 import { json200Response } from "../lib/helpers";
 import { inboxFilter, isInboxAllowed } from "../lib/inbox-permissions";
 import type { Variables } from "../variables";
@@ -16,6 +17,8 @@ const StatsSchema = z.object({
   totalPeople: z.number(),
   totalEmails: z.number(),
   unreadCount: z.number(),
+  /** Mensagens no Spam das caixas visíveis (some sozinho em 30 dias). */
+  spamCount: z.number(),
   // `recipients` e `senderIdentities` sao quem pode ENVIAR (linha em sender_identities).
   // `inboxes` e quem RECEBE. Sao listas diferentes e confundi-las quebra os dois lados:
   // oferecer no "De:" um endereco sem identidade faz o envio cair no provedor default e
@@ -92,6 +95,11 @@ statsRouter.openapi(statsRoute, async (c) => {
           : sql`${people.id} IN (SELECT person_id FROM ${emails} WHERE ${emails.recipient} IN ${allowed.inboxes})`,
     );
 
+  const spamRow = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(spamEmails)
+    .where(inboxFilter(allowed, spamEmails.recipient) ?? sql`1=1`);
+
   // An inbox is any address that has received mail, plus any configured
   // sender identity -- the same universe GET /api/admin/inboxes reports.
   // Reading sender_identities alone hid every catch-all address that was
@@ -154,6 +162,7 @@ statsRouter.openapi(statsRoute, async (c) => {
       totalPeople: personCountRow[0]?.count ?? 0,
       totalEmails,
       unreadCount,
+      spamCount: spamRow[0]?.count ?? 0,
       recipients: podemEnviar.map((r) => r.email),
       senderIdentities: podemEnviar.map((r) => ({
         email: r.email,

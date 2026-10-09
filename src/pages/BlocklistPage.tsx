@@ -108,8 +108,13 @@ export default function BlocklistPage() {
       });
       setAddOpen(false);
       resetAdd();
-    } catch {
-      setAddError(tx("Não deu para bloquear. Pode ser um endereço nosso."));
+    } catch (err) {
+      const motivo = err instanceof Error ? err.message : "";
+      setAddError(
+        motivo && !motivo.startsWith("API error")
+          ? motivo
+          : tx("Não deu para bloquear. Pode ser um endereço nosso."),
+      );
     } finally {
       setAddSubmitting(false);
     }
@@ -150,7 +155,7 @@ export default function BlocklistPage() {
       <PageHeader
         title={tx("Bloqueios")}
         subtitle={tx(
-          "Endereços e domínios bloqueados somem da caixa, e o e-mail novo deles é descartado.",
+          "Endereços e domínios bloqueados somem da caixa, e o e-mail novo deles vai para o Spam, onde fica 30 dias.",
         )}
         action={
           <button
@@ -172,7 +177,7 @@ export default function BlocklistPage() {
             <SectionHeader
               icon={ShieldBan}
               title={`Bloqueados (${items.length}${nextCursor ? "+" : ""})`}
-              subtitle={tx("E-mail que chega desses remetentes é descartado.")}
+              subtitle={tx("O que chega desses remetentes vai para o Spam.")}
             />
             <button
               onClick={() => {

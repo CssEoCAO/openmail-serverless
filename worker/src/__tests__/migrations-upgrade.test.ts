@@ -64,7 +64,7 @@ async function apply(list: { name: string; sql: string }[]) {
   }
 }
 
-describe("migrations 0001 → 0042 on an existing installation", () => {
+describe("migrations 0001 → 0043 on an existing installation", () => {
   beforeAll(async () => {
     // Start from nothing, whatever an earlier file in this worker left behind.
     const { results } = await env.DB.prepare(
@@ -78,10 +78,10 @@ describe("migrations 0001 → 0042 on an existing installation", () => {
     }
   });
 
-  it("has one numbered file per journal entry, 0000 to 0042", () => {
+  it("has one numbered file per journal entry, 0000 to 0043", () => {
     const names = migrations.map((m) => m.name);
     expect(names[0]).toBe("0000_skinny_agent_zero.sql");
-    expect(names.at(-1)).toMatch(/^0042_/);
+    expect(names.at(-1)).toMatch(/^0043_/);
     const nums = names.map((n) => n.slice(0, 4));
     expect(new Set(nums).size).toBe(nums.length);
     expect(nums).toEqual(

@@ -1,4 +1,6 @@
 import { env, exports } from "cloudflare:workers";
+// Carrega o grafo do Worker fora do cronômetro da primeira requisição do teste.
+import "../index";
 import { drizzle } from "drizzle-orm/d1";
 import { schema } from "../db/schema";
 import { users } from "../db/auth.schema";
@@ -92,6 +94,11 @@ export async function applyMigrations() {
     `CREATE INDEX IF NOT EXISTS outbox_status_retry_idx ON outbox_emails(status, next_retry_at)`,
     `CREATE INDEX IF NOT EXISTS outbox_from_idx ON outbox_emails(from_address)`,
     `CREATE INDEX IF NOT EXISTS outbox_sent_email_idx ON outbox_emails(sent_email_id)`,
+    `CREATE TABLE IF NOT EXISTS spam_emails (id TEXT PRIMARY KEY, recipient TEXT NOT NULL, from_address TEXT NOT NULL, from_name TEXT, subject TEXT, body_html TEXT, body_text TEXT, raw_headers TEXT, message_id TEXT, spf TEXT, dkim TEXT, dmarc TEXT, cc TEXT, conversation_id TEXT, attachments TEXT, category TEXT NOT NULL, reason TEXT, confidence REAL, received_at INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS spam_emails_message_recipient_unique ON spam_emails(message_id, recipient)`,
+    `CREATE INDEX IF NOT EXISTS spam_emails_recipient_received_idx ON spam_emails(recipient, received_at)`,
+    `CREATE INDEX IF NOT EXISTS spam_emails_from_idx ON spam_emails(from_address)`,
+    `CREATE TABLE IF NOT EXISTS trusted_senders (email TEXT NOT NULL, recipient TEXT NOT NULL DEFAULT '*', created_at INTEGER NOT NULL, PRIMARY KEY(email, recipient))`,
     `CREATE INDEX IF NOT EXISTS outbox_sequence_email_idx ON outbox_emails(sequence_email_id)`,
     `CREATE TRIGGER IF NOT EXISTS push_subscriptions_user_cap BEFORE INSERT ON push_subscriptions WHEN (SELECT COUNT(*) FROM push_subscriptions WHERE user_id = NEW.user_id) >= 10 BEGIN SELECT RAISE(ABORT, 'push subscription limit'); END`,
     `CREATE TRIGGER IF NOT EXISTS oauth_clients_cap BEFORE INSERT ON oauth_clients WHEN (SELECT COUNT(*) FROM oauth_clients) >= 500 BEGIN SELECT RAISE(ABORT, 'OAuth client capacity reached'); END`,
@@ -293,6 +300,8 @@ export async function cleanDb() {
   await db.exec(`
     DELETE FROM gmail_accounts;
     DELETE FROM drafts;
+    DELETE FROM spam_emails;
+    DELETE FROM trusted_senders;
     DELETE FROM outbox_emails;
     DELETE FROM blocklist;
     DELETE FROM suppressions;

@@ -209,6 +209,7 @@ function Bubble({
             html={visibleEmail.bodyHtml ?? ""}
             attachments={email.attachments}
             collapsedHeight={360}
+            onInteract={handleClick}
           />
         </div>
       ) : (

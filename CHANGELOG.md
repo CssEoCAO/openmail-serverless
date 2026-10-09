@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Recoverable automatic spam.** New senders are classified with Workers AI (`@cf/openai/gpt-oss-120b`); only high-confidence phishing and unsolicited sales pitches go to Spam. Existing block rules now quarantine new messages for 30 days. The Spam page can restore, delete or empty messages within the caller's inbox permissions, preserving message and attachment ids. Admin restoration trusts a sender globally; member restoration only trusts the restored inboxes. Public email domains cannot be blocked as a whole. Requires migration `0043_spam` and the `AI` binding. Blocked mail from the Gmail import also lands in Spam, at its own date, without calling the AI; without AI, manual rules still quarantine mail and unknown senders reach the inbox.
+
+### Fixed
+
+- Use an indexed latest-subject lookup for the combined inbox while preserving recipient and member filters.
+- Restore direct links to people and their selected inbox; clicks inside the sandboxed email frame now mark mail as read. Only show the external-images action for HTML with remote images.
+
 ### Changed
 
 - **English interface.** The interface now ships in English and Portuguese. It follows the browser language (`pt-*` opens in Portuguese, anything else in English) and **Settings → Language** overrides it per browser. Interface text stays in Portuguese in the source and goes through `tx()`; `src/lib/en.ts` holds the English.

@@ -189,6 +189,7 @@ export default function MessageBubble({
             attachments={email.attachments}
             collapsedHeight={420}
             className="overflow-hidden rounded-[6px] border border-border"
+            onInteract={() => isUnread && onMarkRead(email)}
           />
         ) : texto ? (
           <div>

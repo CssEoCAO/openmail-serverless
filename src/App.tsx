@@ -47,6 +47,7 @@ const MessageLinkPage = lazy(() => import("@/pages/MessageLinkPage"));
 const BlocklistPage = lazy(() => import("@/pages/BlocklistPage"));
 const OutboxPage = lazy(() => import("@/pages/OutboxPage"));
 const RascunhosPage = lazy(() => import("@/pages/RascunhosPage"));
+const SpamPage = lazy(() => import("@/pages/SpamPage"));
 
 // Dado de servidor fica 30 s fresco: trocar de caixa e voltar não refaz a chamada.
 // A chegada de e-mail (WebSocket) e as ações invalidam o que mudou.
@@ -191,6 +192,7 @@ function App() {
                   <Route path="/blocklist" element={<BlocklistPage />} />
                   <Route path="/outbox" element={<OutboxPage />} />
                   <Route path="/rascunhos" element={<RascunhosPage />} />
+                  <Route path="/spam" element={<SpamPage />} />
                   <Route path="/admin/users" element={<AdminUsersPage />} />
                   <Route
                     path="/admin/suppressions"

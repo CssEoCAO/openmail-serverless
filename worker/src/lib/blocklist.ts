@@ -18,6 +18,8 @@ export function domainOf(email: string): string {
   return at === -1 ? "" : email.slice(at + 1).toLowerCase();
 }
 
+export { ehDominioGratuito } from "../../../src/lib/dominios-gratuitos";
+
 /** True if the sender email (exact) or its domain is on the blocklist. */
 export async function isBlocked(db: Database, email: string): Promise<boolean> {
   const addr = email.trim().toLowerCase();

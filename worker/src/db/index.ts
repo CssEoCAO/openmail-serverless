@@ -18,4 +18,5 @@ export * from "./suppressions.schema";
 export * from "./blocklist.schema";
 export * from "./drafts.schema";
 export * from "./gmail-accounts.schema";
+export * from "./spam.schema";
 export * from "./schema";
