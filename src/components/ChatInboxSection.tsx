@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { Email } from "@/lib/api";
 import { fetchDraft } from "@/lib/api";
+import { useMarkReadOnOpen } from "@/hooks/useMarkReadOnOpen";
 import type { ThreadInboxGroup } from "@/components/ThreadInboxSection";
 import AttachmentList from "@/components/AttachmentList";
 import ChatQuickReply from "@/components/ChatQuickReply";
@@ -115,6 +116,7 @@ function Bubble({
   onReassign,
   onReply,
 }: BubbleProps) {
+  useMarkReadOnOpen(email, onMarkRead);
   // Resolve the sender label for received bubbles. In a group conversation,
   // each received bubble is from a different person; senderResolver lets
   // the parent supply per-message identity. Falls back to nothing for 1-on-1.

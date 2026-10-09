@@ -370,6 +370,7 @@ export default function InboxPage() {
       ),
     );
     void qc.invalidateQueries({ queryKey: chaves.stats });
+    void qc.invalidateQueries({ queryKey: chaves.conversas });
   }
 
   // O remetente (ou o domínio dele) acabou de ser bloqueado: a conversa some da caixa.

@@ -71,7 +71,11 @@ export default function ThreadInboxSection({
       internalDomains={internalDomains}
       senderResolver={senderResolver}
       onOpenHtml={onOpenHtml}
-      onMarkRead={onMarkRead}
+      onMarkRead={(opened) => {
+        // Marcar leitura não pode recolher a mensagem que acabou de abrir.
+        setAbertas((s) => new Set(s).add(opened.id));
+        onMarkRead(opened);
+      }}
       onReply={onReply}
       onDelete={onDelete}
       onReassign={onReassign}

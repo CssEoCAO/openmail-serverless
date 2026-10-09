@@ -108,6 +108,7 @@ export default function ConversationDetail({
     try {
       await markEmailRead(email.id, true);
       void qc.invalidateQueries({ queryKey: chaves.stats });
+      void qc.invalidateQueries({ queryKey: chaves.conversas });
     } catch {
       recarregar();
     }

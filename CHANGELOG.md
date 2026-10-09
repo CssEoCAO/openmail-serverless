@@ -62,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Opening a message marks it read.** Received messages are marked as read when opened in thread or chat view, including group conversations. Inbox counters refresh automatically, older messages stay open, and a failed update keeps the message unread without retrying in a loop.
 - **Template editor opened blank.** Two copies of `@codemirror/state` and `@codemirror/view` in `yarn.lock` (since the 2026-10-09 dependency update) broke CodeMirror's instance checks; `resolutions` pins one of each.
 - **Clicking inside an HTML message counts again.** Clicks inside the sandboxed iframe never reached the message around it, so clicking the body did not mark it read.
 - **Deleting a person refreshes the counts.** The total, the pagination and the unread counters now come back from the server instead of staying at the old values.

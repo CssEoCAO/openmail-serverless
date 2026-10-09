@@ -15,6 +15,7 @@ import CcChips from "@/components/CcChips";
 import EmailHtmlFrame from "@/components/EmailHtmlFrame";
 import Monograma from "@/components/Monograma";
 import type { Email } from "@/lib/api";
+import { useMarkReadOnOpen } from "@/hooks/useMarkReadOnOpen";
 import { copyMessageLink, messageDomId } from "@/lib/message-link";
 import { dataHora } from "@/lib/datas";
 import { cn } from "@/lib/utils";
@@ -86,6 +87,7 @@ export default function MessageBubble({
   onDelete,
   onReassign,
 }: MessageBubbleProps) {
+  useMarkReadOnOpen(email, onMarkRead);
   const [expanded, setExpanded] = useState(false);
   const temRascunho = useRascunhos().porEmail.has(email.id);
   const isSent = email.type === "sent";
