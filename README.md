@@ -1,23 +1,66 @@
-<p align="center">
-  <img src="public/saasmail-logo.png" alt="saasmail" width="480" />
-</p>
+# OpenMail Serverless
 
-<p align="center">
-  <a href="https://github.com/choyiny/saasmail/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/choyiny/saasmail/actions/workflows/test.yml/badge.svg" /></a>
-  <a href="https://github.com/choyiny/saasmail/actions/workflows/e2e.yml"><img alt="E2E" src="https://github.com/choyiny/saasmail/actions/workflows/e2e.yml/badge.svg" /></a>
-  <a href="https://github.com/choyiny/saasmail/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/choyiny/saasmail/actions/workflows/codeql.yml/badge.svg" /></a>
-  <a href="https://github.com/choyiny/saasmail/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/choyiny/saasmail?sort=semver" /></a>
-  <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" /></a>
-  <a href="https://workers.cloudflare.com/"><img alt="Cloudflare Workers" src="https://img.shields.io/badge/runs%20on-Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white" /></a>
-</p>
+**Caixa de e-mail compartilhada que roda inteira no Cloudflare Workers.** Recebe em todos os seus domínios, junta numa linha do tempo por cliente e responde de qualquer caixa, sem servidor de e-mail, sem VM e sem mensalidade por usuário.
 
-**The centralized inbox for SaaS teams.** One unified timeline per customer — marketing, notifications, and support emails collapsed into a single view, per person.
+Mantido pelo time do [Nerd Ofertas](https://nerdofertas.com), que usa o OpenMail Serverless para atender os clientes dos próprios produtos. Fork do [choyiny/saasmail](https://github.com/choyiny/saasmail) (Apache-2.0) com a interface em português e mudanças de uso diário: caixa em três painéis, provedor de envio escolhido por remetente, rascunhos e envio agendado.
 
-Every interaction with a customer matters, and context compounds. saasmail pulls the promo blast, the billing receipt, and the support thread into the same conversation, so anyone on your team can respond with the full history already in hand.
+![Demonstração: três domínios numa caixa só, responder no Suporte, salvar o rascunho, caixas e usuários](docs/screenshots/demo.gif)
 
-Self-hosted on Cloudflare Workers. Receive with **Cloudflare Email Workers**. Send with **Cloudflare Email Sending**, **Resend**, **Bavimail**, or **Postmark**.
+[Vídeo em MP4](docs/screenshots/demo.mp4) · 26 segundos. Os domínios, as pessoas e as mensagens são fictícios.
 
-<img width="5088" height="3106" alt="saasmail-new" src="https://github.com/user-attachments/assets/407a8b4e-3ba0-4ed9-ae8a-f39dee861e56" />
+## Telas
+
+| Três domínios numa caixa só                                                                           | Conversa                                                                                                                      |
+| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| ![Todas as caixas, agrupadas por domínio](docs/screenshots/inbox.png)                                 | ![Conversa da pessoa, separada por caixa](docs/screenshots/conversa.png)                                                      |
+| **Responder com agendamento**                                                                         | **Caixas, provedor e acesso**                                                                                                 |
+| ![Resposta com rascunho e "Agendar 15/10 às 09:00"](docs/screenshots/responder.png)                   | ![Cada caixa com modo de leitura, provedor (Cloudflare ou Resend), encaminhamento e quem acessa](docs/screenshots/caixas.png) |
+| **Usuários**                                                                                          | **Tema escuro**                                                                                                               |
+| ![Administradores e membros, cada membro com acesso só às suas caixas](docs/screenshots/usuarios.png) | ![A mesma conversa no tema escuro](docs/screenshots/conversa-escuro.png)                                                      |
+
+<p align="center"><img src="docs/screenshots/celular.png" alt="Lista de conversas no celular" width="300"></p>
+
+## Provedores
+
+|             | Cloudflare       | Resend | Postmark | Bavimail |
+| ----------- | ---------------- | ------ | -------- | -------- |
+| **Receber** | ✅ Email Routing | —      | —        | —        |
+| **Enviar**  | ✅ Email Sending | ✅     | ✅       | ✅       |
+
+- **Recebe** pelo Cloudflare Email Routing: o catch-all de cada domínio aponta para o Worker, então qualquer endereço `@seudominio` vira caixa sozinho.
+- **Envia** por Cloudflare Email Sending (3.000 e-mails/mês já incluídos no Workers Paid), Resend, Postmark ou Bavimail.
+- **Por remetente:** com `EMAIL_PROVIDER_ROUTING="identity"`, cada caixa escolhe o provedor na tela **Caixas e envio**. Dá pra mandar a maioria pela Cloudflare e só um domínio pelo Resend. Se o provedor escolhido não estiver configurado, o envio falha com erro em vez de sair por outro.
+- **Guarda** tudo no próprio Cloudflare: mensagens no D1, anexos no R2 e envios agendados e sequências na Queue.
+
+## O que mudou em relação ao saasmail
+
+- Caixa em três painéis: caixas por domínio na lateral, lista e leitura lado a lado, gaveta no celular. A URL acompanha a caixa e a conversa abertas.
+- Abertura mais rápida: primeira carga de 450 para 222 KB e `placement` opcional para o Worker ficar perto do D1.
+- Provedor de envio por remetente, sem cair em outro provedor calado.
+- Rascunhos salvos no servidor, backup automático da resposta no navegador, botão **Agendar** para o próximo horário comercial e cancelamento do agendado.
+- Resposta a e-mail encaminhado sai pela caixa original.
+- Assunto na lista, HTML original sempre visível e anexos com tipo, tamanho e miniatura.
+- Correções de autorização em bloqueios, sequências e pessoas, e cotas de admissão de entrada.
+
+O histórico de cada mudança está nos commits.
+
+## Quem mantém
+
+O OpenMail Serverless é mantido pelo time do [Nerd Ofertas](https://nerdofertas.com), que constrói ferramentas para afiliados e usa esta caixa no atendimento de todos os produtos abaixo:
+
+- [Nerd Ofertas](https://nerdofertas.com): grupos de ofertas, cupons e bugs de preço em tempo real.
+- [Nerd Cupons](https://nerdcupons.com): cupons de desconto de AliExpress, Amazon, Shopee e Mercado Livre.
+- [Melhores Tech](https://melhorestech.com): análises, notícias e guias de compra de tecnologia.
+- [Bot do Afiliado](https://botdoafiliado.com): converte links de qualquer marketplace e posta as ofertas prontas no Telegram.
+- [Painel do Afiliado](https://paineldoafiliado.com): comissões de afiliado de todos os marketplaces num painel só.
+- [Pixel do Afiliado](https://pixeldoafiliado.com): rastreia cada venda da Shopee por anúncio do Meta e envia conversões pela CAPI.
+- [Nota do Afiliado](https://notadoafiliado.com): emissão automática de NFS-e para a Comissão Extra da Shopee.
+- [Piloto do Afiliado](https://pilotodoafiliado.com.br): publica em todas as redes de uma vez e responde o direct.
+- [MCP do Afiliado](https://mcpdoafiliado.com): as APIs de afiliado dentro do Claude e do ChatGPT.
+
+A partir daqui, a documentação é a do projeto original, em inglês.
+
+---
 
 ## Who this is for
 
@@ -30,8 +73,8 @@ SaaS teams that want a self-hosted email stack on Cloudflare Workers — one sha
 The fastest path is the Claude Code onboarding skill — it provisions every Cloudflare resource, fills out your config, runs migrations, and deploys for you:
 
 ```bash
-git clone https://github.com/choyiny/saasmail.git
-cd saasmail
+git clone https://github.com/CssEoCAO/openmail-serverless.git
+cd openmail-serverless
 claude   # then run /saasmail-onboarding
 ```
 
@@ -472,8 +515,8 @@ The `NotificationsHub` Durable Object is keyed per user (`idFromName(userId)`). 
 saasmail ships with two [Claude Code](https://claude.ai/claude-code) skills that do the install and upgrade for you. This is the path we actively maintain — everything in the manual setup below is what the skills automate.
 
 ```bash
-git clone https://github.com/choyiny/saasmail.git
-cd saasmail
+git clone https://github.com/CssEoCAO/openmail-serverless.git
+cd openmail-serverless
 claude
 ```
 
@@ -499,8 +542,8 @@ Don't have Claude Code? The manual steps below cover the same ground.
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/choyiny/saasmail.git
-cd saasmail
+git clone https://github.com/CssEoCAO/openmail-serverless.git
+cd openmail-serverless
 yarn install
 ```
 
