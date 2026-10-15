@@ -17,7 +17,10 @@ test.describe.serial("global search", () => {
 
     const input = page.getByTestId(TEST_IDS.personSearchInput);
     await expect(input).toBeVisible();
-    await expect(input).toHaveAttribute("placeholder", "Search...");
+    await expect(input).toHaveAttribute(
+      "placeholder",
+      "Search by name, email or subject",
+    );
   });
 
   test("clear button is hidden when search is empty", async ({ page }) => {
@@ -108,7 +111,7 @@ test.describe.serial("global search", () => {
     const input = page.getByTestId(TEST_IDS.personSearchInput);
     await input.fill("xyzzyunlikely");
 
-    await expect(page.locator("text=No people found")).toBeVisible();
+    await expect(page.getByText("No conversations here")).toBeVisible();
   });
 
   test("clearing search restores full list", async ({ page }) => {

@@ -16,11 +16,21 @@ import { BASE_URL, MEMBER, loginViaApi } from "../support/login";
 
 const TEXTO = "Resposta em rascunho pelo e2e";
 
+// Este arquivo confere a interface em português (o resto da suíte roda em inglês).
+test.use({ locale: "pt-BR" });
+
 async function abrirPessoa(page: Page, nome: string, tab: string) {
   await page.goto("/inbox/todas");
   await expect(page.getByText(nome)).toBeVisible();
   await page.getByText(nome).click();
-  await page.locator(`[data-testid="inbox-tab"]`, { hasText: tab }).click();
+  await expect(
+    page.getByRole("heading", { name: nome, level: 2 }),
+  ).toBeVisible();
+  // As abas só aparecem quando a pessoa tem mensagens em mais de uma caixa,
+  // e só depois que as mensagens carregam.
+  await expect(page.getByTestId("message-reply").first()).toBeVisible();
+  const abas = page.locator(`[data-testid="inbox-tab"]`);
+  if ((await abas.count()) > 0) await abas.filter({ hasText: tab }).click();
 }
 
 /** Abre o composer numa bolha e espera o GET do rascunho terminar. */
@@ -88,7 +98,7 @@ test.describe.serial("reply drafts", () => {
     });
     expect(lista.drafts[0].bodyText).toContain(TEXTO);
 
-    await composer.getByRole("button", { name: "Cancel" }).click();
+    await composer.getByRole("button", { name: "Cancelar" }).click();
     await expect(composer).not.toBeVisible();
 
     // Marcado na bolha e na linha da caixa.
@@ -124,7 +134,7 @@ test.describe.serial("reply drafts", () => {
     await expect(page.getByTestId("reply-draft-hint")).toHaveText(
       /Rascunho salvo/,
     );
-    await composer.getByRole("button", { name: "Cancel" }).click();
+    await composer.getByRole("button", { name: "Cancelar" }).click();
   });
 
   test("closing before the backup debounce keeps the text; a failed PUT keeps it too and never says saved", async ({
@@ -136,7 +146,7 @@ test.describe.serial("reply drafts", () => {
     await composer.locator(".ProseMirror").click();
     await page.keyboard.type("texto do Bob");
     // Fecha na hora (bem antes dos 600 ms do backup).
-    await composer.getByRole("button", { name: "Cancel" }).click();
+    await composer.getByRole("button", { name: "Cancelar" }).click();
     await expect(composer).not.toBeVisible();
 
     composer = await abrirComposer(page, bubbles.first());
@@ -164,7 +174,7 @@ test.describe.serial("reply drafts", () => {
     );
     await expect(composer).toBeVisible();
     await page.unroute("**/api/drafts/e_s_b1");
-    await composer.getByRole("button", { name: "Cancel" }).click();
+    await composer.getByRole("button", { name: "Cancelar" }).click();
   });
 
   test("another user with the same inbox sees neither the server draft nor the local backup", async ({
@@ -205,7 +215,7 @@ test.describe.serial("reply drafts", () => {
     await expect(page.getByTestId("rascunho-pill")).toHaveCount(0);
     let composer = await abrirComposer(page, bubbles.first());
     await expect(composer.locator(".ProseMirror")).not.toContainText(TEXTO);
-    await composer.getByRole("button", { name: "Cancel" }).click();
+    await composer.getByRole("button", { name: "Cancelar" }).click();
 
     await abrirPessoa(page, "Bob Brown", "support");
     composer = await abrirComposer(
@@ -215,7 +225,7 @@ test.describe.serial("reply drafts", () => {
     await expect(composer.locator(".ProseMirror")).not.toContainText(
       "texto do Bob",
     );
-    await composer.getByRole("button", { name: "Cancel" }).click();
+    await composer.getByRole("button", { name: "Cancelar" }).click();
 
     // Volta pro admin.
     const adminState = JSON.parse(
@@ -237,19 +247,19 @@ test.describe.serial("reply drafts", () => {
     await reply.click();
     const composer = page.getByTestId(TEST_IDS.replyComposer);
     await expect(composer).toBeVisible();
-    await composer.getByRole("button", { name: "Cancel" }).click();
+    await composer.getByRole("button", { name: "Cancelar" }).click();
     await expect(composer).not.toBeVisible();
 
-    // Modal HTML: "View" abre o modal, "Responder" fecha o modal e abre o composer.
+    // Modal HTML: "Ver original" abre o modal, "Responder" fecha o modal e abre o composer.
     await page
-      .getByRole("button", { name: /^View$/ })
+      .getByRole("button", { name: "Ver original", exact: true })
       .first()
       .click();
     const modal = page.getByRole("dialog");
     await expect(modal.getByTestId("modal-reply")).toBeVisible();
     await modal.getByTestId("modal-reply").click();
     await expect(composer).toBeVisible();
-    await composer.getByRole("button", { name: "Cancel" }).click();
+    await composer.getByRole("button", { name: "Cancelar" }).click();
   });
 
   test("an inbox that receives but has no sender identity can save a draft and cannot send", async ({
@@ -284,7 +294,7 @@ test.describe.serial("reply drafts", () => {
     await expect(page.getByTestId("reply-draft-hint")).toHaveText(
       /Rascunho salvo/,
     );
-    await composer.getByRole("button", { name: "Cancel" }).click();
+    await composer.getByRole("button", { name: "Cancelar" }).click();
     await api.delete(`/api/drafts/${(await (await put).json()).emailId}`, {
       headers: { origin: BASE_URL },
     });
@@ -332,7 +342,7 @@ test.describe.serial("reply drafts", () => {
     await expect(composer.getByTestId("reply-backup-pending")).toBeVisible();
     // Regressão: o antigo debounce apagava este backup após 600 ms.
     await page.waitForTimeout(750);
-    await composer.getByRole("button", { name: "Cancel" }).click();
+    await composer.getByRole("button", { name: "Cancelar" }).click();
     expect(
       await page.evaluate(
         (key) => JSON.parse(localStorage.getItem(key)!).bodyText,
@@ -384,10 +394,10 @@ test.describe.serial("reply drafts", () => {
         composer.getByTestId("reply-schedule-button"),
       ).toBeDisabled();
       await expect(
-        composer.getByRole("button", { name: "Cancel" }),
+        composer.getByRole("button", { name: "Cancelar" }),
       ).toBeDisabled();
       await expect(
-        composer.getByRole("button", { name: "Close", exact: true }),
+        composer.getByRole("button", { name: "Fechar", exact: true }),
       ).toBeDisabled();
       expect(
         await composer
@@ -401,7 +411,7 @@ test.describe.serial("reply drafts", () => {
       "data-estado",
       "salvo",
     );
-    await composer.getByRole("button", { name: "Cancel" }).click();
+    await composer.getByRole("button", { name: "Cancelar" }).click();
     await api.delete("/api/drafts/e_s_b2", { headers: { origin: BASE_URL } });
     await page.evaluate(() => localStorage.clear());
     await page.route("**/api/drafts", (route) =>

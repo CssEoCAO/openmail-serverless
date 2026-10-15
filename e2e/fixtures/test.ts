@@ -21,6 +21,8 @@ export const test = base.extend<Fixtures>({
     const ctx = await playwright.request.newContext({
       baseURL: BASE_URL,
       storageState: "e2e/.auth/admin.json",
+      // Cookie-authenticated writes must carry the Origin a browser sends.
+      extraHTTPHeaders: { origin: BASE_URL },
     });
     await use(ctx);
     await ctx.dispose();

@@ -29,11 +29,12 @@ test.describe.serial("chat-mode display (support@)", () => {
     const bubbles = page.getByTestId(TEST_IDS.chatBubble);
     await expect(bubbles).toHaveCount(2);
 
-    // The body text of at least one bubble should be visible
-    // body_text for e_s_a1 is "login", e_s_a2 is "still"
-    // The chat section renders body_text (or strips HTML to text).
+    // The body of at least one bubble should be visible. Bodies render as the
+    // original HTML in a sandboxed iframe (EmailHtmlFrame).
     // body_html is <p>I can't log in.</p> and <p>Tried that, still broken.</p>
-    await expect(bubbles.first()).toContainText("login");
+    await expect(
+      bubbles.first().locator("iframe").contentFrame().locator("body"),
+    ).toContainText("log in");
 
     // Chat mode does NOT render subjects as visible UI headers.
     // The subjects "Help with login" / "Re: Help with login" should not appear
@@ -46,8 +47,8 @@ test.describe.serial("chat-mode display (support@)", () => {
       page.getByRole("heading", { name: /Re: Help with login/i }),
     ).not.toBeVisible();
 
-    // Inline composer: ChatQuickReply renders a textarea with placeholder "Type a reply…"
-    const composer = page.getByPlaceholder(/Type a reply/i);
+    // Inline composer: ChatQuickReply renders a textarea with placeholder "Write a reply…"
+    const composer = page.getByPlaceholder(/Write a reply/i);
     await expect(composer).toBeVisible();
 
     // The send button is inline (not inside a modal)

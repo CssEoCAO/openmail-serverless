@@ -36,10 +36,15 @@ test.describe.serial("sidebar unread count stays in sync", () => {
       .locator(`[data-testid="inbox-tab"]`, { hasText: "support" })
       .click();
 
-    // Click the first chat bubble (support@e2e.test, chat-mode) to mark it read.
+    // Click the body of the first chat bubble (support@e2e.test, chat-mode) to
+    // mark it read. The body is a sandboxed iframe; the click must still count.
     const firstBubble = page.getByTestId(TEST_IDS.chatBubble).first();
     await expect(firstBubble).toBeVisible();
-    await firstBubble.click();
+    await firstBubble
+      .locator("iframe")
+      .contentFrame()
+      .getByText("I can't log in.")
+      .click();
 
     // Badge should drop to 3 immediately — no reload required.
     await expect(aliceBadge).toHaveText("3");

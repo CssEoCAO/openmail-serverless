@@ -61,8 +61,11 @@ test.describe.serial("reply to own sent message", () => {
     // PersonDetail thread view, so reload the page to pick up the newly
     // sent email. Then reopen Alice's person detail.
     await page.reload();
-    await expect(page.getByText("Alice Anderson")).toBeVisible();
-    await page.getByText("Alice Anderson").click();
+    const aliceRow = page.locator(
+      `[data-testid="${TEST_IDS.personRow}"][data-person-id="p_alice"]`,
+    );
+    await expect(aliceRow).toBeVisible();
+    await aliceRow.click();
 
     // ── Step 2: find the new sent bubble and click Reply ──────────────────
     // Inbox groups render only the latest email per group as a MessageBubble.
@@ -82,7 +85,7 @@ test.describe.serial("reply to own sent message", () => {
     const replyComposer = page.getByTestId(TEST_IDS.replyComposer);
     await expect(replyComposer).toBeVisible();
 
-    const freeformTab = page.getByRole("button", { name: "Freeform" });
+    const freeformTab = page.getByRole("button", { name: "Free text" });
     await expect(freeformTab).toBeVisible();
 
     // ── Step 4: type into the reply's ProseMirror ─────────────────────────

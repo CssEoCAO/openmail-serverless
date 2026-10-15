@@ -93,8 +93,11 @@ test.describe.serial("delete person", () => {
 
     // Right panel should revert to the empty state.
     await expect(
-      page.locator("text=Select a person to view emails"),
+      page.getByText("Choose a conversation from the list."),
     ).toBeVisible();
+
+    // The header count comes back from the server without Bob.
+    await expect(page.getByText(/· 1 conversation$/)).toBeVisible();
   });
 
   test("deletion persists after page reload", async ({ page }) => {

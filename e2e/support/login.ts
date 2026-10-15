@@ -15,10 +15,13 @@ export const MEMBER = {
 
 export const BASE_URL = "http://localhost:8788";
 
+/** Bootstrap token the e2e DB is authorized for (see authorizeSetup). */
+export const E2E_SETUP_TOKEN = "e2e-setup-token";
+
 /**
  * Creates the first admin user via POST /api/setup.
- * Only works when the DB has no users (returns 403 otherwise).
- * Body: { name, email, password }
+ * Only works when the DB has no users and authorizeSetup() ran (403 otherwise).
+ * Body: { name, email, password, bootstrapToken }
  */
 export async function createAdmin(request: APIRequestContext): Promise<void> {
   const res = await request.post(`${BASE_URL}/api/setup`, {
@@ -26,6 +29,7 @@ export async function createAdmin(request: APIRequestContext): Promise<void> {
       name: ADMIN.name,
       email: ADMIN.email,
       password: ADMIN.password,
+      bootstrapToken: E2E_SETUP_TOKEN,
     },
   });
   if (!res.ok()) {

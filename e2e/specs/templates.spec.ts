@@ -46,11 +46,9 @@ test.describe.serial("templates CRUD", () => {
     await page.getByRole("button", { name: /new template/i }).click();
     await expect(page).toHaveURL(/\/templates\/new/);
 
-    // Fill metadata. Editor placeholders changed in the design refresh:
-    //   Name placeholder: "Welcome email" (was "Untitled Template")
-    //   Slug + subject placeholders unchanged.
-    await page.getByPlaceholder("Welcome email").fill(tplName);
-    await page.getByPlaceholder("welcome-email").fill(slug);
+    // Fill metadata (name, slug and subject placeholders).
+    await page.getByPlaceholder("Welcome", { exact: true }).fill(tplName);
+    await page.getByPlaceholder("welcome", { exact: true }).fill(slug);
     await page.getByPlaceholder("Welcome, {{name}}!").fill(subject);
 
     // Type body HTML into CodeMirror
@@ -108,7 +106,9 @@ test.describe.serial("templates CRUD", () => {
 
     // Open the editor
     await page.goto(`/templates/${slug}/edit`);
-    await expect(page.getByPlaceholder("Welcome email")).toHaveValue(tplName);
+    await expect(page.getByPlaceholder("Welcome", { exact: true })).toHaveValue(
+      tplName,
+    );
 
     // Replace the HTML body
     const newBody = "<p>Updated body content</p>";
@@ -119,7 +119,7 @@ test.describe.serial("templates CRUD", () => {
     await page.keyboard.type(newBody);
 
     // Save (button reads "Save changes" in edit mode)
-    await page.getByRole("button", { name: "Save changes" }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page).toHaveURL(/\/templates$/);
 
     // Re-open the editor and verify content persisted
