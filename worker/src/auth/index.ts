@@ -6,7 +6,7 @@ import { passkey } from "@better-auth/passkey";
 import { drizzle } from "drizzle-orm/d1";
 import { schema } from "../db/schema";
 import { MCP_SCOPES } from "./scopes";
-import { mcpAudience, oauthIssuer } from "../mcp/resource";
+import { mcpAudience } from "../mcp/resource";
 
 /**
  * Scopes advertised to OAuth clients: the OpenID set plus saasmail's own
@@ -67,11 +67,26 @@ export function createAuth(env?: CloudflareBindings) {
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,
         scopes: OAUTH_SCOPES,
-        // A `resource` outside this list is rejected as invalid_request, and
-        // an access token is only issued as a *JWT* when a resource was
-        // requested — an opaque token can't be verified locally against JWKS.
-        // The MCP audience therefore has to be declared here.
-        validAudiences: [oauthIssuer(baseURL), mcpAudience(baseURL)],
+        // 1.7 replaced `validAudiences` with persisted resources (seeded into
+        // `oauth_resources` at boot). A `resource` not listed here is
+        // rejected as invalid_target, and an access token is only issued as a
+        // *JWT* when a resource was requested — an opaque token can't be
+        // verified locally against JWKS. The MCP endpoint is the only resource
+        // server, so it is the only resource; the issuer audience 1.6 needed
+        // is gone (the userinfo audience is added by the provider itself).
+        resources: [mcpAudience(baseURL)],
+        // Per-client linkage (default on) would make every client registered
+        // before 1.7 fail with invalid_target, and with a single resource it
+        // gates nothing: any client allowed to authorize may target /mcp.
+        // The GHSA-p2fr fix — the resource is bound to the user's grant and
+        // can only narrow on token/refresh — does not depend on this.
+        enforcePerClientResources: false,
+        // 1.7 treats a registration without `application_type` as "web",
+        // which forbids loopback redirects — exactly what local MCP clients
+        // (Claude Code, the MCP SDK) register: http://localhost:<port>/...
+        // "native" accepts those and still accepts https callbacks such as
+        // claude.ai's, which is what 1.6 allowed.
+        clientRegistrationDefaultApplicationType: "native",
       }),
     ],
     advanced: {

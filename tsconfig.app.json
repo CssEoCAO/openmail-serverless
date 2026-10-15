@@ -8,6 +8,9 @@
     "baseUrl": ".",
     "paths": { "@/*": ["./src/*"], "@worker/*": ["./worker/src/*"] },
     "strict": false,
+    // better-auth 1.7 client types collapse `useSession().data` to `never`
+    // without it; the frontend already passes with it on.
+    "strictNullChecks": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "noEmit": true

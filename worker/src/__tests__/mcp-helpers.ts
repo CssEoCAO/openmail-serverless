@@ -132,7 +132,7 @@ export async function registerClient(scope: string) {
   });
   // RFC 7591 specifies 201; better-auth answers 200. Accept either so this
   // doesn't break if the provider tightens it later.
-  expect([200, 201]).toContain(res.status);
+  expect([200, 201], await res.clone().text()).toContain(res.status);
   return (await res.json()) as { client_id: string };
 }
 
@@ -198,19 +198,21 @@ export function exchangeToken(fields: Record<string, string>) {
 export async function runFlow(
   creds: Credentials,
   scope: string,
-  opts: { resource?: string } = {},
+  // `null` omits the resource indicator altogether.
+  opts: { resource?: string | null } = {},
 ): Promise<{ code: string; verifier: string; clientId: string }> {
   const jar = new Jar();
   await signIn(jar, creds);
   const { client_id } = await registerClient(scope);
   const { verifier, challenge } = await pkce();
 
+  const resource = opts.resource === undefined ? MCP_AUDIENCE : opts.resource;
   const { location } = await authorizeAndConsent(jar, {
     client_id,
     redirect_uri: REDIRECT_URI,
     response_type: "code",
     scope,
-    resource: opts.resource ?? MCP_AUDIENCE,
+    ...(resource === null ? {} : { resource }),
     code_challenge: challenge,
     code_challenge_method: "S256",
     state: "test-state",
