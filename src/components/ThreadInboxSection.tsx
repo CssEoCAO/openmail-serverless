@@ -11,6 +11,7 @@ import { dataHora } from "@/lib/datas";
 import type { Email } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 export interface ThreadInboxGroup {
   inbox: string;
   emails: Email[]; // da mais nova para a mais antiga
@@ -89,8 +90,8 @@ export default function ThreadInboxSection({
           className="justify-self-start rounded-[6px] px-2 py-1 text-xs font-medium text-primary-ink hover:bg-primary-soft"
         >
           {isOlderExpanded
-            ? "Recolher as anteriores"
-            : `Abrir as ${anteriores.length} anteriores`}
+            ? tx("Recolher as anteriores")
+            : tx("Abrir as {0} anteriores", anteriores.length)}
         </button>
       )}
       {anteriores.map((email, idx) => {
@@ -121,7 +122,7 @@ export default function ThreadInboxSection({
               <span className="min-w-0 flex-1 truncate text-[13px] text-text-tertiary">
                 {textoDe(email).replace(/\s+/g, " ").trim() ||
                   email.subject ||
-                  "(sem texto)"}
+                  tx("(sem texto)")}
               </span>
               <span className="shrink-0 text-xs text-text-tertiary tabular-nums">
                 {dataHora(email.timestamp)}

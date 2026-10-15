@@ -30,6 +30,7 @@ import {
 } from "@/lib/template-syntax";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 const EMPTY_ANALYSIS: TemplateAnalysis = {
   required: [],
   optional: [],
@@ -107,7 +108,7 @@ export default function TemplateEditorPage() {
         setSubject(t.subject);
         setBodyHtml(t.bodyHtml);
       })
-      .catch(() => setError("Modelo não encontrado"))
+      .catch(() => setError(tx("Modelo não encontrado")))
       .finally(() => setLoading(false));
   }, [slug]);
 
@@ -123,7 +124,7 @@ export default function TemplateEditorPage() {
       }
       navigate("/templates");
     } catch {
-      setError("Não deu para salvar o modelo");
+      setError(tx("Não deu para salvar o modelo"));
     } finally {
       setSaving(false);
     }
@@ -132,7 +133,7 @@ export default function TemplateEditorPage() {
   if (loading) {
     return (
       <PageContainer>
-        <p className="pt-10 text-sm text-text-tertiary">Carregando…</p>
+        <p className="pt-10 text-sm text-text-tertiary">{tx("Carregando…")}</p>
       </PageContainer>
     );
   }
@@ -145,16 +146,16 @@ export default function TemplateEditorPage() {
         className="-mt-1 mb-1 inline-flex items-center gap-1 text-xs font-medium text-text-tertiary transition-colors hover:text-text-primary"
       >
         <ArrowLeft size={12} />
-        Modelos
+        {tx("Modelos")}
       </Link>
 
       <PageHeader
-        title={isEdit ? name || "Editar modelo" : "Novo modelo"}
+        title={isEdit ? name || tx("Editar modelo") : tx("Novo modelo")}
         subtitle={
           isEdit && slugValue ? (
             <span className="font-mono">{slugValue}</span>
           ) : (
-            "E-mail HTML reaproveitável com {{variável}}."
+            tx("E-mail HTML reaproveitável com {{variável}}.")
           )
         }
         action={
@@ -164,7 +165,7 @@ export default function TemplateEditorPage() {
               onClick={() => navigate("/templates")}
               className="rounded-[6px] border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
             >
-              Cancelar
+              {tx("Cancelar")}
             </button>
             <button
               type="button"
@@ -172,7 +173,11 @@ export default function TemplateEditorPage() {
               disabled={saving}
               className="rounded-[6px] bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {saving ? "Salvando…" : isEdit ? "Salvar" : "Criar modelo"}
+              {saving
+                ? tx("Salvando…")
+                : isEdit
+                  ? tx("Salvar")
+                  : tx("Criar modelo")}
             </button>
           </div>
         }
@@ -192,16 +197,18 @@ export default function TemplateEditorPage() {
         <section className="rounded-[8px] bg-card p-5 ring-1 ring-border">
           <SectionHeader
             icon={Sparkles}
-            title="Identificação"
-            subtitle="O slug é o identificador fixo que a API e as sequências usam."
+            title={tx("Identificação")}
+            subtitle={tx(
+              "O slug é o identificador fixo que a API e as sequências usam.",
+            )}
           />
 
           <div className="mt-4 space-y-4">
-            <Field label="Nome" hint="Aparece na lista de modelos.">
+            <Field label={tx("Nome")} hint={tx("Aparece na lista de modelos.")}>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Boas-vindas"
+                placeholder={tx("Boas-vindas")}
                 required
                 className={FORM_INPUT_CLASS}
               />
@@ -209,11 +216,11 @@ export default function TemplateEditorPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
-                label="Slug"
+                label={tx("Slug")}
                 hint={
                   isEdit
-                    ? "O slug não muda depois que o modelo existe."
-                    : "Letras minúsculas, números e hífens."
+                    ? tx("O slug não muda depois que o modelo existe.")
+                    : tx("Letras minúsculas, números e hífens.")
                 }
               >
                 <input
@@ -221,7 +228,7 @@ export default function TemplateEditorPage() {
                   onChange={(e) => setSlugValue(e.target.value)}
                   placeholder="boas-vindas"
                   pattern="[a-z0-9-]+"
-                  title="Só letras minúsculas, números e hífens"
+                  title={tx("Só letras minúsculas, números e hífens")}
                   disabled={isEdit}
                   required
                   className={cn(
@@ -233,22 +240,23 @@ export default function TemplateEditorPage() {
               </Field>
 
               <Field
-                label="Assunto"
+                label={tx("Assunto")}
                 hint={
                   <>
-                    Use{" "}
+                    {tx("Use")}{" "}
                     <code className="rounded bg-bg-muted px-1 py-0.5 font-mono text-[10px]">
-                      {`{{variable}}`}
+                      {tx("{{variable}}")}
                     </code>{" "}
-                    para os campos. Aqui é texto puro, não HTML: os valores
-                    entram sem escape, diferente do corpo.
+                    {tx(
+                      "para os campos. Aqui é texto puro, não HTML: os valores entram sem escape, diferente do corpo.",
+                    )}
                   </>
                 }
               >
                 <input
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  placeholder="Boas-vindas, {{nome}}!"
+                  placeholder={tx("Boas-vindas, {{nome}}!")}
                   required
                   className={FORM_INPUT_CLASS}
                 />
@@ -263,10 +271,10 @@ export default function TemplateEditorPage() {
             <div className="min-w-0">
               <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-primary">
                 <Code2 size={13} className="text-text-tertiary" />
-                Corpo
+                {tx("Corpo")}
               </h2>
               <p className="mt-0.5 text-xs font-light text-text-secondary">
-                HTML à esquerda, o e-mail pronto à direita.
+                {tx("HTML à esquerda, o e-mail pronto à direita.")}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -278,7 +286,7 @@ export default function TemplateEditorPage() {
                 className="inline-flex h-7 items-center gap-1.5 rounded-[6px] border border-border bg-card px-2.5 text-[11px] font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Wand2 size={11} />
-                Formatar
+                {tx("Formatar")}
               </button>
             </div>
           </div>
@@ -293,7 +301,7 @@ export default function TemplateEditorPage() {
             analysis.sections.length > 0) && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-bg-subtle/40 px-5 py-2.5">
               <VarGroup
-                label="Obrigatórias"
+                label={tx("Obrigatórias")}
                 // Section names get their own accurate chip (with the right
                 // sigil) in the Sections group below — showing them again
                 // here as bare `{{name}}` would be a string that never
@@ -304,7 +312,7 @@ export default function TemplateEditorPage() {
                 className="bg-primary-soft text-primary-ink"
               />
               <VarGroup
-                label="Opcionais"
+                label={tx("Opcionais")}
                 // Same exclusion: an inverted or `?`-marked section lands in
                 // `analysis.optional` too, but its optionality is already
                 // shown correctly (as ^ or #...?) in the Sections chip.
@@ -314,7 +322,7 @@ export default function TemplateEditorPage() {
                 className="bg-bg-muted text-text-secondary"
               />
               <VarGroup
-                label="Seções"
+                label={tx("Seções")}
                 items={analysis.sections.map((s) => ({
                   name: s.name,
                   label: sectionChipLabel(s, analysis),
@@ -350,10 +358,10 @@ export default function TemplateEditorPage() {
                   viewMode === "preview" && "md:col-span-2",
                 )}
               >
-                <PaneLabel>Prévia</PaneLabel>
+                <PaneLabel>{tx("Prévia")}</PaneLabel>
                 <div className="min-h-0 flex-1 bg-card">
                   <iframe
-                    title="Prévia do e-mail"
+                    title={tx("Prévia do e-mail")}
                     sandbox="allow-same-origin"
                     srcDoc={previewHtml}
                     className="h-full w-full bg-white"
@@ -388,19 +396,19 @@ function ViewToggle({ mode, onChange }: ViewToggleProps) {
         active={mode === "code"}
         onClick={() => onChange("code")}
         icon={Code2}
-        label="Código"
+        label={tx("Código")}
       />
       <ToggleButton
         active={mode === "split"}
         onClick={() => onChange("split")}
         icon={Sparkles}
-        label="Lado a lado"
+        label={tx("Lado a lado")}
       />
       <ToggleButton
         active={mode === "preview"}
         onClick={() => onChange("preview")}
         icon={Eye}
-        label="Prévia"
+        label={tx("Prévia")}
       />
     </div>
   );
@@ -471,50 +479,43 @@ function VarGroup({
 const SYNTAX_ROWS: Array<{ tag: string; meaning: string }> = [
   {
     tag: "{{key}}",
-    meaning:
+    meaning: tx(
       "Valor, com escape de HTML no corpo. No assunto, que é texto puro, entra sem escape.",
+    ),
   },
   {
     tag: "{{{key}}}",
-    meaning: "Valor cru. Só para HTML gerado pelo seu próprio código.",
+    meaning: tx("Valor cru. Só para HTML gerado pelo seu próprio código."),
   },
   {
     tag: "{{key?}}",
-    meaning: "Opcional: fica vazio em vez de barrar o envio.",
+    meaning: tx("Opcional: fica vazio em vez de barrar o envio."),
   },
   {
     tag: "{{key|nl2br}}",
-    meaning: "Com escape, e as quebras de linha viram <br>.",
+    meaning: tx("Com escape, e as quebras de linha viram <br>."),
   },
   {
     tag: "{{#key}}…{{/key}}",
-    meaning: "Aparece se tiver valor; repete para cada item de uma lista.",
+    meaning: tx("Aparece se tiver valor; repete para cada item de uma lista."),
   },
   {
     tag: "{{#key?}}…{{/key}}",
-    meaning: "Igual a {{#key}}, mas não barra o envio se faltar.",
+    meaning: tx("Igual a {{#key}}, mas não barra o envio se faltar."),
   },
   {
     tag: "{{^key}}…{{/key}}",
-    meaning: "Aparece só se o valor faltar ou estiver vazio.",
+    meaning: tx("Aparece só se o valor faltar ou estiver vazio."),
   },
   {
     tag: "{{.}}",
-    meaning: "O item atual, numa lista de textos simples.",
+    meaning: tx("O item atual, numa lista de textos simples."),
   },
 ];
 
-const LOOP_SNIPPET = `<table>
-  {{#items}}
-    <tr>
-      <td>{{label}}</td>
-      <td>{{currency}}{{price}}</td>
-    </tr>
-  {{/items}}
-</table>
-{{^items}}
-  <p>Nada para mostrar ainda.</p>
-{{/items}}`;
+const LOOP_SNIPPET = tx(
+  "<table>\n  {{#items}}\n    <tr>\n      <td>{{label}}</td>\n      <td>{{currency}}{{price}}</td>\n    </tr>\n  {{/items}}\n</table>\n{{^items}}\n  <p>Nada para mostrar ainda.</p>\n{{/items}}",
+);
 
 const MULTILINE_SNIPPET = `<div style="white-space: pre-line">
   {{message}}
@@ -533,10 +534,10 @@ function SyntaxCard() {
         <div className="min-w-0">
           <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-primary">
             <BookOpen size={13} className="text-text-tertiary" />
-            Sintaxe e estilo
+            {tx("Sintaxe e estilo")}
           </h2>
           <p className="mt-0.5 text-xs font-light text-text-secondary">
-            Todas as marcações e os estilos que valem saber.
+            {tx("Todas as marcações e os estilos que valem saber.")}
           </p>
         </div>
         <ChevronDown
@@ -573,48 +574,60 @@ function SyntaxCard() {
           </div>
 
           <Field
-            label="Listas e estado vazio"
-            hint="Dentro de uma seção o nome procura primeiro no item e depois no nível de cima: {{currency}} pode ficar fora de {{#items}}."
+            label={tx("Listas e estado vazio")}
+            hint={tx(
+              "Dentro de uma seção o nome procura primeiro no item e depois no nível de cima: {{currency}} pode ficar fora de {{#items}}.",
+            )}
           >
             <CodeBlock value={LOOP_SNIPPET} />
           </Field>
 
           <Field
-            label="Valores com várias linhas"
-            hint="O HTML junta as quebras de linha em espaços. Use {{message|nl2br}}, ou mantenha as quebras com um estilo no bloco em volta."
+            label={tx("Valores com várias linhas")}
+            hint={tx(
+              "O HTML junta as quebras de linha em espaços. Use {{message|nl2br}}, ou mantenha as quebras com um estilo no bloco em volta.",
+            )}
           >
             <CodeBlock value={MULTILINE_SNIPPET} />
           </Field>
 
           <div className="rounded-[6px] border border-warning-border bg-warning-bg px-3 py-2.5 text-xs text-warning-text">
-            <strong className="font-medium">Escape por padrão.</strong> Valor
-            com HTML aparece como texto, então não injeta marcação num e-mail
-            assinado pelo nosso domínio. Use{" "}
+            <strong className="font-medium">{tx("Escape por padrão.")}</strong>{" "}
+            {tx(
+              "Valor com HTML aparece como texto, então não injeta marcação num e-mail assinado pelo nosso domínio. Use",
+            )}{" "}
             <code className="rounded bg-warning-bg px-1 font-mono">
-              {`{{{key}}}`}
+              {tx("{{{key}}}")}
             </code>{" "}
-            só para HTML que o seu próprio código gerou.
+            {tx("só para HTML que o seu próprio código gerou.")}
             <div className="mt-1.5">
-              O escape cobre só <code className="font-mono">{`& < > " '`}</code>
-              ; não confere URL. Deixe todo atributo entre aspas (
-              <code className="font-mono">{`href="{{url}}"`}</code>, nunca{" "}
-              <code className="font-mono">{`href={{url}}`}</code>) e não ponha
-              valor de fora num <code className="font-mono">href</code> sem
-              conferir o esquema: <code className="font-mono">javascript:</code>{" "}
-              passa.
+              {tx("O escape cobre só")}{" "}
+              <code className="font-mono">{`& < > " '`}</code>
+              {tx("; não confere URL. Deixe todo atributo entre aspas (")}
+              <code className="font-mono">{tx('href="{{url}}"')}</code>
+              {tx(", nunca")}{" "}
+              <code className="font-mono">{tx("href={{url}}")}</code>
+              {tx(") e não ponha valor de fora num")}{" "}
+              <code className="font-mono">href</code>{" "}
+              {tx("sem conferir o esquema:")}{" "}
+              <code className="font-mono">javascript:</code> passa.
             </div>
           </div>
 
           <div className="rounded-[6px] border border-border bg-bg-subtle/50 px-3 py-2.5 text-xs text-text-secondary">
             <strong className="font-medium text-text-primary">
-              Variável nova afeta quem já envia.
+              {tx("Variável nova afeta quem já envia.")}
             </strong>{" "}
-            Um{" "}
-            <code className="rounded bg-bg-muted px-1 font-mono">{`{{key}}`}</code>{" "}
-            novo vale assim que você salva, e quem chama sem mandar o valor
-            passa a receber 400. Atualize quem chama antes, ou marque como
-            opcional com{" "}
-            <code className="rounded bg-bg-muted px-1 font-mono">{`{{key?}}`}</code>
+            {tx("Um")}{" "}
+            <code className="rounded bg-bg-muted px-1 font-mono">
+              {tx("{{key}}")}
+            </code>{" "}
+            {tx(
+              "novo vale assim que você salva, e quem chama sem mandar o valor passa a receber 400. Atualize quem chama antes, ou marque como opcional com",
+            )}{" "}
+            <code className="rounded bg-bg-muted px-1 font-mono">
+              {tx("{{key?}}")}
+            </code>
             .
           </div>
         </div>
@@ -666,10 +679,11 @@ function ApiReferenceCard({
   );
 
   const endpoint = `${typeof window !== "undefined" ? window.location.origin : ""}/api/email-templates/${slug || "<slug>"}/send`;
-  const curlCommand = `curl -X POST ${endpoint} \\
-  -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer <sua-chave-de-api>" \\
-  -d '${curlBody}'`;
+  const curlCommand = tx(
+    'curl -X POST {0} \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer <sua-chave-de-api>" \\\n  -d \'{1}\'',
+    endpoint,
+    curlBody,
+  );
 
   const errorBody = JSON.stringify(
     {
@@ -692,10 +706,10 @@ function ApiReferenceCard({
         <div className="min-w-0">
           <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-primary">
             <Code2 size={13} className="text-text-tertiary" />
-            Enviar pela API
+            {tx("Enviar pela API")}
           </h2>
           <p className="mt-0.5 text-xs font-light text-text-secondary">
-            Dispare este modelo do seu sistema com um POST autenticado.
+            {tx("Dispare este modelo do seu sistema com um POST autenticado.")}
           </p>
         </div>
         <ChevronDown
@@ -709,14 +723,19 @@ function ApiReferenceCard({
 
       {open && (
         <div className="space-y-5 border-t border-border px-5 py-5">
-          <Field label="Rota" hint="POST nesta URL com corpo em JSON.">
+          <Field
+            label={tx("Rota")}
+            hint={tx("POST nesta URL com corpo em JSON.")}
+          >
             <CodeBlock value={`POST ${endpoint}`} oneLine />
           </Field>
 
           {variables.length > 0 && (
             <Field
-              label="Variáveis obrigatórias"
-              hint="Todas precisam ir no corpo da requisição, senão a API devolve 400."
+              label={tx("Variáveis obrigatórias")}
+              hint={tx(
+                "Todas precisam ir no corpo da requisição, senão a API devolve 400.",
+              )}
             >
               <div className="flex flex-wrap gap-1.5">
                 {variables.map((v) => (
@@ -731,11 +750,11 @@ function ApiReferenceCard({
             </Field>
           )}
 
-          <Field label="Exemplo de requisição">
+          <Field label={tx("Exemplo de requisição")}>
             <CodeBlock value={curlCommand} />
           </Field>
 
-          <Field label="Resposta de erro (400)">
+          <Field label={tx("Resposta de erro (400)")}>
             <CodeBlock value={errorBody} />
           </Field>
         </div>

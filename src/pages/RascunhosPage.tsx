@@ -3,6 +3,7 @@ import { FileText } from "lucide-react";
 import PageHeader, { PageContainer } from "@/components/PageHeader";
 import { useRascunhos, notificarRascunhos } from "@/lib/rascunho";
 
+import { tx } from "@/lib/i18n";
 /**
  * Lista dos rascunhos de resposta do usuário logado, em todas as caixas. Existe
  * para achar um rascunho sem lembrar em qual dos N contatos ele ficou: cada linha
@@ -16,31 +17,36 @@ export default function RascunhosPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Rascunhos"
-        subtitle="Respostas que você começou e ainda não enviou, em todas as caixas. Clique para voltar à mensagem e continuar."
+        title={tx("Rascunhos")}
+        subtitle={tx(
+          "Respostas que você começou e ainda não enviou, em todas as caixas. Clique para voltar à mensagem e continuar.",
+        )}
       />
 
       <section className="overflow-hidden rounded-[8px] bg-card ring-1 ring-border">
         {erro ? (
           <p role="alert" className="px-4 py-6 text-sm text-destructive">
-            Não foi possível carregar os rascunhos.{" "}
+            {tx("Não foi possível carregar os rascunhos.")}{" "}
             <button
               type="button"
               className="underline"
               onClick={notificarRascunhos}
             >
-              Tentar de novo
+              {tx("Tentar de novo")}
             </button>
           </p>
         ) : carregando && lista.length === 0 ? (
-          <p className="px-4 py-6 text-sm text-text-tertiary">Carregando…</p>
+          <p className="px-4 py-6 text-sm text-text-tertiary">
+            {tx("Carregando…")}
+          </p>
         ) : lista.length === 0 ? (
           <p
             data-testid="rascunhos-vazio"
             className="px-4 py-6 text-sm text-text-tertiary"
           >
-            Nenhum rascunho. Abra uma mensagem, clique em Responder e em “Salvar
-            rascunho”.
+            {tx(
+              "Nenhum rascunho. Abra uma mensagem, clique em Responder e em “Salvar rascunho”.",
+            )}
           </p>
         ) : (
           <ul
@@ -85,14 +91,14 @@ export default function RascunhosPage() {
                         </span>
                       </span>
                       <span className="mt-0.5 block truncate text-xs text-text-secondary">
-                        {d.subject?.trim() || "(sem assunto)"}
+                        {d.subject?.trim() || tx("(sem assunto)")}
                       </span>
                       <span className="mt-0.5 block truncate text-xs text-text-tertiary">
                         <span className="font-medium">
                           {d.fromAddress.split("@")[0]}
                         </span>
                         {" · "}
-                        {trecho || "(sem texto)"}
+                        {trecho || tx("(sem texto)")}
                       </span>
                     </span>
                   </button>

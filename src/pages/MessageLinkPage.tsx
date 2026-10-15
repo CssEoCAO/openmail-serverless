@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { fetchEmail } from "@/lib/api";
 
+import { tx } from "@/lib/i18n";
 /**
  * Resolves a shareable `/m/<emailId>` link to the in-app location of the
  * message. Looks up the email's person + owning inbox, then redirects to
@@ -17,7 +18,7 @@ export default function MessageLinkPage() {
 
   useEffect(() => {
     if (!emailId) {
-      setError("Link sem o identificador da mensagem.");
+      setError(tx("Link sem o identificador da mensagem."));
       return;
     }
     let cancelled = false;
@@ -31,7 +32,7 @@ export default function MessageLinkPage() {
           email.type === "received" ? email.recipient : email.fromAddress;
         const personId = email.personId;
         if (!personId || !inbox) {
-          setError("Esta mensagem não abre na caixa.");
+          setError(tx("Esta mensagem não abre na caixa."));
           return;
         }
         navigate(
@@ -41,7 +42,7 @@ export default function MessageLinkPage() {
       })
       .catch(() => {
         if (cancelled) return;
-        setError("Mensagem não encontrada, ou você não tem acesso a ela.");
+        setError(tx("Mensagem não encontrada, ou você não tem acesso a ela."));
       });
     return () => {
       cancelled = true;
@@ -53,14 +54,14 @@ export default function MessageLinkPage() {
       <div className="flex h-full flex-1 items-center justify-center px-6 py-16">
         <div className="max-w-sm rounded-[12px] bg-card p-8 text-center ring-1 ring-border">
           <h2 className="text-base font-semibold text-text-primary">
-            Não deu para abrir a mensagem
+            {tx("Não deu para abrir a mensagem")}
           </h2>
           <p className="mt-2 text-sm text-text-secondary">{error}</p>
           <Link
             to="/"
             className="mt-4 inline-block text-sm font-medium text-primary-ink hover:underline"
           >
-            Voltar à caixa
+            {tx("Voltar à caixa")}
           </Link>
         </div>
       </div>
@@ -69,7 +70,7 @@ export default function MessageLinkPage() {
 
   return (
     <div className="flex h-full flex-1 items-center justify-center text-sm text-text-tertiary">
-      Abrindo a mensagem…
+      {tx("Abrindo a mensagem…")}
     </div>
   );
 }

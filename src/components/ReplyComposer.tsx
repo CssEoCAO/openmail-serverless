@@ -45,13 +45,12 @@ import {
   type Rascunho,
 } from "@/lib/rascunho";
 import { useSession } from "@/lib/auth-client";
-import {
-  proximoHorarioComercial,
-  rotuloBrasilia,
-} from "@worker/lib/horario-comercial";
+import { proximoHorarioComercial } from "@worker/lib/horario-comercial";
+import { rotuloHorario } from "@/lib/datas";
 import { analyzeTemplateClient, chipLabel } from "@/lib/template-syntax";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 const ATTACHMENT_CAP_BYTES = 25 * 1024 * 1024;
 
 interface ReplyComposerProps {
@@ -247,7 +246,9 @@ function ReplyComposerDoUsuario({
     } catch (err) {
       console.warn("Failed to save server draft", err);
       setErroSalvar(
-        "Não foi possível salvar o rascunho no servidor. O texto continua aqui e no backup deste navegador.",
+        tx(
+          "Não foi possível salvar o rascunho no servidor. O texto continua aqui e no backup deste navegador.",
+        ),
       );
     } finally {
       setSalvando(false);
@@ -272,7 +273,7 @@ function ReplyComposerDoUsuario({
     (s) => s.email.toLowerCase() === fromAddress.toLowerCase(),
   );
   // Mesmo modulo do servidor (alias @worker) — ver ComposeModal.
-  const rotuloSlot = rotuloBrasilia(proximoHorarioComercial(Date.now()));
+  const rotuloSlot = rotuloHorario(proximoHorarioComercial(Date.now()));
 
   // Sync the signature trail to the active From inbox.
   useEffect(() => {
@@ -401,7 +402,7 @@ function ReplyComposerDoUsuario({
     setTemplatesError("");
     fetchTemplates()
       .then(setTemplates)
-      .catch(() => setTemplatesError("Não deu para carregar os modelos."))
+      .catch(() => setTemplatesError(tx("Não deu para carregar os modelos.")))
       .finally(() => setTemplatesLoading(false));
   }, [tab, templates.length]);
 
@@ -432,7 +433,7 @@ function ReplyComposerDoUsuario({
         });
       } else {
         if (!selectedSlug) {
-          setError("Escolha um modelo.");
+          setError(tx("Escolha um modelo."));
           setSending(false);
           return;
         }
@@ -468,7 +469,7 @@ function ReplyComposerDoUsuario({
       onSent();
       onClose();
     } catch {
-      setError("Não deu para enviar a resposta. Tente de novo.");
+      setError(tx("Não deu para enviar a resposta. Tente de novo."));
     } finally {
       setSending(false);
     }
@@ -512,7 +513,7 @@ function ReplyComposerDoUsuario({
                 aria-hidden
               />
               <DialogPrimitive.Title className="truncate text-sm font-semibold text-text-primary">
-                Responder · {recipientLabel}
+                {tx("Responder ·")} {recipientLabel}
               </DialogPrimitive.Title>
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
@@ -524,7 +525,7 @@ function ReplyComposerDoUsuario({
               <DialogPrimitive.Close
                 disabled={ocupado}
                 className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
-                aria-label="Fechar"
+                aria-label={tx("Fechar")}
               >
                 <X size={14} />
               </DialogPrimitive.Close>
@@ -536,7 +537,7 @@ function ReplyComposerDoUsuario({
             inert={ocupado || !!backupPendente || remoto === "carregando"}
             className="shrink-0 divide-y divide-border/60 border-b border-border bg-bg-subtle/30"
           >
-            <TrayMetaRow label="De">
+            <TrayMetaRow label={tx("De")}>
               <select
                 value={fromAddress}
                 onChange={(e) => setFromAddress(e.target.value)}
@@ -551,7 +552,7 @@ function ReplyComposerDoUsuario({
                 ))}
               </select>
             </TrayMetaRow>
-            <TrayMetaRow label="Para">
+            <TrayMetaRow label={tx("Para")}>
               <span className="block truncate py-2 pr-3 text-sm text-text-primary">
                 {recipientLabel}
                 {originalEmail?.replyTo &&
@@ -560,14 +561,16 @@ function ReplyComposerDoUsuario({
                     <span
                       data-testid="reply-to-hint"
                       className="ml-2 text-xs font-light text-warning-text"
-                      title="O e-mail original pede resposta para outro endereço (Reply-To). A resposta vai para a pessoa da conversa."
+                      title={tx(
+                        "O e-mail original pede resposta para outro endereço (Reply-To). A resposta vai para a pessoa da conversa.",
+                      )}
                     >
-                      Reply-To: {originalEmail.replyTo}
+                      {tx("Reply-To:")} {originalEmail.replyTo}
                     </span>
                   )}
               </span>
             </TrayMetaRow>
-            <TrayMetaRow label="Cc">
+            <TrayMetaRow label={tx("Cc")}>
               <CcInput
                 value={cc}
                 onChange={setCc}
@@ -584,10 +587,10 @@ function ReplyComposerDoUsuario({
               data-testid="reply-send-unavailable"
               className="shrink-0 border-b border-warning-border bg-warning-bg px-4 py-2 text-xs text-warning-text"
             >
-              <strong>{fromAddress}</strong> recebe e-mails, mas ainda não tem
-              identidade de envio configurada. Você pode salvar o rascunho;
-              enviar fica indisponível até a identidade existir. O remetente não
-              foi trocado.
+              <strong>{fromAddress}</strong>{" "}
+              {tx(
+                "recebe e-mails, mas ainda não tem identidade de envio configurada. Você pode salvar o rascunho; enviar fica indisponível até a identidade existir. O remetente não foi trocado.",
+              )}
             </div>
           )}
           {remoto === "indisponivel" && (
@@ -597,15 +600,16 @@ function ReplyComposerDoUsuario({
               className="flex shrink-0 items-center gap-3 border-b border-warning-border bg-warning-bg px-4 py-2 text-xs text-warning-text"
             >
               <span className="flex-1">
-                Não foi possível consultar o rascunho no servidor. O que você
-                escrever fica só neste navegador até a consulta funcionar.
+                {tx(
+                  "Não foi possível consultar o rascunho no servidor. O que você escrever fica só neste navegador até a consulta funcionar.",
+                )}
               </span>
               <button
                 type="button"
                 onClick={() => setTentativa((n) => n + 1)}
                 className="shrink-0 rounded-[6px] border border-current/30 px-2 py-0.5 font-medium hover:bg-amber-200/40"
               >
-                Tentar de novo
+                {tx("Tentar de novo")}
               </button>
             </div>
           )}
@@ -616,8 +620,9 @@ function ReplyComposerDoUsuario({
               className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-bg-subtle/60 px-4 py-2 text-xs text-text-secondary"
             >
               <span className="flex-1">
-                Este navegador guardou um texto não salvo, diferente do rascunho
-                do servidor. O do servidor está no editor.
+                {tx(
+                  "Este navegador guardou um texto não salvo, diferente do rascunho do servidor. O do servidor está no editor.",
+                )}
               </span>
               <button
                 type="button"
@@ -628,7 +633,7 @@ function ReplyComposerDoUsuario({
                 }}
                 className="rounded-[6px] border border-border bg-card px-2 py-0.5 font-medium text-text-primary hover:bg-bg-muted"
               >
-                Usar texto deste navegador
+                {tx("Usar texto deste navegador")}
               </button>
               <button
                 type="button"
@@ -638,7 +643,7 @@ function ReplyComposerDoUsuario({
                 }}
                 className="rounded-[6px] px-2 py-0.5 font-medium text-text-tertiary hover:text-text-primary"
               >
-                Descartar
+                {tx("Descartar")}
               </button>
             </div>
           )}
@@ -663,8 +668,9 @@ function ReplyComposerDoUsuario({
                     role="status"
                     className="rounded-[8px] border border-warning-border bg-warning-bg px-4 py-2.5 text-xs text-warning-text"
                   >
-                    Não deu para carregar a mensagem original; ela pode ter sido
-                    excluída. A resposta ainda pode ser enviada.
+                    {tx(
+                      "Não deu para carregar a mensagem original; ela pode ter sido excluída. A resposta ainda pode ser enviada.",
+                    )}
                   </div>
                 )}
                 <div className="flex-1">
@@ -680,7 +686,7 @@ function ReplyComposerDoUsuario({
                         data-testid="reply-draft-loading"
                         className="py-3 text-sm text-text-tertiary"
                       >
-                        Consultando rascunho…
+                        {tx("Consultando rascunho…")}
                       </p>
                     ) : (
                       <TiptapEditor
@@ -689,7 +695,7 @@ function ReplyComposerDoUsuario({
                           setBodyHtml(html);
                           setBodyText(text);
                         }}
-                        placeholder="Escreva a resposta…"
+                        placeholder={tx("Escreva a resposta…")}
                       />
                     )}
                     <AttachmentChips
@@ -715,7 +721,7 @@ function ReplyComposerDoUsuario({
               <div className="space-y-4 px-4 py-3 sm:px-5">
                 {templatesLoading ? (
                   <p className="text-sm font-light text-text-tertiary">
-                    Carregando modelos…
+                    {tx("Carregando modelos…")}
                   </p>
                 ) : templatesError ? (
                   <p className="text-sm text-destructive">{templatesError}</p>
@@ -723,14 +729,14 @@ function ReplyComposerDoUsuario({
                   <>
                     <div>
                       <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-text-tertiary">
-                        Modelo
+                        {tx("Modelo")}
                       </label>
                       <select
                         value={selectedSlug}
                         onChange={(e) => setSelectedSlug(e.target.value)}
                         className="w-full rounded-[8px] border border-border bg-card px-3 py-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-text-primary/15"
                       >
-                        <option value="">Escolha um modelo…</option>
+                        <option value="">{tx("Escolha um modelo…")}</option>
                         {templates.map((t) => (
                           <option key={t.slug} value={t.slug}>
                             {t.name}
@@ -743,14 +749,14 @@ function ReplyComposerDoUsuario({
                       <>
                         <div className="rounded-[8px] bg-bg-subtle/60 p-4 ring-1 ring-border">
                           <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-text-tertiary">
-                            Assunto
+                            {tx("Assunto")}
                           </p>
                           <p className="text-sm font-medium text-text-primary">
                             {selectedTemplate.subject}
                           </p>
                           <div className="mt-3 border-t border-border pt-3">
                             <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-text-tertiary">
-                              Prévia do corpo
+                              {tx("Prévia do corpo")}
                             </p>
                             <div
                               className="prose prose-sm max-h-48 max-w-none overflow-auto text-sm text-text-secondary"
@@ -766,7 +772,7 @@ function ReplyComposerDoUsuario({
                         {requiredVars.length > 0 && (
                           <div>
                             <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-text-tertiary">
-                              Variáveis
+                              {tx("Variáveis")}
                             </p>
                             <div className="space-y-2">
                               {requiredVars.map((v) => (
@@ -796,9 +802,9 @@ function ReplyComposerDoUsuario({
                               requiredVars.includes(n),
                             ) && (
                               <p className="mt-2 text-[11px] font-light text-text-tertiary">
-                                Variáveis de seção (#) pedem uma lista de
-                                objetos; este formulário só manda texto, então
-                                envie essas pela API.
+                                {tx(
+                                  "Variáveis de seção (#) pedem uma lista de objetos; este formulário só manda texto, então envie essas pela API.",
+                                )}
                               </p>
                             )}
                           </div>
@@ -821,12 +827,12 @@ function ReplyComposerDoUsuario({
               ) : (
                 <span className="hidden sm:inline">
                   <kbd className="rounded border border-border bg-bg-muted px-1 font-mono text-[10px]">
-                    Ctrl
+                    {tx("Ctrl")}
                   </kbd>
                   <kbd className="ml-1 rounded border border-border bg-bg-muted px-1 font-mono text-[10px]">
-                    Enter
+                    {tx("Enter")}
                   </kbd>{" "}
-                  envia
+                  {tx("envia")}
                 </span>
               )}
             </div>
@@ -854,13 +860,13 @@ function ReplyComposerDoUsuario({
                 {erroSalvar
                   ? erroSalvar
                   : salvando
-                    ? "Salvando rascunho…"
+                    ? tx("Salvando rascunho…")
                     : confirmado !== null && !alterado
-                      ? "Rascunho salvo"
+                      ? tx("Rascunho salvo")
                       : confirmado !== null
-                        ? "Alterações não salvas · backup neste navegador"
-                        : "Não salvo · backup neste navegador"}
-                {files.length > 0 ? " · anexos não são salvos" : ""}
+                        ? tx("Alterações não salvas · backup neste navegador")
+                        : tx("Não salvo · backup neste navegador")}
+                {files.length > 0 ? tx(" · anexos não são salvos") : ""}
               </span>
             )}
             <div className="flex flex-wrap items-center gap-2">
@@ -876,19 +882,21 @@ function ReplyComposerDoUsuario({
                 }
                 title={
                   remoto === "carregando"
-                    ? "Consultando o rascunho no servidor…"
+                    ? tx("Consultando o rascunho no servidor…")
                     : remoto === "indisponivel"
-                      ? "Sem acesso ao servidor: não dá para salvar sem antes ler o que há lá"
+                      ? tx(
+                          "Sem acesso ao servidor: não dá para salvar sem antes ler o que há lá",
+                        )
                       : undefined
                 }
                 className="inline-flex items-center gap-1.5 rounded-[6px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Save size={12} />
                 {salvando
-                  ? "Salvando…"
+                  ? tx("Salvando…")
                   : rascunhoVazio(conteudo) && confirmado !== null
-                    ? "Apagar rascunho"
-                    : "Salvar rascunho"}
+                    ? tx("Apagar rascunho")
+                    : tx("Salvar rascunho")}
               </button>
               <AttachmentPicker
                 onFilesAdded={(added) =>
@@ -902,7 +910,7 @@ function ReplyComposerDoUsuario({
                 disabled={ocupado}
                 className="rounded-[6px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
               >
-                Cancelar
+                {tx("Cancelar")}
               </button>
               <button
                 type="button"
@@ -910,8 +918,11 @@ function ReplyComposerDoUsuario({
                 onClick={() => handleSend(true)}
                 title={
                   identidadeEnvia
-                    ? `Fica na fila e sai ${rotuloSlot}, em horário comercial`
-                    : "Esta caixa ainda não tem identidade de envio"
+                    ? tx(
+                        "Fica na fila e sai {0}, em horário comercial",
+                        rotuloSlot,
+                      )
+                    : tx("Esta caixa ainda não tem identidade de envio")
                 }
                 disabled={
                   ocupado ||
@@ -923,7 +934,7 @@ function ReplyComposerDoUsuario({
                 className="inline-flex items-center gap-1.5 rounded-[6px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Clock size={12} />
-                {sending ? "…" : `Agendar ${rotuloSlot}`}
+                {sending ? "…" : tx("Agendar {0}", rotuloSlot)}
               </button>
               <button
                 type="button"
@@ -932,7 +943,7 @@ function ReplyComposerDoUsuario({
                 title={
                   identidadeEnvia
                     ? undefined
-                    : "Esta caixa ainda não tem identidade de envio"
+                    : tx("Esta caixa ainda não tem identidade de envio")
                 }
                 disabled={
                   ocupado ||
@@ -944,7 +955,7 @@ function ReplyComposerDoUsuario({
                 className="inline-flex items-center gap-1.5 rounded-[6px] bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send size={12} />
-                {sending ? "Enviando…" : "Enviar resposta"}
+                {sending ? tx("Enviando…") : tx("Enviar resposta")}
               </button>
             </div>
           </div>
@@ -966,13 +977,13 @@ function ModePillToggle({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
         active={tab === "freeform"}
         onClick={() => onTab("freeform")}
         icon={Sparkles}
-        label="Texto livre"
+        label={tx("Texto livre")}
       />
       <ModePill
         active={tab === "template"}
         onClick={() => onTab("template")}
         icon={FileText}
-        label="Modelo"
+        label={tx("Modelo")}
       />
     </div>
   );
@@ -1036,7 +1047,7 @@ function ThreadContext({
         <div className="flex min-w-0 items-center gap-2">
           <ReplyIcon size={13} className="shrink-0 text-text-tertiary" />
           <span className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
-            Respondendo a
+            {tx("Respondendo a")}
           </span>
           {original.subject && (
             <span className="truncate text-xs font-medium text-text-secondary">
@@ -1053,12 +1064,12 @@ function ThreadContext({
             {expanded ? (
               <>
                 <ChevronUp size={12} />
-                Esconder histórico
+                {tx("Esconder histórico")}
               </>
             ) : (
               <>
                 <ChevronDown size={12} />
-                Mostrar {olderEmails.length} anteriores
+                {tx("Mostrar")} {olderEmails.length} {tx("anteriores")}
               </>
             )}
           </button>

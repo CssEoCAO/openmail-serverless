@@ -6,11 +6,12 @@ import { quandoCurto, plural } from "@/lib/datas";
 import type { GroupedConversation } from "@/lib/api";
 import { NaoLidasBadge, Selecao, useIntencao } from "@/components/LinhaLista";
 
+import { tx } from "@/lib/i18n";
 /** "Ana, Bruno, Carla" ou "Ana, Bruno +3". */
 export function nomesDoGrupo(
   participants: GroupedConversation["participants"],
 ): string {
-  if (participants.length === 0) return "Conversa em grupo";
+  if (participants.length === 0) return tx("Conversa em grupo");
   const nomes = participants.map((p) =>
     p.name?.trim() ? p.name.trim().split(/\s+/)[0] : p.email.split("@")[0],
   );
@@ -51,7 +52,7 @@ export default function GroupRow({
   const temRascunho = group.participants.some((p) => porPessoa.has(p.id));
   const intencao = useIntencao(onIntencao);
   const naoLida = group.unreadCount > 0;
-  const assunto = group.latestSubject?.trim() || "(sem assunto)";
+  const assunto = group.latestSubject?.trim() || tx("(sem assunto)");
   const nomes = nomesDoGrupo(group.participants);
 
   return (
@@ -84,7 +85,7 @@ export default function GroupRow({
             <Selecao
               marcado={marcada}
               visivel
-              rotulo={`Selecionar conversa com ${nomes}`}
+              rotulo={tx("Selecionar conversa com {0}", nomes)}
               onAlternar={onToggle}
             />
           ) : (
@@ -100,7 +101,7 @@ export default function GroupRow({
                 <Selecao
                   marcado={false}
                   visivel
-                  rotulo={`Selecionar conversa com ${nomes}`}
+                  rotulo={tx("Selecionar conversa com {0}", nomes)}
                   onAlternar={onToggle}
                 />
               </span>
@@ -117,7 +118,7 @@ export default function GroupRow({
           <Users
             size={13}
             className="shrink-0 text-text-tertiary"
-            aria-label="Grupo"
+            aria-label={tx("Grupo")}
           />
           <span className="truncate">{nomes}</span>
         </span>
@@ -153,7 +154,7 @@ export default function GroupRow({
             {plural(group.totalCount, "mensagem", "mensagens")}
           </span>
           {group.hasAttachment === 1 && (
-            <Paperclip size={12} aria-label="Tem anexo" />
+            <Paperclip size={12} aria-label={tx("Tem anexo")} />
           )}
           {temRascunho && <RascunhoPill />}
           {naoLida && (

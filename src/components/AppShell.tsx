@@ -13,6 +13,7 @@ import { hasDismissedPrompt, isPushSupported } from "@/lib/push";
 import { onEmailSent } from "@/lib/email-events";
 import { chaves, useStats } from "@/lib/queries";
 
+import { tx } from "@/lib/i18n";
 // O editor de texto (Tiptap) vem junto com a bandeja: só baixa no primeiro "Escrever".
 const ComposeModal = lazy(() => import("@/pages/ComposeModal"));
 
@@ -84,7 +85,7 @@ export default function AppShell() {
             style={{ paddingTop: "env(safe-area-inset-top)" }}
           >
             <DialogPrimitive.Title className="sr-only">
-              Menu
+              {tx("Menu")}
             </DialogPrimitive.Title>
             <Sidebar
               onCompose={() => onCompose()}
@@ -104,7 +105,7 @@ export default function AppShell() {
           <button
             type="button"
             onClick={() => setMenuAberto(true)}
-            aria-label="Abrir menu"
+            aria-label={tx("Abrir menu")}
             className="flex h-9 w-9 items-center justify-center rounded-[6px] text-text-secondary hover:bg-text-primary/[0.05]"
           >
             <Menu size={18} />
@@ -118,7 +119,7 @@ export default function AppShell() {
             className="flex h-9 items-center gap-1.5 rounded-[6px] bg-primary px-3 text-sm font-medium text-primary-foreground"
           >
             <PenSquare size={15} />
-            Escrever
+            {tx("Escrever")}
           </button>
         </header>
 

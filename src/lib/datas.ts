@@ -1,25 +1,27 @@
-/** Datas em PT-BR para lista e leitura. Recebem epoch em segundos, como a API. */
+/** Datas para lista e leitura, no idioma da interface. Recebem epoch em segundos, como a API. */
+import { LANG, LOCALE, tx } from "@/lib/i18n";
+import { rotuloBrasilia } from "@worker/lib/horario-comercial";
 
-const hora = new Intl.DateTimeFormat("pt-BR", {
+const hora = new Intl.DateTimeFormat(LOCALE, {
   hour: "2-digit",
   minute: "2-digit",
 });
-const diaSemanaCurto = new Intl.DateTimeFormat("pt-BR", { weekday: "short" });
-const diaSemanaLongo = new Intl.DateTimeFormat("pt-BR", { weekday: "long" });
-const diaMes = new Intl.DateTimeFormat("pt-BR", {
+const diaSemanaCurto = new Intl.DateTimeFormat(LOCALE, { weekday: "short" });
+const diaSemanaLongo = new Intl.DateTimeFormat(LOCALE, { weekday: "long" });
+const diaMes = new Intl.DateTimeFormat(LOCALE, {
   day: "numeric",
   month: "short",
 });
-const diaMesAno = new Intl.DateTimeFormat("pt-BR", {
+const diaMesAno = new Intl.DateTimeFormat(LOCALE, {
   day: "numeric",
   month: "short",
   year: "numeric",
 });
-const diaMesLongo = new Intl.DateTimeFormat("pt-BR", {
+const diaMesLongo = new Intl.DateTimeFormat(LOCALE, {
   day: "numeric",
   month: "long",
 });
-const diaMesAnoLongo = new Intl.DateTimeFormat("pt-BR", {
+const diaMesAnoLongo = new Intl.DateTimeFormat(LOCALE, {
   day: "numeric",
   month: "long",
   year: "numeric",
@@ -39,11 +41,11 @@ function diasAtras(d: Date, agora: Date): number {
 export function quandoCurto(ts: number, agora = new Date()): string {
   const d = new Date(ts * 1000);
   const minutos = Math.floor((agora.getTime() - d.getTime()) / 60_000);
-  if (minutos < 1) return "agora";
+  if (minutos < 1) return tx("agora");
   if (minutos < 60) return `${minutos} min`;
   const dias = diasAtras(d, agora);
   if (dias === 0) return hora.format(d);
-  if (dias === 1) return "ontem";
+  if (dias === 1) return tx("ontem");
   if (dias < 7) return semPonto(diaSemanaCurto.format(d));
   if (d.getFullYear() === agora.getFullYear())
     return semPonto(diaMes.format(d));
@@ -55,8 +57,8 @@ export function dataHora(ts: number, agora = new Date()): string {
   const d = new Date(ts * 1000);
   const dias = diasAtras(d, agora);
   const h = hora.format(d);
-  if (dias === 0) return `hoje, ${h}`;
-  if (dias === 1) return `ontem, ${h}`;
+  if (dias === 0) return tx("hoje, {0}", h);
+  if (dias === 1) return tx("ontem, {0}", h);
   const dia =
     d.getFullYear() === agora.getFullYear()
       ? diaMes.format(d)
@@ -84,7 +86,20 @@ export function soHora(ts: number): string {
   return hora.format(new Date(ts * 1000));
 }
 
-/** "1 mensagem" / "3 mensagens". */
+/** "1 mensagem" / "3 mensagens". As palavras passam pela tradução. */
 export function plural(n: number, um: string, varios: string): string {
-  return `${n} ${n === 1 ? um : varios}`;
+  return `${n} ${tx(n === 1 ? um : varios)}`;
+}
+
+/** Rótulo do próximo horário comercial (sempre em Brasília, como o envio). */
+export function rotuloHorario(epochSegundos: number): string {
+  if (LANG === "pt") return rotuloBrasilia(epochSegundos);
+  return new Intl.DateTimeFormat(LOCALE, {
+    timeZone: "America/Sao_Paulo",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(epochSegundos * 1000));
 }

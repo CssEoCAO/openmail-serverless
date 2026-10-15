@@ -21,6 +21,7 @@ import {
   type InboxSortSpec,
 } from "@/lib/api";
 
+import { LOCALE, tx } from "@/lib/i18n";
 interface PeopleTableProps {
   /** Mixed list — both person and group rows render in the table. */
   items: GroupedItem[];
@@ -273,25 +274,25 @@ export default function PeopleTable({
     <div className="flex h-full min-h-0 w-full flex-col">
       {/* Stats strip */}
       <div className="grid shrink-0 grid-cols-4 gap-px border-b border-border bg-border">
-        <StatTile label="Conversas" value={stats.total} />
-        <StatTile label="Com não lidas" value={stats.unread} accent />
-        <StatTile label="Em mais de uma caixa" value={stats.multiInbox} />
-        <StatTile label="Com anexo" value={stats.withAttachments} />
+        <StatTile label={tx("Conversas")} value={stats.total} />
+        <StatTile label={tx("Com não lidas")} value={stats.unread} accent />
+        <StatTile label={tx("Em mais de uma caixa")} value={stats.multiInbox} />
+        <StatTile label={tx("Com anexo")} value={stats.withAttachments} />
       </div>
 
       {/* Table */}
       <div className="smooth-scroll min-h-0 flex-1 overflow-auto">
         {loading ? (
           <div className="flex h-full items-center justify-center text-sm text-text-tertiary">
-            Carregando…
+            {tx("Carregando…")}
           </div>
         ) : items.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
             <p className="text-sm font-medium text-text-primary">
-              Nenhuma conversa com esses filtros
+              {tx("Nenhuma conversa com esses filtros")}
             </p>
             <p className="text-xs font-light text-text-tertiary">
-              Tire um filtro ou amplie a busca.
+              {tx("Tire um filtro ou amplie a busca.")}
             </p>
           </div>
         ) : (
@@ -306,18 +307,18 @@ export default function PeopleTable({
                       ariaLabel={
                         allOnPageSelected
                           ? "Deselect all on page"
-                          : "Marcar todas da página"
+                          : tx("Marcar todas da página")
                       }
                     />
                     {someOnPageSelected && (
-                      <span className="sr-only">Algumas marcadas</span>
+                      <span className="sr-only">{tx("Algumas marcadas")}</span>
                     )}
                   </th>
                 )}
-                <th className="px-4 py-2.5 font-semibold">Pessoa</th>
+                <th className="px-4 py-2.5 font-semibold">{tx("Pessoa")}</th>
                 <th className="px-3 py-2.5 font-semibold">
                   <SortHeader
-                    label="Caixas"
+                    label={tx("Caixas")}
                     sortKey="inbox"
                     active={sortSpec}
                     onClick={onSortChange}
@@ -325,7 +326,7 @@ export default function PeopleTable({
                 </th>
                 <th className="px-3 py-2.5 text-right font-semibold">
                   <SortHeader
-                    label="Mensagens"
+                    label={tx("Mensagens")}
                     sortKey="attachments"
                     active={sortSpec}
                     onClick={onSortChange}
@@ -334,7 +335,7 @@ export default function PeopleTable({
                 </th>
                 <th className="px-3 py-2.5 text-right font-semibold">
                   <SortHeader
-                    label="Não lidas"
+                    label={tx("Não lidas")}
                     sortKey="unread"
                     active={sortSpec}
                     onClick={onSortChange}
@@ -343,7 +344,7 @@ export default function PeopleTable({
                 </th>
                 <th className="px-3 py-2.5 text-right font-semibold">
                   <SortHeader
-                    label="Última"
+                    label={tx("Última")}
                     sortKey="recency"
                     active={sortSpec}
                     onClick={onSortChange}
@@ -387,7 +388,10 @@ export default function PeopleTable({
                         <RowCheckbox
                           checked={isSelected}
                           onChange={() => onToggleSelected?.(person.id)}
-                          ariaLabel={`Marcar ${person.name || person.email}`}
+                          ariaLabel={tx(
+                            "Marcar {0}",
+                            person.name || person.email,
+                          )}
                         />
                       </td>
                     )}
@@ -406,10 +410,12 @@ export default function PeopleTable({
                           <p
                             className="max-w-[28rem] truncate text-xs text-text-secondary"
                             title={
-                              person.latestSubject?.trim() || "(sem assunto)"
+                              person.latestSubject?.trim() ||
+                              tx("(sem assunto)")
                             }
                           >
-                            {person.latestSubject?.trim() || "(sem assunto)"}
+                            {person.latestSubject?.trim() ||
+                              tx("(sem assunto)")}
                           </p>
                         </div>
                       </div>
@@ -438,7 +444,7 @@ export default function PeopleTable({
                           <Paperclip
                             size={11}
                             className="text-text-tertiary"
-                            aria-label="Tem anexo"
+                            aria-label={tx("Tem anexo")}
                           />
                         )}
                         {person.totalCount}
@@ -452,7 +458,7 @@ export default function PeopleTable({
                             e.stopPropagation();
                             onMarkPersonRead?.(person.id);
                           }}
-                          title="Marcar como lida"
+                          title={tx("Marcar como lida")}
                           className="group/badge inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-soft px-1.5 text-[11px] font-semibold tabular-nums text-primary-ink hover:bg-primary hover:text-primary-foreground"
                         >
                           <span className="group-hover/badge:hidden">
@@ -521,8 +527,8 @@ function PageFooter({
     <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-bg-subtle/40 px-4 py-2">
       <span className="text-[11px] font-medium text-text-tertiary">
         {total === 0
-          ? "Nenhum resultado"
-          : `${start}–${end} de ${total.toLocaleString("pt-BR")}`}
+          ? tx("Nenhum resultado")
+          : tx("{0}–{1} de {2}", start, end, total.toLocaleString(LOCALE))}
       </span>
       {totalPages > 1 && (
         <div className="flex items-center gap-2">
@@ -530,7 +536,7 @@ function PageFooter({
             onClick={() => onPageChange(Math.max(1, page - 1))}
             disabled={page <= 1}
             className="flex h-7 w-7 items-center justify-center rounded-[6px] text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary disabled:opacity-30 disabled:hover:bg-transparent"
-            aria-label="Página anterior"
+            aria-label={tx("Página anterior")}
           >
             <ChevronLeft size={14} />
           </button>
@@ -541,7 +547,7 @@ function PageFooter({
             onClick={() => onPageChange(Math.min(totalPages, page + 1))}
             disabled={page >= totalPages}
             className="flex h-7 w-7 items-center justify-center rounded-[6px] text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary disabled:opacity-30 disabled:hover:bg-transparent"
-            aria-label="Próxima página"
+            aria-label={tx("Próxima página")}
           >
             <ChevronRight size={14} />
           </button>
@@ -627,7 +633,7 @@ function GroupTableRow({
           <RowCheckbox
             checked={isSelected}
             onChange={() => onToggleSelected?.(group.id)}
-            ariaLabel="Marcar conversa em grupo"
+            ariaLabel={tx("Marcar conversa em grupo")}
           />
         </td>
       )}
@@ -679,13 +685,13 @@ function GroupTableRow({
               </span>
             </p>
             <p className="truncate text-xs font-light text-text-tertiary">
-              {group.participants.length} participantes
+              {group.participants.length} {tx("participantes")}
             </p>
             <p
               className="max-w-[28rem] truncate text-xs text-text-secondary"
-              title={group.latestSubject?.trim() || "(sem assunto)"}
+              title={group.latestSubject?.trim() || tx("(sem assunto)")}
             >
-              {group.latestSubject?.trim() || "(sem assunto)"}
+              {group.latestSubject?.trim() || tx("(sem assunto)")}
             </p>
           </div>
         </div>
@@ -714,7 +720,7 @@ function GroupTableRow({
               e.stopPropagation();
               onMarkRead?.(group.id);
             }}
-            title="Marcar como lida"
+            title={tx("Marcar como lida")}
             className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-soft px-1.5 text-[11px] font-semibold tabular-nums text-primary-ink hover:bg-primary hover:text-primary-foreground"
           >
             {group.unreadCount}
@@ -747,7 +753,7 @@ function StatTile({ label, value, accent }: StatTileProps) {
           accent && value > 0 && "text-primary-ink",
         )}
       >
-        {value.toLocaleString("pt-BR")}
+        {value.toLocaleString(LOCALE)}
       </p>
     </div>
   );

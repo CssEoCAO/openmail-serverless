@@ -11,6 +11,7 @@ import {
 import type { Attachment } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1).replace(".", ",")} KB`;
@@ -137,7 +138,7 @@ export default function AttachmentList({
               href={preview ? inline : download}
               target={preview ? "_blank" : undefined}
               rel="noreferrer"
-              title={preview ? "Abrir" : "Baixar"}
+              title={preview ? tx("Abrir") : tx("Baixar")}
               className="flex min-w-0 flex-1 items-center gap-2.5"
             >
               {kind === "image" ? (
@@ -164,7 +165,7 @@ export default function AttachmentList({
             <a
               href={download}
               download={att.filename}
-              title="Baixar"
+              title={tx("Baixar")}
               className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
             >
               <Download size={14} />

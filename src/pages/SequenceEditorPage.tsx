@@ -28,12 +28,15 @@ import {
 import { analyzeTemplateClient } from "@/lib/template-syntax";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 /** Round delay-hours into a friendlier string for the summary line. */
 function formatDelay(hours: number): string {
-  if (hours <= 0) return "na hora";
+  if (hours <= 0) return tx("na hora");
   if (hours < 24) return `${hours} h`;
   const days = Math.round((hours / 24) * 10) / 10;
-  return days === 1 ? "1 dia" : `${String(days).replace(".", ",")} dias`;
+  return days === 1
+    ? tx("1 dia")
+    : tx("{0} dias", String(days).replace(".", ","));
 }
 
 /** Cumulative offset from the enrollment start, e.g. "day 3" for the
@@ -45,8 +48,8 @@ function formatCumulative(steps: SequenceStep[], idx: number): string {
       (acc, s) => acc + (Number.isFinite(s.delayHours) ? s.delayHours : 0),
       0,
     );
-  if (total === 0) return "Dia 0 · sai na hora";
-  if (total < 24) return `${total} h depois da inscrição`;
+  if (total === 0) return tx("Dia 0 · sai na hora");
+  if (total < 24) return tx("{0} h depois da inscrição", total);
   const days = Math.round((total / 24) * 10) / 10;
   return `Dia ${String(days).replace(".", ",")}`;
 }
@@ -79,7 +82,7 @@ export default function SequenceEditorPage() {
           setSteps(seq.steps);
         }
       } catch {
-        if (!cancelled) setError("Não deu para carregar a sequência.");
+        if (!cancelled) setError(tx("Não deu para carregar a sequência."));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -126,7 +129,7 @@ export default function SequenceEditorPage() {
       }
       navigate("/sequences");
     } catch {
-      setError("Não deu para salvar a sequência.");
+      setError(tx("Não deu para salvar a sequência."));
     } finally {
       setSaving(false);
     }
@@ -141,7 +144,7 @@ export default function SequenceEditorPage() {
   if (loading) {
     return (
       <PageContainer>
-        <p className="pt-10 text-sm text-text-tertiary">Carregando…</p>
+        <p className="pt-10 text-sm text-text-tertiary">{tx("Carregando…")}</p>
       </PageContainer>
     );
   }
@@ -153,15 +156,17 @@ export default function SequenceEditorPage() {
         className="-mt-1 mb-1 inline-flex items-center gap-1 text-xs font-medium text-text-tertiary transition-colors hover:text-text-primary"
       >
         <ArrowLeft size={12} />
-        Sequências
+        {tx("Sequências")}
       </Link>
 
       <PageHeader
-        title={isEditing ? name || "Editar sequência" : "Nova sequência"}
+        title={
+          isEditing ? name || tx("Editar sequência") : tx("Nova sequência")
+        }
         subtitle={
           isEditing
             ? `${totalSteps} step${totalSteps === 1 ? "" : "s"} · spans ${formatDelay(totalHours)}`
-            : "Monte as etapas; cada e-mail sai sozinho na hora marcada."
+            : tx("Monte as etapas; cada e-mail sai sozinho na hora marcada.")
         }
         action={
           <div className="flex items-center gap-2">
@@ -170,7 +175,7 @@ export default function SequenceEditorPage() {
               onClick={() => navigate("/sequences")}
               className="rounded-[6px] border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
             >
-              Cancelar
+              {tx("Cancelar")}
             </button>
             <button
               type="button"
@@ -180,7 +185,11 @@ export default function SequenceEditorPage() {
               }
               className="rounded-[6px] bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {saving ? "Salvando…" : isEditing ? "Salvar" : "Criar sequência"}
+              {saving
+                ? tx("Salvando…")
+                : isEditing
+                  ? tx("Salvar")
+                  : tx("Criar sequência")}
             </button>
           </div>
         }
@@ -200,16 +209,21 @@ export default function SequenceEditorPage() {
         <section className="rounded-[8px] bg-card p-5 ring-1 ring-border">
           <SectionHeader
             icon={Sparkles}
-            title="Identificação"
-            subtitle="Um nome claro: é ele que aparece na hora de inscrever alguém."
+            title={tx("Identificação")}
+            subtitle={tx(
+              "Um nome claro: é ele que aparece na hora de inscrever alguém.",
+            )}
           />
 
           <div className="mt-4">
-            <Field label="Nome da sequência" hint="Só administradores veem.">
+            <Field
+              label={tx("Nome da sequência")}
+              hint={tx("Só administradores veem.")}
+            >
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Boas-vindas"
+                placeholder={tx("Boas-vindas")}
                 required
                 className={FORM_INPUT_CLASS}
               />
@@ -222,15 +236,17 @@ export default function SequenceEditorPage() {
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
             <SectionHeader
               icon={ListOrdered}
-              title="Etapas"
+              title={tx("Etapas")}
               subtitle={
                 <>
-                  {totalSteps} {totalSteps === 1 ? "etapa" : "etapas"} · dura{" "}
+                  {totalSteps} {totalSteps === 1 ? "etapa" : "etapas"}{" "}
+                  {tx("· dura")}{" "}
                   <span className="font-medium text-text-secondary">
                     {formatDelay(totalHours)}
                   </span>{" "}
-                  do começo ao fim. O intervalo conta a partir da etapa
-                  anterior.
+                  {tx(
+                    "do começo ao fim. O intervalo conta a partir da etapa anterior.",
+                  )}
                 </>
               }
             />
@@ -260,7 +276,7 @@ export default function SequenceEditorPage() {
 
                 <div className="grid min-w-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
                   <Field
-                    label="Modelo"
+                    label={tx("Modelo")}
                     hint={
                       <span className="text-text-tertiary/80">
                         {formatCumulative(steps, idx)}
@@ -277,7 +293,7 @@ export default function SequenceEditorPage() {
                       className={cn(FORM_INPUT_CLASS, "appearance-none pr-8")}
                     >
                       <option value="" disabled>
-                        Escolha um modelo…
+                        {tx("Escolha um modelo…")}
                       </option>
                       {templates.map((t) => (
                         <option key={t.slug} value={t.slug}>
@@ -288,11 +304,11 @@ export default function SequenceEditorPage() {
                   </Field>
 
                   <Field
-                    label="Intervalo"
+                    label={tx("Intervalo")}
                     hint={
                       idx === 0
-                        ? "Zero: a etapa 1 sai na inscrição."
-                        : "Horas depois da etapa anterior."
+                        ? tx("Zero: a etapa 1 sai na inscrição.")
+                        : tx("Horas depois da etapa anterior.")
                     }
                     className="sm:w-40"
                   >
@@ -321,11 +337,11 @@ export default function SequenceEditorPage() {
                   type="button"
                   onClick={() => removeStep(step.order)}
                   disabled={steps.length <= 1}
-                  aria-label="Remover etapa"
+                  aria-label={tx("Remover etapa")}
                   className="inline-flex h-8 shrink-0 items-center gap-1.5 self-end rounded-[6px] px-2.5 text-xs font-medium text-text-secondary transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40 sm:self-auto"
                 >
                   <Trash2 size={12} />
-                  Remover
+                  {tx("Remover")}
                 </button>
               </li>
             ))}
@@ -338,7 +354,7 @@ export default function SequenceEditorPage() {
               className="inline-flex items-center gap-1.5 rounded-[6px] border border-dashed border-border bg-card px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-text-primary/30 hover:bg-bg-muted hover:text-text-primary"
             >
               <Plus size={12} />
-              Adicionar etapa
+              {tx("Adicionar etapa")}
             </button>
           </div>
         </section>
@@ -462,18 +478,18 @@ function ApiReferenceCard({
         <div className="min-w-0">
           <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-primary">
             <Code2 size={13} className="text-text-tertiary" />
-            Inscrever pela API
+            {tx("Inscrever pela API")}
           </h2>
           <p className="mt-0.5 text-xs font-light text-text-secondary">
-            Inscreva um contato por programa: mande{" "}
+            {tx("Inscreva um contato por programa: mande")}{" "}
             <code className="rounded bg-bg-muted px-1 py-0.5 font-mono text-[10px]">
-              personEmail
+              {tx("personEmail")}
             </code>{" "}
-            (achado ou criado) ou{" "}
+            {tx("(achado ou criado) ou")}{" "}
             <code className="rounded bg-bg-muted px-1 py-0.5 font-mono text-[10px]">
-              personId
+              {tx("personId")}
             </code>{" "}
-            (já existente).
+            {tx("(já existente).")}
           </p>
         </div>
         <ChevronDown
@@ -487,14 +503,16 @@ function ApiReferenceCard({
 
       {open && (
         <div className="space-y-5 border-t border-border px-5 py-5">
-          <Field label="Rota">
+          <Field label={tx("Rota")}>
             <CodeBlock value={`POST ${endpoint}`} oneLine />
           </Field>
 
           {perTemplate.length > 0 && (
             <Field
-              label="Variáveis dos modelos"
-              hint="Todas precisam ir em `variables`, senão a API devolve 400."
+              label={tx("Variáveis dos modelos")}
+              hint={tx(
+                "Todas precisam ir em `variables`, senão a API devolve 400.",
+              )}
             >
               <ul className="space-y-1.5 text-xs">
                 {perTemplate.map((tv) => (
@@ -520,7 +538,7 @@ function ApiReferenceCard({
             </Field>
           )}
 
-          <Field label="Exemplo de requisição">
+          <Field label={tx("Exemplo de requisição")}>
             <CodeBlock value={curl} />
           </Field>
         </div>

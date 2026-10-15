@@ -1,6 +1,7 @@
 import { useRef, useCallback, ReactNode } from "react";
 import { Paperclip } from "lucide-react";
 
+import { tx } from "@/lib/i18n";
 export interface AttachmentPickerProps {
   /** Called with newly picked or dropped files. Parent merges into its own list. */
   onFilesAdded: (files: File[]) => void;
@@ -70,7 +71,7 @@ export default function AttachmentPicker({
           buttonClassName ??
           "inline-flex items-center gap-1 rounded p-1 text-text-tertiary hover:bg-bg-muted hover:text-text-secondary"
         }
-        aria-label="Anexar arquivos"
+        aria-label={tx("Anexar arquivos")}
       >
         {buttonLabel ?? <Paperclip className="h-4 w-4" />}
       </button>

@@ -18,6 +18,7 @@ import type { ApiKeyInfo } from "@/lib/api";
 import { useSession } from "@/lib/auth-client";
 import PageHeader, { PageContainer } from "@/components/PageHeader";
 
+import { LOCALE, tx } from "@/lib/i18n";
 export default function ApiKeysPage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "admin";
@@ -59,20 +60,24 @@ export default function ApiKeysPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Chave de API"
-        subtitle="Acesso por programa: enviar e-mail, cuidar de modelos, inscrever contatos e consultar a caixa."
+        title={tx("Chave de API")}
+        subtitle={tx(
+          "Acesso por programa: enviar e-mail, cuidar de modelos, inscrever contatos e consultar a caixa.",
+        )}
       />
 
       <div className="max-w-3xl space-y-5">
         {loading ? (
-          <p className="text-sm text-text-tertiary">Carregando…</p>
+          <p className="text-sm text-text-tertiary">{tx("Carregando…")}</p>
         ) : (
           <>
             {/* Newly generated key — must copy now */}
             {newKey && (
               <div className="rounded-[8px] border border-warning-border bg-warning-bg px-4 py-3">
                 <p className="mb-2 text-xs font-medium text-warning-text">
-                  Sua chave de API. Copie agora: ela não aparece de novo.
+                  {tx(
+                    "Sua chave de API. Copie agora: ela não aparece de novo.",
+                  )}
                 </p>
                 <div className="flex items-center gap-2">
                   <input
@@ -88,12 +93,12 @@ export default function ApiKeysPage() {
                     {copied ? (
                       <>
                         <Check size={12} />
-                        Copiado
+                        {tx("Copiado")}
                       </>
                     ) : (
                       <>
                         <Copy size={12} />
-                        Copiar
+                        {tx("Copiar")}
                       </>
                     )}
                   </button>
@@ -102,7 +107,7 @@ export default function ApiKeysPage() {
                   onClick={() => setNewKey(null)}
                   className="mt-2 text-xs font-light text-text-tertiary transition-colors hover:text-text-secondary"
                 >
-                  Concluído
+                  {tx("Concluído")}
                 </button>
               </div>
             )}
@@ -118,9 +123,9 @@ export default function ApiKeysPage() {
                         {keyInfo.prefix}
                       </p>
                       <p className="mt-0.5 text-xs font-light text-text-tertiary">
-                        Criada em{" "}
+                        {tx("Criada em")}{" "}
                         {new Date(keyInfo.createdAt * 1000).toLocaleDateString(
-                          "pt-BR",
+                          LOCALE,
                         )}
                       </p>
                     </div>
@@ -131,14 +136,14 @@ export default function ApiKeysPage() {
                       className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-border px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
                     >
                       <RefreshCw size={12} />
-                      Gerar outra
+                      {tx("Gerar outra")}
                     </button>
                     <button
                       onClick={() => setConfirmAction("revoke")}
                       className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-border px-3 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
                     >
                       <Trash2 size={12} />
-                      Revogar
+                      {tx("Revogar")}
                     </button>
                   </div>
                 </div>
@@ -148,16 +153,16 @@ export default function ApiKeysPage() {
             {!keyInfo && !newKey && (
               <div className="rounded-[8px] bg-card p-8 text-center ring-1 ring-border">
                 <p className="mb-1 text-sm font-medium text-text-primary">
-                  Nenhuma chave ainda
+                  {tx("Nenhuma chave ainda")}
                 </p>
                 <p className="mb-4 text-xs font-light text-text-tertiary">
-                  Gere uma chave para usar a API por programa.
+                  {tx("Gere uma chave para usar a API por programa.")}
                 </p>
                 <button
                   onClick={handleGenerate}
                   className="inline-flex items-center gap-1.5 rounded-[6px] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                 >
-                  Gerar chave de API
+                  {tx("Gerar chave de API")}
                 </button>
               </div>
             )}
@@ -165,12 +170,12 @@ export default function ApiKeysPage() {
             {/* Usage */}
             <div className="rounded-[8px] bg-card p-5 ring-1 ring-border">
               <h2 className="mb-2 text-sm font-semibold text-text-primary">
-                Como usar
+                {tx("Como usar")}
               </h2>
               <p className="mb-3 text-xs font-light text-text-secondary">
-                Mande a chave no cabeçalho{" "}
+                {tx("Mande a chave no cabeçalho")}{" "}
                 <code className="rounded bg-bg-muted px-1 py-0.5 font-mono">
-                  Authorization
+                  {tx("Authorization")}
                 </code>
                 .
               </p>
@@ -179,14 +184,14 @@ export default function ApiKeysPage() {
   ${typeof window !== "undefined" ? window.location.origin : "https://sua-instancia"}/api/people`}
               </pre>
               <p className="mt-3 text-xs font-light text-text-secondary">
-                A chave dá acesso total à API como a sua conta. Veja a{" "}
+                {tx("A chave dá acesso total à API como a sua conta. Veja a")}{" "}
                 <a
                   href="/swagger-ui"
                   className="font-medium text-primary-ink hover:underline"
                 >
-                  documentação da API
+                  {tx("documentação da API")}
                 </a>{" "}
-                com todas as rotas.
+                {tx("com todas as rotas.")}
               </p>
             </div>
 
@@ -204,21 +209,25 @@ export default function ApiKeysPage() {
           <DialogHeader>
             <DialogTitle className="text-text-primary">
               {confirmAction === "regenerate"
-                ? "Gerar outra chave?"
-                : "Revogar a chave?"}
+                ? tx("Gerar outra chave?")
+                : tx("Revogar a chave?")}
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm font-light text-text-secondary">
             {confirmAction === "regenerate"
-              ? "A chave atual deixa de valer e uma nova é gerada. Quem usa a antiga para de funcionar."
-              : "A chave é apagada para sempre. Quem usa a chave para de funcionar."}
+              ? tx(
+                  "A chave atual deixa de valer e uma nova é gerada. Quem usa a antiga para de funcionar.",
+                )
+              : tx(
+                  "A chave é apagada para sempre. Quem usa a chave para de funcionar.",
+                )}
           </p>
           <div className="mt-4 flex justify-end gap-2">
             <button
               onClick={() => setConfirmAction(null)}
               className="rounded-[6px] border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-bg-muted hover:text-text-primary"
             >
-              Cancelar
+              {tx("Cancelar")}
             </button>
             <button
               onClick={
@@ -230,7 +239,9 @@ export default function ApiKeysPage() {
                   : "bg-primary hover:bg-primary/90"
               }`}
             >
-              {confirmAction === "regenerate" ? "Gerar outra" : "Revogar"}
+              {confirmAction === "regenerate"
+                ? tx("Gerar outra")
+                : tx("Revogar")}
             </button>
           </div>
         </DialogContent>
@@ -242,19 +253,9 @@ export default function ApiKeysPage() {
 // A self-contained prompt the user can paste into any AI assistant to get
 // signature-verification code in their own stack — keeps setup instructions
 // in-app without shipping per-language code samples or a docs site.
-const VERIFY_PROMPT = `Escreva o código do meu endpoint de webhook para conferir os webhooks do SaaSMail.
-
-Cada requisição traz o cabeçalho:
-  X-SaaSMail-Signature: sha256=<hex>
-em que <hex> é o HMAC-SHA256 do corpo EXATO da requisição (os bytes crus, antes de qualquer parse de JSON), com o segredo de assinatura do webhook como chave.
-
-O código deve:
-1. Ler o corpo cru da requisição.
-2. Calcular HMAC-SHA256(corpoCru, segredo) em hexadecimal.
-3. Comparar "sha256=" + esse hex com o cabeçalho em tempo constante.
-4. Recusar a requisição (401) se não bater.
-
-Minha stack: <sua linguagem/framework, ex.: Node/Express, Python/FastAPI, Cloudflare Workers>`;
+const VERIFY_PROMPT = tx(
+  'Escreva o código do meu endpoint de webhook para conferir os webhooks do SaaSMail.\n\nCada requisição traz o cabeçalho:\n  X-SaaSMail-Signature: sha256=<hex>\nem que <hex> é o HMAC-SHA256 do corpo EXATO da requisição (os bytes crus, antes de qualquer parse de JSON), com o segredo de assinatura do webhook como chave.\n\nO código deve:\n1. Ler o corpo cru da requisição.\n2. Calcular HMAC-SHA256(corpoCru, segredo) em hexadecimal.\n3. Comparar "sha256=" + esse hex com o cabeçalho em tempo constante.\n4. Recusar a requisição (401) se não bater.\n\nMinha stack: <sua linguagem/framework, ex.: Node/Express, Python/FastAPI, Cloudflare Workers>',
+);
 
 function WebhookSection() {
   const [url, setUrl] = useState("");
@@ -297,7 +298,7 @@ function WebhookSection() {
       setSecret("");
       setSuccess(cfg.url ? "Webhook salvo." : "Webhook desligado.");
     } catch {
-      setError("Não deu para salvar o webhook.");
+      setError(tx("Não deu para salvar o webhook."));
     } finally {
       setBusy(false);
     }
@@ -311,9 +312,9 @@ function WebhookSection() {
       const cfg = await saveWebhookConfig({ url: url.trim(), secret: null });
       setHasSecret(cfg.hasSecret);
       setSecret("");
-      setSuccess("Segredo de assinatura apagado.");
+      setSuccess(tx("Segredo de assinatura apagado."));
     } catch {
-      setError("Não deu para apagar o segredo.");
+      setError(tx("Não deu para apagar o segredo."));
     } finally {
       setBusy(false);
     }
@@ -330,7 +331,7 @@ function WebhookSection() {
           : `Teste falhou: ${res.error ?? `HTTP ${res.status}`}.`,
       );
     } catch {
-      setTestResult("Teste falhou: erro na requisição.");
+      setTestResult(tx("Teste falhou: erro na requisição."));
     } finally {
       setBusy(false);
     }
@@ -338,14 +339,17 @@ function WebhookSection() {
 
   return (
     <section className="space-y-3">
-      <h2 className="text-base font-semibold text-text-primary">Webhook</h2>
+      <h2 className="text-base font-semibold text-text-primary">
+        {tx("Webhook")}
+      </h2>
       <div className="rounded-[8px] bg-card p-5 ring-1 ring-border">
         <p className="text-xs font-light text-text-secondary">
-          Manda um <code>POST</code> para uma automação de fora (n8n, Make…) a
-          cada e-mail que chega. Vale para todas as caixas, uma tentativa só,
-          desligado por padrão. Com segredo de assinatura, a requisição leva o
-          cabeçalho <code>X-SaaSMail-Signature: sha256=&lt;hmac&gt;</code> sobre
-          o corpo cru.
+          {tx("Manda um")} <code>POST</code>{" "}
+          {tx(
+            "para uma automação de fora (n8n, Make…) a cada e-mail que chega. Vale para todas as caixas, uma tentativa só, desligado por padrão. Com segredo de assinatura, a requisição leva o cabeçalho",
+          )}{" "}
+          <code>{tx("X-SaaSMail-Signature: sha256=<hmac>")}</code>{" "}
+          {tx("sobre o corpo cru.")}
         </p>
 
         <div className="mt-4 space-y-2">
@@ -353,7 +357,7 @@ function WebhookSection() {
             htmlFor="webhook-url"
             className="text-xs font-medium text-text-secondary"
           >
-            URL de destino
+            {tx("URL de destino")}
           </label>
           <input
             id="webhook-url"
@@ -371,7 +375,7 @@ function WebhookSection() {
             htmlFor="webhook-secret"
             className="text-xs font-medium text-text-secondary"
           >
-            Segredo de assinatura (opcional)
+            {tx("Segredo de assinatura (opcional)")}
           </label>
           <input
             id="webhook-secret"
@@ -379,7 +383,9 @@ function WebhookSection() {
             value={secret}
             onChange={(e) => setSecret(e.target.value)}
             placeholder={
-              hasSecret ? "•••••••• (definido; em branco mantém)" : "nenhum"
+              hasSecret
+                ? tx("•••••••• (definido; em branco mantém)")
+                : tx("nenhum")
             }
             disabled={busy}
             className="h-10 w-full max-w-sm rounded-[6px] border border-border bg-card px-3 text-sm text-text-primary focus:border-primary focus:outline-none"
@@ -391,7 +397,7 @@ function WebhookSection() {
               disabled={busy}
               className="text-xs font-light text-text-secondary hover:text-text-primary hover:underline disabled:opacity-60"
             >
-              Apagar segredo
+              {tx("Apagar segredo")}
             </button>
           )}
         </div>
@@ -401,7 +407,7 @@ function WebhookSection() {
         <div className="mt-4 rounded-[6px] border border-border bg-bg-subtle p-3">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium text-text-primary">
-              Conferir a assinatura
+              {tx("Conferir a assinatura")}
             </p>
             <button
               type="button"
@@ -411,19 +417,20 @@ function WebhookSection() {
               {promptCopied ? (
                 <>
                   <Check size={12} />
-                  Copiado
+                  {tx("Copiado")}
                 </>
               ) : (
                 <>
                   <Copy size={12} />
-                  Copiar instrução
+                  {tx("Copiar instrução")}
                 </>
               )}
             </button>
           </div>
           <p className="mt-1 text-xs font-light text-text-secondary">
-            Para conferir a assinatura no seu receptor, cole esta instrução no
-            seu assistente de IA: ele gera o código para a sua stack.
+            {tx(
+              "Para conferir a assinatura no seu receptor, cole esta instrução no seu assistente de IA: ele gera o código para a sua stack.",
+            )}
           </p>
           <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-[6px] bg-card p-2.5 text-[11px] font-mono leading-relaxed text-text-secondary ring-1 ring-border">
             {VERIFY_PROMPT}
@@ -447,7 +454,7 @@ function WebhookSection() {
             disabled={busy}
             className="rounded-[6px] bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {busy ? "Salvando…" : "Salvar"}
+            {busy ? tx("Salvando…") : tx("Salvar")}
           </button>
           <button
             type="button"
@@ -455,7 +462,7 @@ function WebhookSection() {
             disabled={busy || !url.trim()}
             className="rounded-[6px] border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-bg-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Mandar teste
+            {tx("Mandar teste")}
           </button>
         </div>
       </div>

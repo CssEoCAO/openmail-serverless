@@ -4,6 +4,7 @@ import type { Email } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { dataHora } from "@/lib/datas";
 
+import { tx } from "@/lib/i18n";
 interface ThreadMessageProps {
   email: Email;
   /** Slightly de-emphasize this message — used for older context items. */
@@ -28,7 +29,7 @@ export default function ThreadMessage({
   const failedToSend = isSent && email.status === "failed";
   const retrying = isSent && email.status === "retrying";
   const sender = isSent
-    ? `você (${email.fromAddress ?? "—"})`
+    ? tx("você ({0})", email.fromAddress ?? "—")
     : (email.fromAddress ?? "desconhecido");
   const recipient = isSent ? email.toAddress : email.recipient;
   const fullStamp = dataHora(email.timestamp);
@@ -56,29 +57,31 @@ export default function ThreadMessage({
           data-testid={retrying ? "message-retrying-badge" : undefined}
           title={
             retrying
-              ? "O provedor recusou o envio; vamos tentar de novo sozinhos. Detalhes na Saída."
+              ? tx(
+                  "O provedor recusou o envio; vamos tentar de novo sozinhos. Detalhes na Saída.",
+                )
               : undefined
           }
         >
           {failedToSend ? (
             <>
               <AlertTriangle size={9} />
-              Não enviada
+              {tx("Não enviada")}
             </>
           ) : retrying ? (
             <>
               <Clock size={9} />
-              Tentando de novo
+              {tx("Tentando de novo")}
             </>
           ) : isSent ? (
             <>
               <Send size={9} />
-              Enviada
+              {tx("Enviada")}
             </>
           ) : (
             <>
               <InboxIcon size={9} />
-              Recebida
+              {tx("Recebida")}
             </>
           )}
         </span>
@@ -97,7 +100,7 @@ export default function ThreadMessage({
         />
       ) : (
         <pre className="whitespace-pre-wrap break-words font-sans text-[13px] leading-relaxed text-text-secondary">
-          {email.bodyText || "(sem texto)"}
+          {email.bodyText || tx("(sem texto)")}
         </pre>
       )}
     </div>

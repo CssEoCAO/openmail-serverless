@@ -5,6 +5,7 @@ import { dispatchEmailSent } from "@/lib/email-events";
 import AttachmentPicker from "@/components/AttachmentPicker";
 import AttachmentChips from "@/components/AttachmentChips";
 
+import { tx } from "@/lib/i18n";
 const ATTACHMENT_CAP_BYTES = 25 * 1024 * 1024;
 
 interface ChatQuickReplyProps {
@@ -100,7 +101,7 @@ export default function ChatQuickReply({
         await sendEmail({
           to: personEmail,
           fromAddress: inboxAddress,
-          subject: "(sem assunto)",
+          subject: tx("(sem assunto)"),
           bodyHtml: plainTextToHtml(text),
           bodyText: text,
           ...(files.length > 0
@@ -117,7 +118,7 @@ export default function ChatQuickReply({
       setFiles([]);
       onSent();
     } catch (e) {
-      setError("Não deu para enviar. Tente de novo.");
+      setError(tx("Não deu para enviar. Tente de novo."));
       console.error(e);
     } finally {
       setSending(false);
@@ -154,8 +155,8 @@ export default function ChatQuickReply({
           rows={1}
           placeholder={
             latestReceivedEmailId
-              ? "Escreva uma resposta…"
-              : "Escreva uma mensagem…"
+              ? tx("Escreva uma resposta…")
+              : tx("Escreva uma mensagem…")
           }
           className="flex-1 resize-none border-0 bg-transparent px-2 py-1.5 text-sm text-text-primary outline-none placeholder:text-text-tertiary disabled:text-text-tertiary"
         />
@@ -166,8 +167,10 @@ export default function ChatQuickReply({
           <button
             type="button"
             onClick={onOpenCompose}
-            title="Abrir no editor completo (trocar remetente, CC, anexos…)"
-            aria-label="Abrir no editor completo"
+            title={tx(
+              "Abrir no editor completo (trocar remetente, CC, anexos…)",
+            )}
+            aria-label={tx("Abrir no editor completo")}
             className="shrink-0 rounded-[6px] p-2 text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
           >
             <Maximize2 size={14} />
@@ -179,7 +182,7 @@ export default function ChatQuickReply({
           disabled={!canSend}
           className="shrink-0 rounded-[6px] bg-primary px-3.5 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {sending ? "Enviando…" : "Enviar"}
+          {sending ? tx("Enviando…") : tx("Enviar")}
         </button>
       </div>
       <div className="mt-1.5 flex items-center justify-between">
@@ -187,8 +190,8 @@ export default function ChatQuickReply({
           <span className="text-xs text-destructive">{error}</span>
         ) : (
           <span className="text-[11px] text-text-tertiary">
-            Sai por <span className="font-medium">{inboxAddress}</span> · Ctrl +
-            Enter envia
+            {tx("Sai por")} <span className="font-medium">{inboxAddress}</span>{" "}
+            {tx("· Ctrl + Enter envia")}
             {onOpenCompose && (
               <>
                 {" · "}
@@ -197,7 +200,7 @@ export default function ChatQuickReply({
                   onClick={onOpenCompose}
                   className="font-medium text-text-secondary underline-offset-2 hover:text-text-primary hover:underline"
                 >
-                  abrir no editor completo
+                  {tx("abrir no editor completo")}
                 </button>
               </>
             )}

@@ -16,6 +16,7 @@ import {
 import { useSession } from "@/lib/auth-client";
 import { useBranding } from "@/lib/branding";
 
+import { LANG, LOCALE, trocarIdioma, tx, type Lang } from "@/lib/i18n";
 interface Subscription {
   id: string;
   userAgent: string | null;
@@ -30,16 +31,55 @@ export default function SettingsPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Configurações"
-        subtitle="Notificações, preferências de leitura e (só administrador) o nome do app."
+        title={tx("Configurações")}
+        subtitle={tx(
+          "Notificações, preferências de leitura, idioma e (só administrador) o nome do app.",
+        )}
       />
 
       <div className="max-w-3xl space-y-8">
         <NotificationsSection />
         <DisplayPreferencesSection />
+        <LanguageSection />
         {isAdmin && <AppBrandingSection />}
       </div>
     </PageContainer>
+  );
+}
+
+/* ----------------------------------- Idioma ------------------------------------ */
+
+function LanguageSection() {
+  return (
+    <section className="space-y-3">
+      <h2 className="text-base font-semibold text-text-primary">
+        {tx("Idioma")}
+      </h2>
+      <div className="rounded-[8px] bg-card p-5 ring-1 ring-border">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h3 className="text-sm font-medium text-text-primary">
+              {tx("Idioma da interface")}
+            </h3>
+            <p className="mt-1 text-xs font-light text-text-secondary">
+              {tx("Vale para este navegador. A página recarrega ao trocar.")}
+            </p>
+          </div>
+          <select
+            id="idioma-interface"
+            value={LANG}
+            onChange={(event) =>
+              trocarIdioma(event.currentTarget.value as Lang)
+            }
+            aria-label={tx("Idioma da interface")}
+            className="h-9 rounded-[6px] border border-border bg-card px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-text-primary/15"
+          >
+            <option value="pt">Português</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -110,29 +150,29 @@ function NotificationsSection() {
   return (
     <section className="space-y-3">
       <h2 className="text-base font-semibold text-text-primary">
-        Notificações
+        {tx("Notificações")}
       </h2>
 
       {!supported ? (
         <p className="text-sm text-text-secondary">
-          Este navegador não aceita notificações push.
+          {tx("Este navegador não aceita notificações push.")}
         </p>
       ) : pushEnabled === null ? (
-        <p className="text-sm text-text-tertiary">Carregando…</p>
+        <p className="text-sm text-text-tertiary">{tx("Carregando…")}</p>
       ) : pushEnabled === false ? (
         <p className="text-sm text-text-secondary">
-          As notificações push não estão configuradas nesta instalação.
+          {tx("As notificações push não estão configuradas nesta instalação.")}
         </p>
       ) : (
         <div className="space-y-5">
           <div className="rounded-[8px] bg-card p-5 ring-1 ring-border">
             <h3 className="text-sm font-semibold text-text-primary">
-              Este navegador
+              {tx("Este navegador")}
             </h3>
             <p className="mt-1 text-xs font-light text-text-secondary">
               {subscribedHere
-                ? "Notificações ligadas neste navegador."
-                : "Notificações desligadas neste navegador."}
+                ? tx("Notificações ligadas neste navegador.")
+                : tx("Notificações desligadas neste navegador.")}
             </p>
             {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
             <div className="mt-3">
@@ -142,7 +182,7 @@ function NotificationsSection() {
                   disabled={busy || !vapidPublicKey}
                   onClick={onDisable}
                 >
-                  Desligar
+                  {tx("Desligar")}
                 </button>
               ) : (
                 <button
@@ -150,7 +190,7 @@ function NotificationsSection() {
                   disabled={busy || !vapidPublicKey}
                   onClick={onEnable}
                 >
-                  Ligar
+                  {tx("Ligar")}
                 </button>
               )}
             </div>
@@ -159,12 +199,12 @@ function NotificationsSection() {
           <div className="overflow-hidden rounded-[8px] bg-card ring-1 ring-border">
             <div className="border-b border-border px-5 py-3">
               <h3 className="text-xs font-medium text-text-tertiary">
-                Navegadores com notificação
+                {tx("Navegadores com notificação")}
               </h3>
             </div>
             {subs.length === 0 ? (
               <p className="px-5 py-4 text-xs font-light text-text-tertiary">
-                Nenhum ainda.
+                {tx("Nenhum ainda.")}
               </p>
             ) : (
               <ul className="divide-y divide-border/60 text-xs">
@@ -175,13 +215,18 @@ function NotificationsSection() {
                   >
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium text-text-primary">
-                        {s.userAgent ?? "Navegador desconhecido"}
+                        {s.userAgent ?? tx("Navegador desconhecido")}
                       </div>
                       <div className="text-xs font-light text-text-tertiary">
-                        ativado em{" "}
-                        {new Date(s.createdAt * 1000).toLocaleString("pt-BR")}
+                        {tx("ativado em")}{" "}
+                        {new Date(s.createdAt * 1000).toLocaleString(LOCALE)}
                         {s.lastUsedAt
-                          ? ` · último uso ${new Date(s.lastUsedAt * 1000).toLocaleString("pt-BR")}`
+                          ? tx(
+                              " · último uso {0}",
+                              new Date(s.lastUsedAt * 1000).toLocaleString(
+                                LOCALE,
+                              ),
+                            )
                           : ""}
                       </div>
                     </div>
@@ -190,7 +235,7 @@ function NotificationsSection() {
                       disabled={busy}
                       onClick={() => onRevoke(s.id)}
                     >
-                      Remover
+                      {tx("Remover")}
                     </button>
                   </li>
                 ))}
@@ -237,17 +282,20 @@ function DisplayPreferencesSection() {
 
   return (
     <section className="space-y-3">
-      <h2 className="text-base font-semibold text-text-primary">Leitura</h2>
+      <h2 className="text-base font-semibold text-text-primary">
+        {tx("Leitura")}
+      </h2>
 
       <div className="rounded-[8px] bg-card p-5 ring-1 ring-border">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h3 className="text-sm font-medium text-text-primary">
-              Esconder assinaturas no modo chat
+              {tx("Esconder assinaturas no modo chat")}
             </h3>
             <p className="mt-1 text-xs font-light text-text-secondary">
-              Tira o bloco de assinatura dos balões do modo chat, para a
-              conversa ficar limpa.
+              {tx(
+                "Tira o bloco de assinatura dos balões do modo chat, para a conversa ficar limpa.",
+              )}
             </p>
           </div>
           <button
@@ -302,16 +350,16 @@ function AppBrandingSection() {
         const data = (await res.json().catch(() => ({}))) as {
           error?: string;
         };
-        setError(data.error || "Não deu para salvar o nome.");
+        setError(data.error || tx("Não deu para salvar o nome."));
         return;
       }
       const data = (await res.json()) as { brandName: string };
-      setSuccess(`Salvo. O app agora se chama "${data.brandName}".`);
+      setSuccess(tx('Salvo. O app agora se chama "{0}".', data.brandName));
       // Push the new value into the live BrandingProvider so the top-nav
       // wordmark updates without a page reload.
       await refreshBranding();
     } catch {
-      setError("Não deu para salvar o nome.");
+      setError(tx("Não deu para salvar o nome."));
     } finally {
       setBusy(false);
     }
@@ -320,11 +368,11 @@ function AppBrandingSection() {
   async function onSave() {
     const trimmed = value.trim();
     if (!trimmed) {
-      setError("O nome não pode ficar vazio.");
+      setError(tx("O nome não pode ficar vazio."));
       return;
     }
     if (trimmed.length > 40) {
-      setError("O nome pode ter até 40 caracteres.");
+      setError(tx("O nome pode ter até 40 caracteres."));
       return;
     }
     await patch({ brandName: trimmed });
@@ -336,19 +384,22 @@ function AppBrandingSection() {
 
   return (
     <section className="space-y-3">
-      <h2 className="text-base font-semibold text-text-primary">Nome do app</h2>
+      <h2 className="text-base font-semibold text-text-primary">
+        {tx("Nome do app")}
+      </h2>
 
       <div className="rounded-[8px] bg-card p-5 ring-1 ring-border">
         <p className="text-xs font-light text-text-secondary">
-          Aparece na lateral, na tela de login, na aba do navegador e nos
-          e-mails de convite.
+          {tx(
+            "Aparece na lateral, na tela de login, na aba do navegador e nos e-mails de convite.",
+          )}
         </p>
         <div className="mt-4 space-y-2">
           <label
             htmlFor="branding-app-name"
             className="text-xs font-medium text-text-secondary"
           >
-            Nome
+            {tx("Nome")}
           </label>
           <input
             id="branding-app-name"
@@ -382,7 +433,7 @@ function AppBrandingSection() {
             disabled={busy}
             className="rounded-[6px] bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {busy ? "Salvando…" : "Salvar"}
+            {busy ? tx("Salvando…") : tx("Salvar")}
           </button>
           <button
             type="button"
@@ -390,7 +441,7 @@ function AppBrandingSection() {
             disabled={busy}
             className="text-xs text-text-secondary hover:text-text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Voltar ao padrão
+            {tx("Voltar ao padrão")}
           </button>
         </div>
       </div>

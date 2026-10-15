@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 export interface InboxFilters {
   recipient?: string;
   unread?: boolean;
@@ -32,10 +33,10 @@ export interface InboxFilters {
 export type InboxView = "list" | "table";
 
 const ORDENS: Array<{ value: InboxSort; label: string }> = [
-  { value: "recency", label: "Mais recentes" },
-  { value: "unread", label: "Não lidas primeiro" },
-  { value: "inbox", label: "Por caixa" },
-  { value: "attachments", label: "Com anexo primeiro" },
+  { value: "recency", label: tx("Mais recentes") },
+  { value: "unread", label: tx("Não lidas primeiro") },
+  { value: "inbox", label: tx("Por caixa") },
+  { value: "attachments", label: tx("Com anexo primeiro") },
 ];
 
 interface ListHeaderProps {
@@ -100,7 +101,7 @@ export default function ListHeader({
   refreshing,
 }: ListHeaderProps) {
   const rotuloOrdem =
-    ORDENS.find((o) => o.value === sortSpec.key)?.label ?? "Mais recentes";
+    ORDENS.find((o) => o.value === sortSpec.key)?.label ?? tx("Mais recentes");
   const filtrando = !!filters.unread || !!filters.hasAttachment;
 
   return (
@@ -116,16 +117,16 @@ export default function ListHeader({
           <p className="truncate text-xs text-text-tertiary tabular-nums">
             {endereco ? `${endereco} · ` : ""}
             {conversas === null
-              ? "Carregando…"
-              : `${naoLidas} não ${naoLidas === 1 ? "lida" : "lidas"} · ${conversas} ${conversas === 1 ? "conversa" : "conversas"}`}
+              ? tx("Carregando…")
+              : `${naoLidas === 1 ? tx("{0} não lida", naoLidas) : tx("{0} não lidas", naoLidas)} · ${conversas === 1 ? tx("{0} conversa", conversas) : tx("{0} conversas", conversas)}`}
           </p>
         </div>
         <button
           type="button"
           onClick={onRefresh}
           disabled={refreshing}
-          aria-label="Atualizar"
-          title="Atualizar"
+          aria-label={tx("Atualizar")}
+          title={tx("Atualizar")}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] text-text-tertiary transition-colors hover:bg-text-primary/[0.05] hover:text-text-primary disabled:opacity-60"
         >
           <RefreshCw size={15} className={cn(refreshing && "animate-spin")} />
@@ -133,8 +134,10 @@ export default function ListHeader({
         <button
           type="button"
           onClick={() => onViewChange(view === "list" ? "table" : "list")}
-          aria-label={view === "list" ? "Ver como tabela" : "Ver como lista"}
-          title={view === "list" ? "Ver como tabela" : "Ver como lista"}
+          aria-label={
+            view === "list" ? tx("Ver como tabela") : tx("Ver como lista")
+          }
+          title={view === "list" ? tx("Ver como tabela") : tx("Ver como lista")}
           className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-[6px] text-text-tertiary transition-colors hover:bg-text-primary/[0.05] hover:text-text-primary md:flex"
         >
           {view === "list" ? <Table2 size={15} /> : <LayoutList size={15} />}
@@ -142,7 +145,7 @@ export default function ListHeader({
       </div>
 
       <label className="relative block">
-        <span className="sr-only">Buscar</span>
+        <span className="sr-only">{tx("Buscar")}</span>
         <Search
           size={14}
           className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary"
@@ -152,7 +155,7 @@ export default function ListHeader({
           type="text"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Buscar por nome, e-mail ou assunto"
+          placeholder={tx("Buscar por nome, e-mail ou assunto")}
           className="h-8 w-full rounded-[6px] border border-border bg-bg-subtle pl-8 pr-8 text-[13px] text-text-primary placeholder:text-text-tertiary focus:border-primary focus:bg-card focus:outline-none"
         />
         {search && (
@@ -160,7 +163,7 @@ export default function ListHeader({
             type="button"
             data-testid="person-search-clear"
             onClick={() => onSearchChange("")}
-            aria-label="Limpar busca"
+            aria-label={tx("Limpar busca")}
             className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[4px] text-text-tertiary hover:text-text-primary"
           >
             <X size={13} />
@@ -175,7 +178,7 @@ export default function ListHeader({
             onFiltersChange({ ...filters, unread: !filters.unread })
           }
         >
-          Não lidas
+          {tx("Não lidas")}
         </Chip>
         <Chip
           ativo={!!filters.hasAttachment}
@@ -187,7 +190,7 @@ export default function ListHeader({
           }
         >
           <Paperclip size={12} />
-          Com anexo
+          {tx("Com anexo")}
         </Chip>
         {filtrando && (
           <button
@@ -201,7 +204,7 @@ export default function ListHeader({
             }
             className="h-7 rounded-[6px] px-1.5 text-xs text-text-tertiary hover:text-text-primary"
           >
-            Limpar
+            {tx("Limpar")}
           </button>
         )}
 
@@ -246,10 +249,10 @@ export default function ListHeader({
             }
             aria-label={
               sortSpec.direction === "asc"
-                ? "Ordem crescente; inverter"
-                : "Ordem decrescente; inverter"
+                ? tx("Ordem crescente; inverter")
+                : tx("Ordem decrescente; inverter")
             }
-            title="Inverter a ordem"
+            title={tx("Inverter a ordem")}
             className="flex h-7 w-7 items-center justify-center rounded-[6px] text-text-tertiary hover:bg-text-primary/[0.05] hover:text-text-primary"
           >
             {sortSpec.direction === "asc" ? (

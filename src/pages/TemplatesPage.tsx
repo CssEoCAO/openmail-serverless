@@ -6,6 +6,7 @@ import type { EmailTemplate } from "@/lib/api";
 import PageHeader, { PageContainer } from "@/components/PageHeader";
 import { analyzeTemplateClient } from "@/lib/template-syntax";
 
+import { tx } from "@/lib/i18n";
 /**
  * Count the top-level names a caller can supply — shown as a small badge on
  * each row so the list hints at template complexity without opening the editor.
@@ -43,7 +44,7 @@ export default function TemplatesPage() {
   }, []);
 
   async function handleDelete(slug: string) {
-    if (!confirm("Excluir este modelo?")) return;
+    if (!confirm(tx("Excluir este modelo?"))) return;
     await deleteTemplate(slug);
     setTemplates((prev) => prev.filter((t) => t.slug !== slug));
   }
@@ -51,29 +52,31 @@ export default function TemplatesPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Modelos de e-mail"
-        subtitle="Modelos HTML reaproveitáveis com {{variável}}. Usados na resposta, nas sequências e pela API."
+        title={tx("Modelos de e-mail")}
+        subtitle={tx(
+          "Modelos HTML reaproveitáveis com {{variável}}. Usados na resposta, nas sequências e pela API.",
+        )}
         action={
           <button
             onClick={() => navigate("/templates/new")}
             className="inline-flex items-center gap-1.5 rounded-[6px] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             <Plus size={14} />
-            Novo modelo
+            {tx("Novo modelo")}
           </button>
         }
       />
 
       <div className="max-w-4xl">
         {loading ? (
-          <p className="text-sm text-text-tertiary">Carregando…</p>
+          <p className="text-sm text-text-tertiary">{tx("Carregando…")}</p>
         ) : templates.length === 0 ? (
           <div className="rounded-[8px] bg-card p-10 text-center ring-1 ring-border">
             <p className="mb-1 text-sm font-medium text-text-primary">
-              Nenhum modelo ainda
+              {tx("Nenhum modelo ainda")}
             </p>
             <p className="text-xs font-light text-text-tertiary">
-              Crie o primeiro pelo botão "Novo modelo".
+              {tx('Crie o primeiro pelo botão "Novo modelo".')}
             </p>
           </div>
         ) : (
@@ -103,7 +106,11 @@ export default function TemplatesPage() {
                           </p>
                           {varCount > 0 && (
                             <span
-                              title={`${varCount} ${varCount === 1 ? "variável" : "variáveis"}`}
+                              title={
+                                varCount === 1
+                                  ? tx("{0} variável", varCount)
+                                  : tx("{0} variáveis", varCount)
+                              }
                               className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary-soft px-1.5 py-0.5 font-mono text-[11px] text-primary-ink"
                             >
                               <Hash size={9} />
@@ -123,11 +130,11 @@ export default function TemplatesPage() {
                         className="inline-flex h-8 items-center gap-1.5 rounded-[6px] px-2.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
                       >
                         <Pencil size={12} />
-                        Editar
+                        {tx("Editar")}
                       </button>
                       <button
                         onClick={() => handleDelete(t.slug)}
-                        aria-label="Excluir"
+                        aria-label={tx("Excluir")}
                         className="inline-flex h-8 items-center gap-1.5 rounded-[6px] px-2.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
                       >
                         <Trash2 size={12} />

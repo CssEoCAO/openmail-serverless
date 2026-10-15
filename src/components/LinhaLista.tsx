@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { CheckCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 // Peças das linhas da lista (pessoa e grupo): seleção, contador e pré-carga.
 
 /**
@@ -89,8 +90,8 @@ export function NaoLidasBadge({
       role="button"
       tabIndex={0}
       data-testid={testId}
-      title="Marcar como lida"
-      aria-label={`${n} não lidas; marcar como lida`}
+      title={tx("Marcar como lida")}
+      aria-label={tx("{0} não lidas; marcar como lida", n)}
       onClick={(e) => {
         e.stopPropagation();
         onMarcar();

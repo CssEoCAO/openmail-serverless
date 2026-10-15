@@ -1,6 +1,7 @@
 import { CheckCheck, X, Loader2, ShieldBan } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 interface SelectionBarProps {
   count: number;
   busy?: boolean;
@@ -52,7 +53,7 @@ export default function SelectionBar({
         ) : (
           <CheckCheck size={12} />
         )}
-        Marcar como lida
+        {tx("Marcar como lida")}
       </button>
 
       {onBlock && (
@@ -63,7 +64,7 @@ export default function SelectionBar({
           className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 text-xs font-medium transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <ShieldBan size={12} />
-          Bloquear
+          {tx("Bloquear")}
         </button>
       )}
 
@@ -71,10 +72,10 @@ export default function SelectionBar({
         type="button"
         onClick={onClear}
         className="ml-auto inline-flex items-center gap-1 rounded-[6px] px-2 py-1 text-xs font-medium transition-colors hover:bg-primary/10"
-        aria-label="Desmarcar tudo"
+        aria-label={tx("Desmarcar tudo")}
       >
         <X size={12} />
-        Desmarcar
+        {tx("Desmarcar")}
       </button>
     </div>
   );

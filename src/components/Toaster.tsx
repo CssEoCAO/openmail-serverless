@@ -4,6 +4,7 @@ import { CheckCircle2, AlertTriangle, Info, X, XCircle } from "lucide-react";
 import { TOAST_EVENT, type ToastInit, type ToastKind } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 interface ToastItem extends ToastInit {
   id: string;
 }
@@ -121,7 +122,7 @@ export default function Toaster() {
             <button
               type="button"
               onClick={() => dismiss(it.id)}
-              aria-label="Fechar aviso"
+              aria-label={tx("Fechar aviso")}
               className="shrink-0 rounded-[6px] p-1 text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
             >
               <X size={12} />

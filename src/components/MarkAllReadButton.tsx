@@ -1,5 +1,6 @@
 import { CheckCheck } from "lucide-react";
 
+import { tx } from "@/lib/i18n";
 interface MarkAllReadButtonProps {
   /** Não lidas no escopo; com 0 o botão não aparece. */
   unreadCount: number;
@@ -24,11 +25,15 @@ export default function MarkAllReadButton({
       type="button"
       data-testid="mark-all-read"
       onClick={onMarkAllRead}
-      title={`Marcar as ${unreadCount} não lidas de ${scopeLabel} como lidas`}
+      title={tx(
+        "Marcar as {0} não lidas de {1} como lidas",
+        unreadCount,
+        scopeLabel,
+      )}
       className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[6px] border border-border bg-card px-2.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-subtle hover:text-text-primary"
     >
       <CheckCheck size={14} />
-      Marcar como lida
+      {tx("Marcar como lida")}
       <span className="rounded-full bg-primary-soft px-1.5 text-[11px] font-semibold tabular-nums text-primary-ink">
         {unreadCount}
       </span>

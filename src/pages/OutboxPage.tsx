@@ -6,17 +6,18 @@ import PageHeader, { PageContainer } from "@/components/PageHeader";
 import { SectionHeader } from "@/components/PageForm";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 function relativeTime(ts: number): string {
   const diff = ts - Date.now() / 1000;
   const abs = Math.abs(diff);
-  if (abs < 60) return diff >= 0 ? "a qualquer momento" : "agora há pouco";
+  if (abs < 60) return diff >= 0 ? "a qualquer momento" : tx("agora há pouco");
   const n =
     abs < 3600
       ? `${Math.floor(abs / 60)} min`
       : abs < 86400
         ? `${Math.floor(abs / 3600)} h`
         : `${Math.floor(abs / 86400)} d`;
-  return diff >= 0 ? `em ${n}` : `há ${n}`;
+  return diff >= 0 ? tx("em {0}", n) : tx("há {0}", n);
 }
 
 function StatusChip({ item }: { item: OutboxItem }) {
@@ -34,10 +35,10 @@ function StatusChip({ item }: { item: OutboxItem }) {
     >
       {status === "pending" ? <Clock size={10} /> : <X size={10} />}
       {agendado
-        ? "Agendado"
+        ? tx("Agendado")
         : status === "pending"
-          ? "Tentando de novo"
-          : "Falhou"}
+          ? tx("Tentando de novo")
+          : tx("Falhou")}
     </span>
   );
 }
@@ -58,7 +59,7 @@ export default function OutboxPage() {
       setItems(res.items);
       setNextCursor(res.nextCursor);
     } catch {
-      setError("Não deu para carregar a saída.");
+      setError(tx("Não deu para carregar a saída."));
     } finally {
       setLoading(false);
     }
@@ -71,7 +72,7 @@ export default function OutboxPage() {
       setItems((prev) => [...prev, ...res.items]);
       setNextCursor(res.nextCursor);
     } catch {
-      setError("Não deu para carregar mais.");
+      setError(tx("Não deu para carregar mais."));
     }
   }
 
@@ -88,19 +89,22 @@ export default function OutboxPage() {
         setItems((prev) => prev.filter((i) => i.id !== item.id));
         setNotice(
           res.outcome === "sent"
-            ? `Enviado para ${item.toAddress}.`
-            : `${item.toAddress} está na lista de supressão; envio cancelado.`,
+            ? tx("Enviado para {0}.", item.toAddress)
+            : tx(
+                "{0} está na lista de supressão; envio cancelado.",
+                item.toAddress,
+              ),
         );
       } else {
         setNotice(
           res.outcome === "failed"
-            ? `Ainda falhando: o provedor recusou de novo.`
+            ? tx("Ainda falhando: o provedor recusou de novo.")
             : `Tentativa feita; aguardando o provedor.`,
         );
         await loadInitial();
       }
     } catch {
-      setError("A nova tentativa falhou.");
+      setError(tx("A nova tentativa falhou."));
     } finally {
       setBusyId(null);
     }
@@ -112,9 +116,9 @@ export default function OutboxPage() {
     try {
       await cancelOutboxItem(item.id);
       setItems((prev) => prev.filter((i) => i.id !== item.id));
-      setNotice(`Envio para ${item.toAddress} cancelado.`);
+      setNotice(tx("Envio para {0} cancelado.", item.toAddress));
     } catch {
-      setError("Não deu para cancelar.");
+      setError(tx("Não deu para cancelar."));
     } finally {
       setBusyId(null);
     }
@@ -123,8 +127,10 @@ export default function OutboxPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Saída"
-        subtitle="Envios agendados e os que o provedor recusou. Os em nova tentativa voltam a sair a cada hora; os que falharam precisam de reenvio manual."
+        title={tx("Saída")}
+        subtitle={tx(
+          "Envios agendados e os que o provedor recusou. Os em nova tentativa voltam a sair a cada hora; os que falharam precisam de reenvio manual.",
+        )}
       />
 
       <div className="space-y-6">
@@ -133,7 +139,7 @@ export default function OutboxPage() {
             <SectionHeader
               icon={Send}
               title={`Na fila (${items.length}${nextCursor ? "+" : ""})`}
-              subtitle="Envio que deu certo não aparece aqui."
+              subtitle={tx("Envio que deu certo não aparece aqui.")}
             />
           </div>
 
@@ -150,11 +156,11 @@ export default function OutboxPage() {
 
           {loading ? (
             <p className="px-5 py-6 text-xs font-light text-text-tertiary">
-              Carregando…
+              {tx("Carregando…")}
             </p>
           ) : items.length === 0 ? (
             <p className="px-5 py-10 text-center text-sm text-text-tertiary">
-              Nada esperando para sair.
+              {tx("Nada esperando para sair.")}
             </p>
           ) : (
             <>
@@ -175,11 +181,11 @@ export default function OutboxPage() {
                         <StatusChip item={item} />
                       </div>
                       <p className="truncate text-xs font-light text-text-tertiary">
-                        Para {item.toAddress} · de {item.fromAddress} ·{" "}
-                        {item.attempts}{" "}
+                        {tx("Para")} {item.toAddress} {tx("· de")}{" "}
+                        {item.fromAddress} · {item.attempts}{" "}
                         {item.attempts === 1 ? "tentativa" : "tentativas"}
                         {item.status === "pending" && item.nextRetryAt
-                          ? ` · ${item.attempts === 0 ? "sai" : "próxima"} ${relativeTime(item.nextRetryAt)}`
+                          ? ` · ${item.attempts === 0 ? tx("sai") : tx("próxima")} ${relativeTime(item.nextRetryAt)}`
                           : ""}
                       </p>
                       {item.lastError && (
@@ -198,7 +204,7 @@ export default function OutboxPage() {
                           size={12}
                           className={busyId === item.id ? "animate-spin" : ""}
                         />
-                        Tentar agora
+                        {tx("Tentar agora")}
                       </button>
                       <button
                         onClick={() => handleCancel(item)}
@@ -206,7 +212,7 @@ export default function OutboxPage() {
                         className="inline-flex h-8 items-center gap-1 rounded-[6px] px-2 text-xs font-medium text-text-tertiary transition-colors hover:bg-destructive-subtle hover:text-destructive disabled:opacity-60"
                       >
                         <X size={12} />
-                        Cancelar
+                        {tx("Cancelar")}
                       </button>
                     </div>
                   </li>
@@ -218,7 +224,7 @@ export default function OutboxPage() {
                     onClick={loadMore}
                     className="w-full rounded-[6px] border border-border bg-card py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
                   >
-                    Carregar mais
+                    {tx("Carregar mais")}
                   </button>
                 </div>
               )}

@@ -73,6 +73,10 @@ Do **not** hand-author `migrations/*.sql` or edit `migrations/meta/_journal.json
 
 Details: [`migrations/README.md`](./migrations/README.md). Apply with `yarn db:migrate:dev` / `yarn db:migrate:prod`.
 
+## Interface text (i18n)
+
+Interface strings are written in Portuguese in the source and go through `tx("…")` from `src/lib/i18n.ts`; `src/lib/en.ts` maps each Portuguese string to English. A new visible string needs both: the `tx()` call and its English line in `en.ts`. Placeholders are positional (`tx("{0} não lidas", n)`), and dates and numbers use `LOCALE` from the same module instead of a hardcoded `"pt-BR"`.
+
 ## API surface
 
 Backend routes are Hono + Zod OpenAPI under `worker/src/routers/`. Spec is served at `/doc` (JSON) and `/swagger-ui` (not `/openapi.json` / `/api/doc`). When changing request/response shapes, update the zod-openapi schemas so `/doc` stays accurate.

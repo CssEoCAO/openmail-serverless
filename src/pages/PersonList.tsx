@@ -29,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+import { tx } from "@/lib/i18n";
 interface PersonListProps {
   /** Linhas de pessoa e de grupo vindas de /api/people/grouped. */
   items: GroupedItem[];
@@ -91,7 +92,7 @@ function LinhaPessoa({
   const qc = useQueryClient();
   const intencao = useIntencao(() => preCarregarPessoa(qc, person.id));
   const naoLida = person.unreadCount > 0;
-  const assunto = person.latestSubject?.trim() || "(sem assunto)";
+  const assunto = person.latestSubject?.trim() || tx("(sem assunto)");
   const caixas = person.recipients ?? [];
 
   return (
@@ -189,7 +190,7 @@ function LinhaPessoa({
             {plural(person.totalCount, "mensagem", "mensagens")}
           </span>
           {person.hasAttachment === 1 && (
-            <Paperclip size={12} aria-label="Tem anexo" />
+            <Paperclip size={12} aria-label={tx("Tem anexo")} />
           )}
           {temRascunho && <RascunhoPill />}
           {naoLida && (
@@ -209,7 +210,7 @@ function LinhaPessoa({
               type="button"
               data-testid="person-kebab-menu"
               data-person-id={person.id}
-              aria-label="Ações da pessoa"
+              aria-label={tx("Ações da pessoa")}
               className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-[4px] bg-card text-text-tertiary opacity-0 shadow-sm ring-1 ring-border transition-opacity hover:text-text-primary focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
             >
               <MoreHorizontal size={14} />
@@ -222,7 +223,7 @@ function LinhaPessoa({
               className="text-destructive focus:text-destructive"
             >
               <Trash2 />
-              Excluir pessoa
+              {tx("Excluir pessoa")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -274,7 +275,11 @@ export default function PersonList({
   async function excluir(person: GroupedPerson) {
     if (
       !confirm(
-        `Excluir ${person.name || person.email} e as ${plural(person.totalCount, "mensagem", "mensagens")} para sempre? Não dá para desfazer.`,
+        tx(
+          "Excluir {0} e as {1} para sempre? Não dá para desfazer.",
+          person.name || person.email,
+          plural(person.totalCount, "mensagem", "mensagens"),
+        ),
       )
     )
       return;
@@ -284,7 +289,7 @@ export default function PersonList({
       onDelete(person.id);
       onPersonDeleted?.(person.id);
     } catch {
-      setErroExcluir("Não deu para excluir. Tente de novo.");
+      setErroExcluir(tx("Não deu para excluir. Tente de novo."));
     }
   }
 
@@ -333,7 +338,7 @@ export default function PersonList({
           className={cn(stale && "opacity-60 transition-opacity")}
         >
           {loading ? (
-            <ul aria-busy="true" aria-label="Carregando conversas">
+            <ul aria-busy="true" aria-label={tx("Carregando conversas")}>
               {Array.from({ length: 8 }, (_, i) => (
                 <li
                   key={i}
@@ -347,23 +352,23 @@ export default function PersonList({
           ) : error && items.length === 0 ? (
             <div className="px-6 py-16 text-center">
               <p className="text-sm font-medium text-text-primary">
-                Não deu para carregar as conversas.
+                {tx("Não deu para carregar as conversas.")}
               </p>
               <button
                 type="button"
                 onClick={() => void onRefresh()}
                 className="mt-2 text-sm font-medium text-primary-ink hover:underline"
               >
-                Tentar de novo
+                {tx("Tentar de novo")}
               </button>
             </div>
           ) : items.length === 0 ? (
             <div className="px-6 py-16 text-center">
               <p className="text-sm font-medium text-text-primary">
-                Nenhuma conversa aqui
+                {tx("Nenhuma conversa aqui")}
               </p>
               <p className="mt-1 text-xs text-text-tertiary">
-                Tente outra busca ou tire os filtros.
+                {tx("Tente outra busca ou tire os filtros.")}
               </p>
             </div>
           ) : (
@@ -409,8 +414,8 @@ export default function PersonList({
       {total > 0 && (
         <div className="flex shrink-0 items-center justify-between border-t border-border px-3 py-1.5 text-xs text-text-tertiary">
           <span className="tabular-nums">
-            {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} de{" "}
-            {total}
+            {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)}{" "}
+            {tx("de")} {total}
           </span>
           {totalPages > 1 && (
             <span className="flex items-center gap-0.5">
@@ -418,7 +423,7 @@ export default function PersonList({
                 type="button"
                 onClick={() => onPageChange(Math.max(1, page - 1))}
                 disabled={page <= 1}
-                aria-label="Página anterior"
+                aria-label={tx("Página anterior")}
                 className="flex h-7 w-7 items-center justify-center rounded-[6px] hover:bg-text-primary/[0.05] hover:text-text-primary disabled:opacity-30 disabled:hover:bg-transparent"
               >
                 <ChevronLeft size={15} />
@@ -427,7 +432,7 @@ export default function PersonList({
                 type="button"
                 onClick={() => onPageChange(Math.min(totalPages, page + 1))}
                 disabled={page >= totalPages}
-                aria-label="Próxima página"
+                aria-label={tx("Próxima página")}
                 className="flex h-7 w-7 items-center justify-center rounded-[6px] hover:bg-text-primary/[0.05] hover:text-text-primary disabled:opacity-30 disabled:hover:bg-transparent"
               >
                 <ChevronRight size={15} />

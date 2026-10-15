@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { enablePush, markPromptDismissed, motivoPush } from "@/lib/push";
 
+import { tx } from "@/lib/i18n";
 export function PushOptInBanner({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,15 +28,15 @@ export function PushOptInBanner({ onClose }: { onClose: () => void }) {
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-primary-soft px-4 py-2.5 text-sm">
       <div>
         <p className="font-medium text-text-primary">
-          Receber aviso de e-mail novo mesmo com a aba fechada
+          {tx("Receber aviso de e-mail novo mesmo com a aba fechada")}
         </p>
         {error ? (
           <p className="mt-1 text-xs text-destructive">
-            Não deu para ligar as notificações: {error}
+            {tx("Não deu para ligar as notificações:")} {error}
           </p>
         ) : (
           <p className="mt-1 text-xs text-text-secondary">
-            O navegador avisa quando chega e-mail, como um app.
+            {tx("O navegador avisa quando chega e-mail, como um app.")}
           </p>
         )}
       </div>
@@ -45,13 +46,13 @@ export function PushOptInBanner({ onClose }: { onClose: () => void }) {
           disabled={busy}
           onClick={handleEnable}
         >
-          {busy ? "…" : "Ligar"}
+          {busy ? "…" : tx("Ligar")}
         </button>
         <button
           className="rounded-[6px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-primary"
           onClick={handleDismiss}
         >
-          Agora não
+          {tx("Agora não")}
         </button>
       </div>
     </div>

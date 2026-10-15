@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchSequences, enrollPerson, type Sequence } from "@/lib/api";
 
+import { tx } from "@/lib/i18n";
 interface EnrollSequenceModalProps {
   personId: string;
   personName: string | null;
@@ -92,7 +93,7 @@ export default function EnrollSequenceModal({
       onEnrolled();
       onClose();
     } catch (err: any) {
-      alert(err.message || "Não deu para inscrever a pessoa.");
+      alert(err.message || tx("Não deu para inscrever a pessoa."));
     } finally {
       setSubmitting(false);
     }
@@ -106,14 +107,16 @@ export default function EnrollSequenceModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="w-full max-w-lg rounded-[12px] border border-border bg-card p-6 shadow-xl">
         <h2 className="mb-1 text-lg font-semibold text-text-primary">
-          Inscrever em sequência
+          {tx("Inscrever em sequência")}
         </h2>
         <p className="mb-4 text-sm text-text-secondary">
           {personName ?? personEmail}
         </p>
 
         {loading ? (
-          <p className="text-sm text-text-tertiary">Carregando sequências…</p>
+          <p className="text-sm text-text-tertiary">
+            {tx("Carregando sequências…")}
+          </p>
         ) : (
           <>
             <select
@@ -125,7 +128,7 @@ export default function EnrollSequenceModal({
               }}
               className="mb-4 w-full rounded-md border border-border bg-card ring-1 ring-border px-3 py-2 text-sm text-text-primary"
             >
-              <option value="">Escolha uma sequência…</option>
+              <option value="">{tx("Escolha uma sequência…")}</option>
               {sequences.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} ({s.steps.length}{" "}
@@ -136,7 +139,7 @@ export default function EnrollSequenceModal({
 
             <div className="mb-4">
               <p className="mb-2 text-xs font-medium text-text-secondary">
-                Enviar como
+                {tx("Enviar como")}
               </p>
               <select
                 value={fromAddress}
@@ -154,7 +157,7 @@ export default function EnrollSequenceModal({
             {selectedSequence && (
               <div className="mb-4">
                 <p className="mb-2 text-xs font-medium text-text-secondary">
-                  Etapas
+                  {tx("Etapas")}
                 </p>
                 <div className="space-y-2">
                   {selectedSequence.steps.map((step, idx) => {
@@ -195,7 +198,7 @@ export default function EnrollSequenceModal({
                 </div>
                 {activeStepCount === 0 && (
                   <p className="mt-1 text-xs text-destructive">
-                    Marque pelo menos uma etapa.
+                    {tx("Marque pelo menos uma etapa.")}
                   </p>
                 )}
               </div>
@@ -203,20 +206,20 @@ export default function EnrollSequenceModal({
 
             <div className="mb-4">
               <p className="mb-2 text-xs font-medium text-text-secondary">
-                Variáveis
+                {tx("Variáveis")}
               </p>
               {variables.map((v, idx) => (
                 <div key={idx} className="mb-1 flex items-center gap-2">
                   <input
                     type="text"
-                    placeholder="chave"
+                    placeholder={tx("chave")}
                     value={v.key}
                     onChange={(e) => updateVariable(idx, "key", e.target.value)}
                     className="w-28 rounded border border-border bg-card ring-1 ring-border px-2 py-1 text-xs text-text-primary"
                   />
                   <input
                     type="text"
-                    placeholder="valor"
+                    placeholder={tx("valor")}
                     value={v.value}
                     onChange={(e) =>
                       updateVariable(idx, "value", e.target.value)
@@ -237,7 +240,7 @@ export default function EnrollSequenceModal({
                 onClick={addVariable}
                 className="text-xs font-medium text-primary-ink hover:underline"
               >
-                + Adicionar variável
+                {tx("+ Adicionar variável")}
               </button>
             </div>
 
@@ -246,14 +249,14 @@ export default function EnrollSequenceModal({
                 onClick={onClose}
                 className="rounded-[6px] border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-muted"
               >
-                Cancelar
+                {tx("Cancelar")}
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={!selectedId || submitting || activeStepCount === 0}
                 className="rounded-[6px] bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
               >
-                {submitting ? "Inscrevendo…" : "Inscrever"}
+                {submitting ? tx("Inscrevendo…") : tx("Inscrever")}
               </button>
             </div>
           </>

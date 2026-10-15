@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { MarcaPublica, botaoSecundario } from "@/components/Publico";
 import { useSearchParams } from "react-router-dom";
 
+import { tx } from "@/lib/i18n";
 type State =
   | { kind: "loading" }
   | { kind: "suppressed"; email: string }
@@ -81,10 +82,10 @@ export default function UnsubscribePage() {
           {state.kind === "loading" && (
             <>
               <h1 className="text-lg font-semibold text-text-primary">
-                Processando o pedido…
+                {tx("Processando o pedido…")}
               </h1>
               <p className="mt-2 text-sm text-text-tertiary">
-                Um instante enquanto atualizamos suas preferências.
+                {tx("Um instante enquanto atualizamos suas preferências.")}
               </p>
             </>
           )}
@@ -92,13 +93,13 @@ export default function UnsubscribePage() {
           {state.kind === "suppressed" && (
             <>
               <h1 className="text-xl font-semibold text-text-primary">
-                Inscrição cancelada
+                {tx("Inscrição cancelada")}
               </h1>
               <p className="mt-2 break-all text-sm text-text-secondary">
                 <span className="font-medium text-text-primary">
                   {state.email}
                 </span>{" "}
-                não vai mais receber nossos e-mails.
+                {tx("não vai mais receber nossos e-mails.")}
               </p>
               <button
                 type="button"
@@ -106,11 +107,12 @@ export default function UnsubscribePage() {
                 disabled={undoLoading || !undoToken}
                 className={`${botaoSecundario} mt-5`}
               >
-                {undoLoading ? "Atualizando…" : "Voltar a receber"}
+                {undoLoading ? tx("Atualizando…") : tx("Voltar a receber")}
               </button>
               <p className="mt-3 text-xs text-text-tertiary">
-                Mudou de ideia? Voltar a receber só reativa a entrega; não
-                inscreve você em nada novo.
+                {tx(
+                  "Mudou de ideia? Voltar a receber só reativa a entrega; não inscreve você em nada novo.",
+                )}
               </p>
             </>
           )}
@@ -118,13 +120,13 @@ export default function UnsubscribePage() {
           {state.kind === "subscribed" && (
             <>
               <h1 className="text-xl font-semibold text-text-primary">
-                Inscrição reativada
+                {tx("Inscrição reativada")}
               </h1>
               <p className="mt-2 break-all text-sm text-text-secondary">
                 <span className="font-medium text-text-primary">
                   {state.email}
                 </span>{" "}
-                volta a receber nossos e-mails.
+                {tx("volta a receber nossos e-mails.")}
               </p>
             </>
           )}
@@ -132,11 +134,12 @@ export default function UnsubscribePage() {
           {state.kind === "error" && (
             <>
               <h1 className="text-lg font-semibold text-text-primary">
-                Este link de descadastro é inválido ou expirou
+                {tx("Este link de descadastro é inválido ou expirou")}
               </h1>
               <p className="mt-2 text-sm text-text-tertiary">
-                Se continuar recebendo e-mails que não quer, responda a um deles
-                e avise o remetente.
+                {tx(
+                  "Se continuar recebendo e-mails que não quer, responda a um deles e avise o remetente.",
+                )}
               </p>
             </>
           )}

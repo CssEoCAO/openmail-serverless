@@ -11,16 +11,15 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { sendEmail, fetchStats, type CcEntry } from "@/lib/api";
 import { chaves } from "@/lib/queries";
-import {
-  proximoHorarioComercial,
-  rotuloBrasilia,
-} from "@worker/lib/horario-comercial";
+import { proximoHorarioComercial } from "@worker/lib/horario-comercial";
+import { rotuloHorario } from "@/lib/datas";
 import { dispatchEmailSent } from "@/lib/email-events";
 import { getFromLabel } from "@/lib/format";
 import { sanitizeEmailHtml } from "@/lib/sanitize-html";
 import AttachmentPicker from "@/components/AttachmentPicker";
 import AttachmentChips from "@/components/AttachmentChips";
 
+import { tx } from "@/lib/i18n";
 // Effective backend cap is ~18MB on the Cloudflare email path; we cap the
 // UI at 25MB and let the server reject the rest with a clear 413.
 const ATTACHMENT_CAP_BYTES = 25 * 1024 * 1024;
@@ -169,7 +168,7 @@ export default function ComposeModal({
   // do calendario no cliente: duas implementacoes divergem, e a que o usuario le seria a
   // errada. Recalculado a cada render porque o modal pode ficar aberto atravessando as
   // 18h — um rotulo congelado prometeria um horario que ja passou.
-  const rotuloSlot = rotuloBrasilia(proximoHorarioComercial(Date.now()));
+  const rotuloSlot = rotuloHorario(proximoHorarioComercial(Date.now()));
 
   async function handleSend(agendar = false) {
     if (!to || bodyIsEmpty) return;
@@ -198,7 +197,7 @@ export default function ComposeModal({
       setFiles([]);
       onClose();
     } catch {
-      setError("Não deu para enviar. Tente de novo.");
+      setError(tx("Não deu para enviar. Tente de novo."));
     } finally {
       setSending(false);
     }
@@ -239,7 +238,7 @@ export default function ComposeModal({
                 aria-hidden
               />
               <DialogPrimitive.Title className="truncate text-sm font-semibold text-text-primary">
-                {to ? `Nova mensagem · ${to}` : "Nova mensagem"}
+                {to ? tx("Nova mensagem · {0}", to) : tx("Nova mensagem")}
               </DialogPrimitive.Title>
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
@@ -249,7 +248,7 @@ export default function ComposeModal({
               />
               <DialogPrimitive.Close
                 className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
-                aria-label="Fechar"
+                aria-label={tx("Fechar")}
               >
                 <X size={14} />
               </DialogPrimitive.Close>
@@ -263,7 +262,7 @@ export default function ComposeModal({
             className="shrink-0 divide-y divide-border/60 border-b border-border bg-bg-subtle/30"
             data-testid="compose-metadata"
           >
-            <TrayMetaRow label="De">
+            <TrayMetaRow label={tx("De")}>
               <select
                 value={fromAddress}
                 onChange={(e) => setFromAddress(e.target.value)}
@@ -277,19 +276,19 @@ export default function ComposeModal({
                 ))}
               </select>
             </TrayMetaRow>
-            <TrayMetaRow label="Para" htmlFor="compose-to">
+            <TrayMetaRow label={tx("Para")} htmlFor="compose-to">
               <input
                 id="compose-to"
                 type="email"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
                 required
-                placeholder="nome@exemplo.com"
-                aria-label="Para"
+                placeholder={tx("nome@exemplo.com")}
+                aria-label={tx("Para")}
                 className="w-full bg-transparent py-2 pr-3 text-sm text-text-primary outline-none placeholder:text-text-tertiary"
               />
             </TrayMetaRow>
-            <TrayMetaRow label="Cc">
+            <TrayMetaRow label={tx("Cc")}>
               <CcInput
                 value={cc}
                 onChange={setCc}
@@ -297,14 +296,14 @@ export default function ComposeModal({
                 testId="compose-cc-input"
               />
             </TrayMetaRow>
-            <TrayMetaRow label="Assunto" htmlFor="compose-subject">
+            <TrayMetaRow label={tx("Assunto")} htmlFor="compose-subject">
               <input
                 id="compose-subject"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 required
-                placeholder="Sobre o quê?"
-                aria-label="Assunto"
+                placeholder={tx("Sobre o quê?")}
+                aria-label={tx("Assunto")}
                 className="w-full bg-transparent py-2 pr-3 text-sm text-text-primary outline-none placeholder:text-text-tertiary"
               />
             </TrayMetaRow>
@@ -359,12 +358,12 @@ export default function ComposeModal({
               ) : (
                 <span className="hidden sm:inline">
                   <kbd className="rounded border border-border bg-bg-muted px-1 font-mono text-[10px]">
-                    Ctrl
+                    {tx("Ctrl")}
                   </kbd>
                   <kbd className="ml-1 rounded border border-border bg-bg-muted px-1 font-mono text-[10px]">
-                    Enter
+                    {tx("Enter")}
                   </kbd>{" "}
-                  envia
+                  {tx("envia")}
                 </span>
               )}
             </div>
@@ -380,13 +379,16 @@ export default function ComposeModal({
                 onClick={onClose}
                 className="rounded-[6px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
               >
-                Cancelar
+                {tx("Cancelar")}
               </button>
               <button
                 type="button"
                 data-testid="compose-schedule-button"
                 onClick={() => handleSend(true)}
-                title={`Fica na fila e sai ${rotuloSlot}, em horário comercial`}
+                title={tx(
+                  "Fica na fila e sai {0}, em horário comercial",
+                  rotuloSlot,
+                )}
                 disabled={
                   sending ||
                   bodyIsEmpty ||
@@ -396,7 +398,7 @@ export default function ComposeModal({
                 className="inline-flex items-center gap-1.5 rounded-[6px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Clock size={12} />
-                {sending ? "…" : `Agendar ${rotuloSlot}`}
+                {sending ? "…" : tx("Agendar {0}", rotuloSlot)}
               </button>
               <button
                 type="button"
@@ -411,7 +413,7 @@ export default function ComposeModal({
                 className="inline-flex items-center gap-1.5 rounded-[6px] bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send size={12} />
-                {sending ? "Enviando…" : "Enviar"}
+                {sending ? tx("Enviando…") : tx("Enviar")}
               </button>
             </div>
           </div>

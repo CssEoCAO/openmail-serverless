@@ -44,6 +44,7 @@ import { rotuloCaixa, dominioDe } from "@/lib/arvore-caixas";
 import { useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 /** Espera o usuário parar de digitar; o resto da lista responde na hora. */
 function useAtrasado<T>(valor: T, ms: number): T {
   const [v, setV] = useState(valor);
@@ -396,17 +397,17 @@ export default function InboxPage() {
     : undefined;
   const titulo = caixaDaRota
     ? rotuloCaixa(caixaInfo ?? { email: caixaDaRota, displayName: null })
-    : "Todas as caixas";
+    : tx("Todas as caixas");
 
   if (stats && stats.inboxes.length === 0 && !isAdmin) {
     return (
       <div className="flex flex-1 items-center justify-center px-6">
         <div className="max-w-sm text-center">
           <h2 className="text-base font-semibold text-text-primary">
-            Nenhuma caixa liberada para você
+            {tx("Nenhuma caixa liberada para você")}
           </h2>
           <p className="mt-1 text-sm text-text-tertiary">
-            Peça a um administrador para dar acesso a uma caixa.
+            {tx("Peça a um administrador para dar acesso a uma caixa.")}
           </p>
         </div>
       </div>
@@ -493,7 +494,7 @@ export default function InboxPage() {
                 className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 text-xs font-medium text-text-secondary hover:bg-text-primary/[0.05] hover:text-text-primary"
               >
                 <ArrowLeft size={14} />
-                Voltar à tabela
+                {tx("Voltar à tabela")}
               </button>
             </div>
             <div className="min-h-0 flex-1">{leitura}</div>
@@ -540,7 +541,7 @@ export default function InboxPage() {
     <div className="flex min-h-0 flex-1">
       {/* Lista: no celular ocupa a tela e some quando uma conversa abre. */}
       <section
-        aria-label="Conversas"
+        aria-label={tx("Conversas")}
         className={cn(
           "min-h-0 w-full flex-col border-r border-border bg-card md:flex md:w-[340px] md:shrink-0 xl:w-[380px]",
           aberta ? "hidden" : "flex",
@@ -590,7 +591,7 @@ export default function InboxPage() {
       </section>
 
       <section
-        aria-label="Leitura"
+        aria-label={tx("Leitura")}
         className={cn(
           "min-h-0 min-w-0 flex-1 bg-card md:block",
           aberta ? "block" : "hidden",
@@ -599,7 +600,7 @@ export default function InboxPage() {
         {leitura ?? (
           <div className="flex h-full items-center justify-center px-8 text-center">
             <p className="max-w-[280px] text-sm text-text-tertiary">
-              Escolha uma conversa na lista.
+              {tx("Escolha uma conversa na lista.")}
             </p>
           </div>
         )}

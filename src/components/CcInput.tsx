@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CcEntry } from "@/lib/api";
 
+import { tx } from "@/lib/i18n";
 interface CcInputProps {
   value: CcEntry[];
   onChange: (next: CcEntry[]) => void;
@@ -57,7 +58,7 @@ export default function CcInput({
   value,
   onChange,
   internalDomains = [],
-  placeholder = "Adicionar CC (Enter confirma)",
+  placeholder = tx("Adicionar CC (Enter confirma)"),
   testId,
 }: CcInputProps) {
   const [draft, setDraft] = useState("");
@@ -119,7 +120,7 @@ export default function CcInput({
                 e.stopPropagation();
                 remove(c.email);
               }}
-              aria-label={`Remover ${c.email}`}
+              aria-label={tx("Remover {0}", c.email)}
               className="rounded-full p-0.5 hover:bg-black/10"
             >
               <X size={9} />

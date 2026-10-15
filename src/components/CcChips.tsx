@@ -1,6 +1,7 @@
 import { Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 export interface CcEntry {
   email: string;
   name?: string | null;
@@ -61,7 +62,7 @@ export default function CcChips({
     >
       <span className="inline-flex items-center gap-1 text-[11px] font-medium text-text-tertiary">
         <Users size={10} />
-        Cc
+        {tx("Cc")}
       </span>
       {cc.map((c) => {
         const internal = isInternal(c.email, internalDomains);
@@ -119,7 +120,7 @@ export function RosterDiffNotice({
               internalDomains={internalDomains}
             />
           ))}
-          <span>entrou</span>
+          <span>{tx("entrou")}</span>
         </span>
       )}
       {joined.length > 0 && left.length > 0 && (
@@ -135,7 +136,7 @@ export function RosterDiffNotice({
               internalDomains={internalDomains}
             />
           ))}
-          <span>saiu</span>
+          <span>{tx("saiu")}</span>
         </span>
       )}
     </div>

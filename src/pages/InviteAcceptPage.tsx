@@ -11,6 +11,7 @@ import {
 } from "@/components/Publico";
 import { useBranding } from "@/lib/branding";
 
+import { tx } from "@/lib/i18n";
 export default function InviteAcceptPage() {
   const { passkeyRequired, brandName } = useBranding();
   const { token } = useParams<{ token: string }>();
@@ -60,13 +61,15 @@ export default function InviteAcceptPage() {
     try {
       const result = await acceptInvite({ token, name, email, password });
       if (!result.success) {
-        setError("Não deu para criar a conta.");
+        setError(tx("Não deu para criar a conta."));
         return;
       }
       const signInResult = await signIn.email({ email, password });
       if (signInResult.error) {
         setError(
-          "A conta foi criada, mas o login não entrou. Vá para a tela de login.",
+          tx(
+            "A conta foi criada, mas o login não entrou. Vá para a tela de login.",
+          ),
         );
         return;
       }
@@ -77,24 +80,30 @@ export default function InviteAcceptPage() {
       void passkeyRequired;
       window.location.href = "/";
     } catch (err: any) {
-      setError(err?.message || "Não deu para aceitar o convite.");
+      setError(err?.message || tx("Não deu para aceitar o convite."));
     } finally {
       setLoading(false);
     }
   }
 
   if (status === "loading") {
-    return <p className="text-sm text-text-tertiary">Conferindo o convite…</p>;
+    return (
+      <p className="text-sm text-text-tertiary">
+        {tx("Conferindo o convite…")}
+      </p>
+    );
   }
 
   if (status === "invalid") {
     return (
       <CartaoPublico
-        titulo="Convite inválido"
-        subtitulo="Este link expirou, já foi usado ou não existe. Peça outro a quem convidou você."
+        titulo={tx("Convite inválido")}
+        subtitulo={tx(
+          "Este link expirou, já foi usado ou não existe. Peça outro a quem convidou você.",
+        )}
       >
         <a href="/login" className={botaoPrimario}>
-          Ir para o login
+          {tx("Ir para o login")}
         </a>
       </CartaoPublico>
     );
@@ -102,12 +111,12 @@ export default function InviteAcceptPage() {
 
   return (
     <CartaoPublico
-      titulo={`Entrar em ${brandName}`}
-      subtitulo="Crie sua conta para começar."
+      titulo={tx("Entrar em {0}", brandName)}
+      subtitulo={tx("Crie sua conta para começar.")}
     >
       <form onSubmit={handleSubmit} className="grid gap-3.5">
         <label className="grid gap-1.5">
-          <span className={rotuloPublico}>Nome</span>
+          <span className={rotuloPublico}>{tx("Nome")}</span>
           <input
             id="invite-name"
             value={name}
@@ -118,7 +127,7 @@ export default function InviteAcceptPage() {
           />
         </label>
         <label className="grid gap-1.5">
-          <span className={rotuloPublico}>E-mail</span>
+          <span className={rotuloPublico}>{tx("E-mail")}</span>
           <input
             id="invite-email"
             type="email"
@@ -131,7 +140,7 @@ export default function InviteAcceptPage() {
           />
         </label>
         <label className="grid gap-1.5">
-          <span className={rotuloPublico}>Senha</span>
+          <span className={rotuloPublico}>{tx("Senha")}</span>
           <input
             id="invite-password"
             type="password"
@@ -143,12 +152,12 @@ export default function InviteAcceptPage() {
             className={campoPublico}
           />
           <span className="text-xs text-text-tertiary">
-            Pelo menos 8 caracteres.
+            {tx("Pelo menos 8 caracteres.")}
           </span>
         </label>
         {error && <ErroPublico>{error}</ErroPublico>}
         <button type="submit" className={botaoPrimario} disabled={loading}>
-          {loading ? "Criando a conta…" : "Criar conta"}
+          {loading ? tx("Criando a conta…") : tx("Criar conta")}
         </button>
       </form>
     </CartaoPublico>

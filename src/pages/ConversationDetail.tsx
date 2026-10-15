@@ -20,6 +20,7 @@ import { showToast } from "@/lib/toast";
 import { chaves, mapearPaginas, useConversa, useStats } from "@/lib/queries";
 import { plural } from "@/lib/datas";
 
+import { tx } from "@/lib/i18n";
 const ReplyComposer = lazy(() => import("@/components/ReplyComposer"));
 
 interface ConversationDetailProps {
@@ -84,8 +85,14 @@ export default function ConversationDetail({
         ) {
           showToast({
             kind: "warning",
-            message: `A resposta saiu por ${inboxLabel(detail.fromAddress)}`,
-            description: `Esta conversa é de ${inboxLabel(conversation.inbox)}; resposta por outra caixa começa outra conversa.`,
+            message: tx(
+              "A resposta saiu por {0}",
+              inboxLabel(detail.fromAddress),
+            ),
+            description: tx(
+              "Esta conversa é de {0}; resposta por outra caixa começa outra conversa.",
+              inboxLabel(conversation.inbox),
+            ),
             durationMs: 6500,
           });
         }
@@ -124,14 +131,19 @@ export default function ConversationDetail({
   async function handleDelete(emailId: string) {
     if (
       !confirm(
-        "Excluir esta mensagem e os anexos para sempre? Não dá para desfazer.",
+        tx(
+          "Excluir esta mensagem e os anexos para sempre? Não dá para desfazer.",
+        ),
       )
     )
       return;
     try {
       await deleteEmail(emailId);
     } catch {
-      showToast({ kind: "error", message: "Não deu para excluir a mensagem" });
+      showToast({
+        kind: "error",
+        message: tx("Não deu para excluir a mensagem"),
+      });
       return;
     }
     mudarEmails((l) => l.filter((e) => e.id !== emailId));
@@ -165,7 +177,7 @@ export default function ConversationDetail({
           <button
             type="button"
             onClick={onBack}
-            aria-label="Voltar à lista"
+            aria-label={tx("Voltar à lista")}
             className="-ml-1 flex h-8 w-8 items-center justify-center rounded-[6px] text-text-secondary hover:bg-text-primary/[0.05] md:hidden"
           >
             <ArrowLeft size={17} />
@@ -206,8 +218,8 @@ export default function ConversationDetail({
           className="shrink-0 border-b border-border py-1.5 text-xs font-medium text-primary-ink hover:bg-bg-subtle disabled:opacity-60"
         >
           {consulta.isFetchingNextPage
-            ? "Carregando…"
-            : "Mostrar mensagens mais antigas"}
+            ? tx("Carregando…")
+            : tx("Mostrar mensagens mais antigas")}
         </button>
       )}
 
@@ -224,14 +236,14 @@ export default function ConversationDetail({
         ) : consulta.isError ? (
           <div className="px-6 py-16 text-center">
             <p className="text-sm font-medium text-text-primary">
-              Não deu para abrir a conversa.
+              {tx("Não deu para abrir a conversa.")}
             </p>
             <button
               type="button"
               onClick={() => void consulta.refetch()}
               className="mt-2 text-sm font-medium text-primary-ink hover:underline"
             >
-              Tentar de novo
+              {tx("Tentar de novo")}
             </button>
           </div>
         ) : (

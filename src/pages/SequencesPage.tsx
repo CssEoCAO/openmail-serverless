@@ -4,12 +4,13 @@ import { Plus, ListOrdered, Pencil, Trash2, Clock } from "lucide-react";
 import { fetchSequences, deleteSequence, type Sequence } from "@/lib/api";
 import PageHeader, { PageContainer } from "@/components/PageHeader";
 
+import { tx } from "@/lib/i18n";
 /** Round delay-hours into a friendlier string for the row chip. */
 function formatTotalDelay(hours: number): string {
-  if (hours <= 0) return "na hora";
+  if (hours <= 0) return tx("na hora");
   if (hours < 24) return `${hours}h`;
   const days = Math.round((hours / 24) * 10) / 10;
-  return days === 1 ? "1 dia" : `${days} dias`;
+  return days === 1 ? tx("1 dia") : tx("{0} dias", days);
 }
 
 function totalDurationHours(seq: Sequence): number {
@@ -28,42 +29,47 @@ export default function SequencesPage() {
   }, []);
 
   async function handleDelete(id: string) {
-    if (!confirm("Excluir esta sequência?")) return;
+    if (!confirm(tx("Excluir esta sequência?"))) return;
     try {
       await deleteSequence(id);
       setSequences((prev) => prev.filter((s) => s.id !== id));
     } catch {
-      alert("Não deu para excluir: a sequência pode ter inscrições ativas.");
+      alert(
+        tx("Não deu para excluir: a sequência pode ter inscrições ativas."),
+      );
     }
   }
 
   return (
     <PageContainer>
       <PageHeader
-        title="Sequências"
-        subtitle="Campanhas em etapas: inscreva um contato e os modelos saem na agenda definida."
+        title={tx("Sequências")}
+        subtitle={tx(
+          "Campanhas em etapas: inscreva um contato e os modelos saem na agenda definida.",
+        )}
         action={
           <button
             onClick={() => navigate("/sequences/new")}
             className="inline-flex items-center gap-1.5 rounded-[6px] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             <Plus size={14} />
-            Nova sequência
+            {tx("Nova sequência")}
           </button>
         }
       />
 
       <div className="max-w-4xl">
         {loading ? (
-          <p className="text-sm text-text-tertiary">Carregando…</p>
+          <p className="text-sm text-text-tertiary">{tx("Carregando…")}</p>
         ) : sequences.length === 0 ? (
           <div className="rounded-[8px] bg-card p-10 text-center ring-1 ring-border">
             <p className="mb-1 text-sm font-medium text-text-primary">
-              Nenhuma sequência ainda
+              {tx("Nenhuma sequência ainda")}
             </p>
             <p className="mb-4 text-xs font-light text-text-tertiary">
-              Monte a primeira campanha em etapas para acompanhar contatos sem
-              esforço.
+              {tx(
+                "Monte a primeira campanha em etapas para acompanhar contatos sem esforço.",
+              )}
             </p>
           </div>
         ) : (
@@ -97,7 +103,7 @@ export default function SequencesPage() {
                         </div>
                         <p className="mt-0.5 inline-flex items-center gap-1 text-xs font-light text-text-tertiary">
                           <Clock size={10} />
-                          dura {formatTotalDelay(total)}
+                          {tx("dura")} {formatTotalDelay(total)}
                         </p>
                       </div>
                     </Link>
@@ -107,11 +113,11 @@ export default function SequencesPage() {
                         className="inline-flex h-8 items-center gap-1.5 rounded-[6px] px-2.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
                       >
                         <Pencil size={12} />
-                        Editar
+                        {tx("Editar")}
                       </button>
                       <button
                         onClick={() => handleDelete(seq.id)}
-                        aria-label="Excluir"
+                        aria-label={tx("Excluir")}
                         className="inline-flex h-8 items-center gap-1.5 rounded-[6px] px-2.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
                       >
                         <Trash2 size={12} />

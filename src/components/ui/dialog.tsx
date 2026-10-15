@@ -6,6 +6,7 @@ import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 const Dialog = DialogPrimitive.Root;
 
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -46,7 +47,7 @@ const DialogContent = React.forwardRef<
       {children}
       <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm text-text-tertiary opacity-80 transition hover:bg-bg-muted hover:text-text-primary hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-accent/40">
         <X className="h-4 w-4" />
-        <span className="sr-only">Fechar</span>
+        <span className="sr-only">{tx("Fechar")}</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   </DialogPortal>

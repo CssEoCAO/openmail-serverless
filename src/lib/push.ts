@@ -1,5 +1,6 @@
 // Browser-side push orchestration.
 // Consumers: PushOptInBanner, NotificationsSection.
+import { tx } from "@/lib/i18n";
 
 const DISMISS_KEY = "saasmail.pushPromptDismissedAt";
 
@@ -111,10 +112,13 @@ export async function disablePush(): Promise<void> {
 
 /** Frase para mostrar ao usuário a partir do motivo técnico de enablePush(). */
 export function motivoPush(reason: string): string {
-  if (reason === "unsupported") return "este navegador não aceita notificações";
+  if (reason === "unsupported")
+    return tx("este navegador não aceita notificações");
   if (reason === "server_not_configured")
-    return "as notificações não estão configuradas no servidor";
+    return tx("as notificações não estão configuradas no servidor");
   if (reason === "permission_denied")
-    return "o navegador bloqueou a permissão; libere nas configurações do site";
+    return tx(
+      "o navegador bloqueou a permissão; libere nas configurações do site",
+    );
   return `o servidor recusou (${reason})`;
 }

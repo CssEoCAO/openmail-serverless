@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 const CHAVE_DOMINIOS = "saasmail.dominiosAbertos";
 
 function lerDominiosAbertos(): Record<string, boolean> {
@@ -146,7 +147,7 @@ export default function Sidebar({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Fechar menu"
+            aria-label={tx("Fechar menu")}
             className="flex h-8 w-8 items-center justify-center rounded-[6px] text-text-tertiary hover:bg-text-primary/[0.05] hover:text-text-primary"
           >
             <X size={16} />
@@ -163,10 +164,10 @@ export default function Sidebar({
         className="flex h-9 items-center justify-center gap-2 rounded-[6px] bg-primary text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
       >
         <PenSquare size={15} />
-        Escrever
+        {tx("Escrever")}
       </button>
 
-      <nav className="grid gap-px" aria-label="Caixa">
+      <nav className="grid gap-px" aria-label={tx("Caixa")}>
         <Link
           to="/"
           onClick={ir}
@@ -174,7 +175,7 @@ export default function Sidebar({
           className={cn(itemBase, emTodas && itemAtivo)}
         >
           <Inbox size={15} className="shrink-0" />
-          <span className="truncate">Todas as caixas</span>
+          <span className="truncate">{tx("Todas as caixas")}</span>
           <Contador n={stats?.unreadCount ?? 0} forte />
         </Link>
         <NavLink
@@ -184,7 +185,7 @@ export default function Sidebar({
           className={({ isActive }) => cn(itemBase, isActive && itemAtivo)}
         >
           <FileText size={15} className="shrink-0" />
-          <span className="truncate">Rascunhos</span>
+          <span className="truncate">{tx("Rascunhos")}</span>
           <Contador n={rascunhos.porEmail.size} />
         </NavLink>
         <NavLink
@@ -193,19 +194,19 @@ export default function Sidebar({
           className={({ isActive }) => cn(itemBase, isActive && itemAtivo)}
         >
           <Clock size={15} className="shrink-0" />
-          <span className="truncate">Saída</span>
+          <span className="truncate">{tx("Saída")}</span>
           <Contador n={saida?.pending ?? 0} />
         </NavLink>
       </nav>
 
       <div className="mt-1 flex items-center justify-between px-2 text-[11px] font-semibold uppercase tracking-wide text-text-tertiary">
-        Caixas
+        {tx("Caixas")}
         <span className="font-medium normal-case tracking-normal tabular-nums">
           {caixas.length || ""}
         </span>
       </div>
       <label className="relative block">
-        <span className="sr-only">Filtrar caixas</span>
+        <span className="sr-only">{tx("Filtrar caixas")}</span>
         <Search
           size={13}
           className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary"
@@ -214,7 +215,7 @@ export default function Sidebar({
           type="search"
           value={filtro}
           onChange={(e) => setFiltro(e.target.value)}
-          placeholder="Filtrar caixas"
+          placeholder={tx("Filtrar caixas")}
           className="h-8 w-full rounded-[6px] border border-border bg-card pl-8 pr-2 text-[13px] text-text-primary placeholder:text-text-tertiary focus:border-primary focus:outline-none"
         />
       </label>
@@ -224,10 +225,14 @@ export default function Sidebar({
         data-testid="inbox-tree"
       >
         {!stats ? (
-          <p className="px-2 py-2 text-xs text-text-tertiary">Carregando…</p>
+          <p className="px-2 py-2 text-xs text-text-tertiary">
+            {tx("Carregando…")}
+          </p>
         ) : arvore.length === 0 ? (
           <p className="px-2 py-2 text-xs text-text-tertiary">
-            {filtro ? "Nenhuma caixa com esse nome." : "Nenhuma caixa ainda."}
+            {filtro
+              ? tx("Nenhuma caixa com esse nome.")
+              : tx("Nenhuma caixa ainda.")}
           </p>
         ) : (
           arvore.map((no) => {
@@ -288,9 +293,11 @@ export default function Sidebar({
                             {!c.podeEnviar && (
                               <span
                                 className="shrink-0 text-[11px] font-normal text-text-tertiary"
-                                title="Recebe, mas não está configurada para enviar"
+                                title={tx(
+                                  "Recebe, mas não está configurada para enviar",
+                                )}
                               >
-                                só recebe
+                                {tx("só recebe")}
                               </span>
                             )}
                             <Contador n={c.naoLidas} forte />
@@ -313,8 +320,8 @@ export default function Sidebar({
                           className="h-7 w-full rounded-[6px] px-2 text-left text-xs text-text-tertiary hover:bg-text-primary/[0.05] hover:text-text-primary"
                         >
                           {verParadas
-                            ? "Esconder as sem movimento"
-                            : `+${no.paradas.length} sem movimento`}
+                            ? tx("Esconder as sem movimento")
+                            : tx("+{0} sem movimento", no.paradas.length)}
                         </button>
                       </li>
                     )}
@@ -328,7 +335,7 @@ export default function Sidebar({
 
       <nav
         className="grid gap-px border-t border-border pt-2"
-        aria-label="Ferramentas"
+        aria-label={tx("Ferramentas")}
       >
         <NavLink
           to="/templates"
@@ -336,7 +343,7 @@ export default function Sidebar({
           className={({ isActive }) => cn(itemBase, isActive && itemAtivo)}
         >
           <FileText size={15} className="shrink-0" />
-          Modelos
+          {tx("Modelos")}
         </NavLink>
         {isAdmin && (
           <NavLink
@@ -345,7 +352,7 @@ export default function Sidebar({
             className={({ isActive }) => cn(itemBase, isActive && itemAtivo)}
           >
             <ListOrdered size={15} className="shrink-0" />
-            Sequências
+            {tx("Sequências")}
           </NavLink>
         )}
         {isAdmin && (
@@ -357,7 +364,7 @@ export default function Sidebar({
               className={itemBase}
             >
               <Shield size={15} className="shrink-0" />
-              Administração
+              {tx("Administração")}
               {adminAberto ? (
                 <ChevronDown size={14} className="ml-auto text-text-tertiary" />
               ) : (
@@ -370,10 +377,10 @@ export default function Sidebar({
             {adminAberto && (
               <div className="grid grid-cols-[minmax(0,1fr)] gap-px pl-6">
                 {[
-                  ["/inboxes", "Caixas e envio"],
-                  ["/admin/users", "Usuários"],
-                  ["/blocklist", "Bloqueios"],
-                  ["/admin/suppressions", "Supressões"],
+                  ["/inboxes", tx("Caixas e envio")],
+                  ["/admin/users", tx("Usuários")],
+                  ["/blocklist", tx("Bloqueios")],
+                  ["/admin/suppressions", tx("Supressões")],
                 ].map(([to, rotulo]) => (
                   <NavLink
                     key={to}
@@ -408,7 +415,7 @@ export default function Sidebar({
               </span>
               {isAdmin && (
                 <span className="block text-[11px] text-text-tertiary">
-                  Administrador
+                  {tx("Administrador")}
                 </span>
               )}
             </span>
@@ -418,7 +425,7 @@ export default function Sidebar({
         <DropdownMenuContent align="start" side="top" className="w-56">
           <div className="px-2 py-1.5">
             <p className="truncate text-sm font-medium text-text-primary">
-              {session?.user?.name || "Conta"}
+              {session?.user?.name || tx("Conta")}
             </p>
             <p className="truncate text-xs text-text-tertiary">
               {session?.user?.email}
@@ -432,7 +439,7 @@ export default function Sidebar({
             }}
           >
             <Settings />
-            Configurações
+            {tx("Configurações")}
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => {
@@ -441,7 +448,7 @@ export default function Sidebar({
             }}
           >
             <Key />
-            Chave de API
+            {tx("Chave de API")}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
@@ -450,7 +457,7 @@ export default function Sidebar({
             className="text-destructive focus:text-destructive"
           >
             <LogOut />
-            Sair
+            {tx("Sair")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

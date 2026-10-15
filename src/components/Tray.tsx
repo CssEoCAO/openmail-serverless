@@ -1,3 +1,4 @@
+import { tx } from "@/lib/i18n";
 import type { ReactNode } from "react";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -89,8 +90,8 @@ export function TrayMaximizeButton({
     <button
       type="button"
       onClick={onToggle}
-      aria-label={fullscreen ? "Restaurar tamanho" : "Maximizar"}
-      title={fullscreen ? "Restaurar tamanho" : "Maximizar"}
+      aria-label={fullscreen ? tx("Restaurar tamanho") : tx("Maximizar")}
+      title={fullscreen ? tx("Restaurar tamanho") : tx("Maximizar")}
       className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
     >
       <Icon size={14} />

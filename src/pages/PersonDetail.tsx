@@ -44,6 +44,7 @@ import { dominioDe } from "@/lib/arvore-caixas";
 import { plural } from "@/lib/datas";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 // O editor de resposta (Tiptap) só baixa quando alguém clica em Responder.
 const ReplyComposer = lazy(() => import("@/components/ReplyComposer"));
 
@@ -157,11 +158,15 @@ export default function PersonDetail({
       await addBlock({ type, value });
       showToast({
         kind: "success",
-        message: `${value} bloqueado`,
+        message: tx("{0} bloqueado", value),
         description:
           type === "domain"
-            ? "E-mail novo desse domínio é descartado e as conversas dele somem da caixa."
-            : "E-mail novo desse endereço é descartado e as conversas dele somem da caixa.",
+            ? tx(
+                "E-mail novo desse domínio é descartado e as conversas dele somem da caixa.",
+              )
+            : tx(
+                "E-mail novo desse endereço é descartado e as conversas dele somem da caixa.",
+              ),
         durationMs: 5000,
       });
       if (onBlock) onBlock();
@@ -170,11 +175,13 @@ export default function PersonDetail({
       // Quase sempre a trava que impede bloquear um domínio nosso.
       showToast({
         kind: "error",
-        message: "Não deu para bloquear",
+        message: tx("Não deu para bloquear"),
         description:
           type === "domain"
-            ? "Esse domínio não pode ser bloqueado; pode ser um dos nossos."
-            : "Esse endereço não pode ser bloqueado; pode ser um dos nossos.",
+            ? tx("Esse domínio não pode ser bloqueado; pode ser um dos nossos.")
+            : tx(
+                "Esse endereço não pode ser bloqueado; pode ser um dos nossos.",
+              ),
       });
     }
   }
@@ -212,7 +219,9 @@ export default function PersonDetail({
   async function handleDelete(emailId: string) {
     if (
       !confirm(
-        "Excluir esta mensagem e os anexos para sempre? Não dá para desfazer.",
+        tx(
+          "Excluir esta mensagem e os anexos para sempre? Não dá para desfazer.",
+        ),
       )
     )
       return;
@@ -221,7 +230,10 @@ export default function PersonDetail({
     try {
       await deleteEmail(emailId);
     } catch {
-      showToast({ kind: "error", message: "Não deu para excluir a mensagem" });
+      showToast({
+        kind: "error",
+        message: tx("Não deu para excluir a mensagem"),
+      });
       return;
     }
     mudarEmails((l) => l.filter((e) => e.id !== emailId));
@@ -240,10 +252,12 @@ export default function PersonDetail({
     const target = result.person?.email ?? result.email.toAddress;
     showToast({
       kind: "success",
-      message: target ? `Movida para ${target}` : "Mensagem redirecionada",
+      message: target
+        ? tx("Movida para {0}", target)
+        : "Mensagem redirecionada",
       description: result.person?.created
-        ? "Criamos a pessoa e movemos a mensagem para ela."
-        : "As respostas a esta mensagem vão para ela.",
+        ? tx("Criamos a pessoa e movemos a mensagem para ela.")
+        : tx("As respostas a esta mensagem vão para ela."),
       durationMs: 5000,
     });
   }
@@ -321,8 +335,11 @@ export default function PersonDetail({
         setActiveInbox(sentInbox);
         showToast({
           kind: "info",
-          message: `Resposta saiu por ${inboxLabel(sentInbox)}`,
-          description: `Você estava em ${inboxLabel(previous)}; trocamos de aba para mostrar.`,
+          message: tx("Resposta saiu por {0}", inboxLabel(sentInbox)),
+          description: tx(
+            "Você estava em {0}; trocamos de aba para mostrar.",
+            inboxLabel(previous),
+          ),
           durationMs: 5500,
         });
       }
@@ -350,7 +367,7 @@ export default function PersonDetail({
         <button
           type="button"
           onClick={onBack}
-          aria-label="Voltar à lista"
+          aria-label={tx("Voltar à lista")}
           className="-ml-1 flex h-8 w-8 items-center justify-center rounded-[6px] text-text-secondary hover:bg-text-primary/[0.05] md:hidden"
         >
           <ArrowLeft size={17} />
@@ -365,7 +382,7 @@ export default function PersonDetail({
           {person.name ? `${person.email} · ` : ""}
           {plural(person.totalCount, "mensagem", "mensagens")}
           {inboxGroups.length > 1
-            ? ` · ${inboxGroups.length} caixas`
+            ? tx(" · {0} caixas", inboxGroups.length)
             : distinctInboxes[0]
               ? ` · ${distinctInboxes[0]}`
               : ""}
@@ -393,26 +410,26 @@ export default function PersonDetail({
             className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-border bg-card px-2.5 text-xs font-medium text-text-secondary hover:bg-bg-subtle hover:text-text-primary"
           >
             <ListOrdered size={14} />
-            Sequência
+            {tx("Sequência")}
           </button>
         )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              aria-label="Bloquear remetente"
+              aria-label={tx("Bloquear remetente")}
               className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-border bg-card px-2.5 text-xs font-medium text-text-secondary hover:border-destructive/40 hover:text-destructive"
             >
               <ShieldBan size={14} />
-              Bloquear
+              {tx("Bloquear")}
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
             <DropdownMenuItem onClick={() => handleBlock("email")}>
-              Bloquear {person.email}
+              {tx("Bloquear")} {person.email}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => handleBlock("domain")}>
-              Bloquear o domínio {dominioDe(person.email)}
+              {tx("Bloquear o domínio")} {dominioDe(person.email)}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -439,14 +456,14 @@ export default function PersonDetail({
         {cabecalho}
         <div className="px-6 py-16 text-center">
           <p className="text-sm font-medium text-text-primary">
-            Não deu para abrir a conversa.
+            {tx("Não deu para abrir a conversa.")}
           </p>
           <button
             type="button"
             onClick={() => void consulta.refetch()}
             className="mt-2 text-sm font-medium text-primary-ink hover:underline"
           >
-            Tentar de novo
+            {tx("Tentar de novo")}
           </button>
         </div>
       </div>
@@ -485,7 +502,7 @@ export default function PersonDetail({
                 {unread > 0 && (
                   <span
                     className="tabular-nums font-semibold text-primary-ink"
-                    aria-label={`${unread} não lidas`}
+                    aria-label={tx("{0} não lidas", unread)}
                   >
                     {unread}
                   </span>
@@ -504,8 +521,8 @@ export default function PersonDetail({
           className="shrink-0 border-b border-border py-1.5 text-xs font-medium text-primary-ink hover:bg-bg-subtle disabled:opacity-60"
         >
           {consulta.isFetchingNextPage
-            ? "Carregando…"
-            : "Mostrar mensagens mais antigas"}
+            ? tx("Carregando…")
+            : tx("Mostrar mensagens mais antigas")}
         </button>
       )}
 
@@ -556,7 +573,7 @@ export default function PersonDetail({
                     className="flex h-10 w-full items-center gap-2 rounded-[6px] border border-border px-3 text-left text-sm text-text-tertiary hover:border-primary/50 hover:text-text-secondary"
                   >
                     <Reply size={15} />
-                    Responder para {person.name || person.email}…
+                    {tx("Responder para")} {person.name || person.email}…
                   </button>
                 </div>
               )}
@@ -564,7 +581,7 @@ export default function PersonDetail({
           )
         ) : (
           <div className="flex flex-1 items-center justify-center text-sm text-text-tertiary">
-            Nenhuma mensagem.
+            {tx("Nenhuma mensagem.")}
           </div>
         )}
       </div>

@@ -21,6 +21,7 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 /**
  * Admin "Inboxes" table. Real table layout with bulk select + bulk
  * actions, inline display-name editing (blur-to-save), mode toggle
@@ -113,7 +114,7 @@ export default function AdminInboxTable() {
       setNewOutboundProvider("cloudflare");
     } catch (err) {
       setCreateError(
-        err instanceof Error ? err.message : "Não deu para criar a caixa",
+        err instanceof Error ? err.message : tx("Não deu para criar a caixa"),
       );
     } finally {
       setCreating(false);
@@ -151,14 +152,14 @@ export default function AdminInboxTable() {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next)) {
         setForwardErrors((p) => ({
           ...p,
-          [inbox.email]: "Informe um e-mail válido.",
+          [inbox.email]: tx("Informe um e-mail válido."),
         }));
         return;
       }
       if (next === inbox.email.toLowerCase()) {
         setForwardErrors((p) => ({
           ...p,
-          [inbox.email]: "A caixa não pode encaminhar para ela mesma.",
+          [inbox.email]: tx("A caixa não pode encaminhar para ela mesma."),
         }));
         return;
       }
@@ -178,8 +179,9 @@ export default function AdminInboxTable() {
     } catch {
       setForwardErrors((p) => ({
         ...p,
-        [inbox.email]:
+        [inbox.email]: tx(
           "Não deu para salvar. Confira o endereço e tente de novo.",
+        ),
       }));
     }
   }
@@ -277,9 +279,9 @@ export default function AdminInboxTable() {
   async function handleDelete(emails: string[]) {
     const label =
       emails.length === 1
-        ? `Excluir a caixa "${emails[0]}"?`
-        : `Excluir ${emails.length} caixas?`;
-    if (!window.confirm(`${label} Não dá para desfazer.`)) return;
+        ? tx('Excluir a caixa "{0}"?', emails[0])
+        : tx("Excluir {0} caixas?", emails.length);
+    if (!window.confirm(tx("{0} Não dá para desfazer.", label))) return;
     setBulkBusy(true);
     try {
       await Promise.all(emails.map((email) => deleteInbox(email)));
@@ -313,7 +315,7 @@ export default function AdminInboxTable() {
   }
 
   if (loading) {
-    return <p className="text-sm text-text-tertiary">Carregando…</p>;
+    return <p className="text-sm text-text-tertiary">{tx("Carregando…")}</p>;
   }
 
   return (
@@ -324,7 +326,7 @@ export default function AdminInboxTable() {
         className="rounded-[8px] bg-card p-4 ring-1 ring-border"
       >
         <div className="mb-2 text-xs font-medium text-text-secondary">
-          Nova caixa
+          {tx("Nova caixa")}
         </div>
         <div className="flex flex-col gap-2 md:flex-row">
           <input
@@ -332,7 +334,7 @@ export default function AdminInboxTable() {
             required
             value={newEmail}
             onChange={(e) => setNewEmail(e.currentTarget.value)}
-            placeholder="caixa@exemplo.com"
+            placeholder={tx("caixa@exemplo.com")}
             data-testid="inbox-create-email"
             className="h-9 flex-1 rounded-[6px] border border-border bg-card px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-text-primary/15"
           />
@@ -343,18 +345,18 @@ export default function AdminInboxTable() {
                 event.currentTarget.value as "cloudflare" | "resend",
               )
             }
-            aria-label="Provedor de envio"
+            aria-label={tx("Provedor de envio")}
             data-testid="inbox-create-outbound-provider"
             className="h-9 rounded-[6px] border border-border bg-card px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-text-primary/15"
           >
-            <option value="cloudflare">Cloudflare</option>
-            <option value="resend">Resend</option>
+            <option value="cloudflare">{tx("Cloudflare")}</option>
+            <option value="resend">{tx("Resend")}</option>
           </select>
           <input
             type="text"
             value={newDisplayName}
             onChange={(e) => setNewDisplayName(e.currentTarget.value)}
-            placeholder="Nome de exibição (opcional)"
+            placeholder={tx("Nome de exibição (opcional)")}
             data-testid="inbox-create-display-name"
             className="h-9 flex-1 rounded-[6px] border border-border bg-card px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-text-primary/15"
           />
@@ -365,7 +367,7 @@ export default function AdminInboxTable() {
             className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
           >
             <Plus size={14} />
-            {creating ? "Criando…" : "Criar"}
+            {creating ? tx("Criando…") : tx("Criar")}
           </button>
         </div>
         {createError && (
@@ -391,7 +393,7 @@ export default function AdminInboxTable() {
             className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 text-xs font-medium transition-colors hover:bg-primary/10 disabled:opacity-50"
           >
             <MessageSquare size={12} />
-            Modo fio
+            {tx("Modo fio")}
           </button>
           <button
             onClick={() => handleBulkSetMode("chat")}
@@ -399,7 +401,7 @@ export default function AdminInboxTable() {
             className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 text-xs font-medium transition-colors hover:bg-primary/10 disabled:opacity-50"
           >
             <MessageCircle size={12} />
-            Modo chat
+            {tx("Modo chat")}
           </button>
           <button
             onClick={() => handleDelete(Array.from(selected))}
@@ -411,16 +413,16 @@ export default function AdminInboxTable() {
             ) : (
               <Trash2 size={12} />
             )}
-            Excluir
+            {tx("Excluir")}
           </button>
 
           <button
             onClick={clearSelection}
             className="ml-auto inline-flex items-center gap-1 rounded-[6px] px-2 py-1 text-xs font-medium transition-colors hover:bg-primary/10"
-            aria-label="Desmarcar tudo"
+            aria-label={tx("Desmarcar tudo")}
           >
             <X size={12} />
-            Desmarcar
+            {tx("Desmarcar")}
           </button>
         </div>
       )}
@@ -429,10 +431,10 @@ export default function AdminInboxTable() {
       {inboxes.length === 0 && (
         <div className="rounded-[8px] bg-card p-10 text-center ring-1 ring-border">
           <p className="mb-1 text-sm font-medium text-text-primary">
-            Nenhuma caixa ainda
+            {tx("Nenhuma caixa ainda")}
           </p>
           <p className="text-xs font-light text-text-tertiary">
-            Crie a primeira pelo formulário acima.
+            {tx("Crie a primeira pelo formulário acima.")}
           </p>
         </div>
       )}
@@ -462,17 +464,23 @@ export default function AdminInboxTable() {
                     <Checkbox
                       checked={allSelected}
                       onChange={toggleSelectAll}
-                      ariaLabel="Marcar todas as caixas"
+                      ariaLabel={tx("Marcar todas as caixas")}
                     />
                   </th>
                   <th className="px-3 py-2.5 font-semibold">
-                    Caixa e nome de exibição
+                    {tx("Caixa e nome de exibição")}
                   </th>
-                  <th className="px-3 py-2.5 font-semibold">Assinatura</th>
-                  <th className="px-3 py-2.5 font-semibold">Modo</th>
-                  <th className="px-3 py-2.5 font-semibold">Provedor</th>
-                  <th className="px-3 py-2.5 font-semibold">Encaminhar para</th>
-                  <th className="px-3 py-2.5 font-semibold">Acesso</th>
+                  <th className="px-3 py-2.5 font-semibold">
+                    {tx("Assinatura")}
+                  </th>
+                  <th className="px-3 py-2.5 font-semibold">{tx("Modo")}</th>
+                  <th className="px-3 py-2.5 font-semibold">
+                    {tx("Provedor")}
+                  </th>
+                  <th className="px-3 py-2.5 font-semibold">
+                    {tx("Encaminhar para")}
+                  </th>
+                  <th className="px-3 py-2.5 font-semibold">{tx("Acesso")}</th>
                   <th className="w-16 px-3 py-2.5 text-right font-semibold">
                     {/* actions */}
                   </th>
@@ -497,7 +505,7 @@ export default function AdminInboxTable() {
                         <Checkbox
                           checked={isSelected}
                           onChange={() => toggleSelected(inbox.email)}
-                          ariaLabel={`Marcar ${inbox.email}`}
+                          ariaLabel={tx("Marcar {0}", inbox.email)}
                         />
                       </td>
 
@@ -526,9 +534,9 @@ export default function AdminInboxTable() {
                           )}
                         >
                           <Pen size={11} />
-                          {inbox.signatureHtml ? "Definida" : "—"}
+                          {inbox.signatureHtml ? tx("Definida") : "—"}
                           <span className="ml-0.5 text-[10px] font-light opacity-70">
-                            Editar
+                            {tx("Editar")}
                           </span>
                         </button>
                       </td>
@@ -557,7 +565,7 @@ export default function AdminInboxTable() {
                                 )}
                               >
                                 <Icon size={10} />
-                                {m === "thread" ? "Fio" : "Chat"}
+                                {m === "thread" ? tx("Fio") : tx("Chat")}
                               </button>
                             );
                           })}
@@ -577,12 +585,15 @@ export default function AdminInboxTable() {
                                 | "resend",
                             )
                           }
-                          aria-label={`Provedor de envio de ${inbox.email}`}
+                          aria-label={tx(
+                            "Provedor de envio de {0}",
+                            inbox.email,
+                          )}
                           data-testid="inbox-outbound-provider"
                           className="h-8 rounded-[6px] border border-border bg-card px-2 text-xs font-medium text-text-primary focus:outline-none focus:ring-2 focus:ring-text-primary/15"
                         >
-                          <option value="cloudflare">Cloudflare</option>
-                          <option value="resend">Resend</option>
+                          <option value="cloudflare">{tx("Cloudflare")}</option>
+                          <option value="resend">{tx("Resend")}</option>
                         </select>
                       </td>
 
@@ -599,7 +610,7 @@ export default function AdminInboxTable() {
                       <td className="px-3 py-2.5">
                         {members.length === 0 ? (
                           <span className="text-xs font-light italic text-text-tertiary">
-                            Só administradores
+                            {tx("Só administradores")}
                           </span>
                         ) : (
                           <div className="flex flex-wrap items-center gap-1">
@@ -642,7 +653,7 @@ export default function AdminInboxTable() {
                           type="button"
                           data-testid="inbox-delete-button"
                           onClick={() => handleDelete([inbox.email])}
-                          aria-label={`Excluir a caixa ${inbox.email}`}
+                          aria-label={tx("Excluir a caixa {0}", inbox.email)}
                           className="inline-flex h-7 w-7 items-center justify-center rounded-[5px] text-text-tertiary opacity-60 transition-all hover:bg-destructive/10 hover:text-destructive hover:opacity-100"
                         >
                           <Trash2 size={13} />
@@ -660,20 +671,24 @@ export default function AdminInboxTable() {
       {inboxes.length > 0 && (
         <p className="px-1 text-xs font-light leading-relaxed text-text-tertiary">
           <span className="font-medium text-text-secondary">
-            Encaminhar para
+            {tx("Encaminhar para")}
           </span>{" "}
-          manda uma cópia de cada mensagem que a caixa recebe para outro
-          endereço, pelo provedor de envio configurado. Prefira isso a uma regra
-          de encaminhamento do Email Routing da Cloudflare: ele repassa por IPs
-          compartilhados que o Outlook e o Hotmail bloqueiam, e a cópia volta
-          com <span className="font-mono">550 5.7.1 … (S3150)</span>. A cópia
-          sai do endereço da caixa com o remetente original em{" "}
-          <span className="font-mono">Reply-To</span>, então autentica no nosso
-          próprio domínio.
+          {tx(
+            "manda uma cópia de cada mensagem que a caixa recebe para outro endereço, pelo provedor de envio configurado. Prefira isso a uma regra de encaminhamento do Email Routing da Cloudflare: ele repassa por IPs compartilhados que o Outlook e o Hotmail bloqueiam, e a cópia volta com",
+          )}{" "}
+          <span className="font-mono">550 5.7.1 … (S3150)</span>
+          {tx(
+            ". A cópia sai do endereço da caixa com o remetente original em",
+          )}{" "}
+          <span className="font-mono">{tx("Reply-To")}</span>
+          {tx(", então autentica no nosso próprio domínio.")}
           <br />
-          <span className="font-medium text-text-secondary">Provedor</span> vale
-          por remetente. Use Cloudflare nas identidades já habilitadas no Email
-          Sending, e Resend só onde ele já é o transporte e a chave do produto.
+          <span className="font-medium text-text-secondary">
+            {tx("Provedor")}
+          </span>{" "}
+          {tx(
+            "vale por remetente. Use Cloudflare nas identidades já habilitadas no Email Sending, e Resend só onde ele já é o transporte e a chave do produto.",
+          )}
         </p>
       )}
     </div>
@@ -707,7 +722,7 @@ function DisplayNameInput({ inbox, onCommit }: DisplayNameInputProps) {
           (e.currentTarget as HTMLInputElement).blur();
         }
       }}
-      placeholder="Dar um nome…"
+      placeholder={tx("Dar um nome…")}
       data-testid="inbox-display-name-input"
       className="h-8 w-full rounded-[6px] border border-transparent bg-transparent px-2 text-sm text-text-primary placeholder:font-light placeholder:italic placeholder:text-text-tertiary hover:border-border focus:border-border focus:bg-card focus:outline-none focus:ring-2 focus:ring-text-primary/15"
     />
@@ -747,8 +762,8 @@ function ForwardToInput({ inbox, error, onCommit }: ForwardToInputProps) {
             (e.currentTarget as HTMLInputElement).blur();
           }
         }}
-        placeholder="Sem encaminhamento"
-        aria-label={`Encaminhar ${inbox.email} para`}
+        placeholder={tx("Sem encaminhamento")}
+        aria-label={tx("Encaminhar {0} para", inbox.email)}
         aria-invalid={error ? true : undefined}
         data-testid="inbox-forward-to-input"
         className={cn(
@@ -802,7 +817,7 @@ function SignatureEditor({ inbox, onCancel, onSave }: SignatureEditorProps) {
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="mb-0.5 text-xs font-medium text-text-secondary">
-            Assinatura
+            {tx("Assinatura")}
           </div>
           <p className="truncate text-xs text-text-secondary">
             <span className="font-mono">{inbox.email}</span>
@@ -812,7 +827,7 @@ function SignatureEditor({ inbox, onCancel, onSave }: SignatureEditorProps) {
           type="button"
           onClick={onCancel}
           className="rounded-[6px] p-1 text-text-tertiary hover:bg-bg-muted hover:text-text-primary"
-          aria-label="Fechar o editor de assinatura"
+          aria-label={tx("Fechar o editor de assinatura")}
         >
           <X size={14} />
         </button>
@@ -821,7 +836,7 @@ function SignatureEditor({ inbox, onCancel, onSave }: SignatureEditorProps) {
         <TiptapEditor
           content={html}
           onUpdate={setHtml}
-          placeholder="Abraço, equipe"
+          placeholder={tx("Abraço, equipe")}
         />
       </div>
       <div className="mt-3 flex items-center justify-end gap-2">
@@ -830,7 +845,7 @@ function SignatureEditor({ inbox, onCancel, onSave }: SignatureEditorProps) {
           onClick={onCancel}
           className="rounded-[6px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
         >
-          Cancelar
+          {tx("Cancelar")}
         </button>
         <button
           type="button"
@@ -844,7 +859,7 @@ function SignatureEditor({ inbox, onCancel, onSave }: SignatureEditorProps) {
           ) : (
             <Pen size={12} />
           )}
-          Salvar assinatura
+          {tx("Salvar assinatura")}
         </button>
       </div>
     </div>

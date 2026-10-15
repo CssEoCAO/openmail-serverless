@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
 
+import { tx } from "@/lib/i18n";
 export interface AttachmentChipsProps {
   files: File[];
   /** Cap in bytes; total > cap → red text. */
@@ -35,7 +36,7 @@ export default function AttachmentChips({
             type="button"
             onClick={() => onRemove(idx)}
             className="ml-0.5 rounded hover:bg-gray-200"
-            aria-label={`Remover ${f.name}`}
+            aria-label={tx("Remover {0}", f.name)}
           >
             <X className="h-3 w-3" />
           </button>

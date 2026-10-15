@@ -10,6 +10,7 @@ import {
 } from "@/components/Publico";
 import { useBranding } from "@/lib/branding";
 
+import { tx } from "@/lib/i18n";
 type Status = "checking" | "available" | "unavailable" | "migration-required";
 
 type SetupStatusResponse = {
@@ -68,7 +69,7 @@ export default function OnboardingPage() {
         const data = (await res
           .json()
           .catch(() => ({}))) as SetupStatusResponse;
-        setError(data.error || "Não deu para criar a conta.");
+        setError(data.error || tx("Não deu para criar a conta."));
         if (res.status === 503 && data.code === "DATABASE_MIGRATION_REQUIRED") {
           setMigrationRequired(data);
           setStatus("migration-required");
@@ -82,30 +83,30 @@ export default function OnboardingPage() {
       }
       window.location.href = passkeyRequired ? "/setup-passkey" : "/";
     } catch {
-      setError("Não deu para criar a conta.");
+      setError(tx("Não deu para criar a conta."));
     } finally {
       setLoading(false);
     }
   }
 
   if (status === "checking") {
-    return <p className="text-sm text-text-tertiary">Carregando…</p>;
+    return <p className="text-sm text-text-tertiary">{tx("Carregando…")}</p>;
   }
 
   if (status === "migration-required") {
     return (
       <CartaoPublico
-        titulo="Falta preparar o banco"
+        titulo={tx("Falta preparar o banco")}
         subtitulo={
           migrationRequired?.error ||
-          "O banco de produção ainda não recebeu as migrações."
+          tx("O banco de produção ainda não recebeu as migrações.")
         }
       >
         <code className="block rounded-[6px] border border-border bg-bg-subtle px-3 py-2 text-xs text-text-primary">
-          {migrationRequired?.command || "yarn db:migrate:prod"}
+          {migrationRequired?.command || tx("yarn db:migrate:prod")}
         </code>
         <p className="mt-3 text-xs text-text-tertiary">
-          Rode o comando acima e recarregue esta página.
+          {tx("Rode o comando acima e recarregue esta página.")}
         </p>
       </CartaoPublico>
     );
@@ -114,11 +115,11 @@ export default function OnboardingPage() {
   if (status === "unavailable") {
     return (
       <CartaoPublico
-        titulo="Configuração já feita"
-        subtitulo="Já existe uma conta de administrador. Entre com ela."
+        titulo={tx("Configuração já feita")}
+        subtitulo={tx("Já existe uma conta de administrador. Entre com ela.")}
       >
         <button className={botaoPrimario} onClick={() => navigate("/login")}>
-          Ir para o login
+          {tx("Ir para o login")}
         </button>
       </CartaoPublico>
     );
@@ -126,12 +127,12 @@ export default function OnboardingPage() {
 
   return (
     <CartaoPublico
-      titulo="Primeiro acesso"
-      subtitulo="Crie a conta de administrador para começar."
+      titulo={tx("Primeiro acesso")}
+      subtitulo={tx("Crie a conta de administrador para começar.")}
     >
       <form onSubmit={handleSubmit} className="grid gap-3.5">
         <label className="grid gap-1.5">
-          <span className={rotuloPublico}>Código de instalação</span>
+          <span className={rotuloPublico}>{tx("Código de instalação")}</span>
           <input
             id="bootstrap-token"
             type="password"
@@ -142,11 +143,13 @@ export default function OnboardingPage() {
             className={campoPublico}
           />
           <span className="text-xs text-text-tertiary">
-            Código temporário de quem instalou (scripts/prepare-bootstrap.mjs).
+            {tx(
+              "Código temporário de quem instalou (scripts/prepare-bootstrap.mjs).",
+            )}
           </span>
         </label>
         <label className="grid gap-1.5">
-          <span className={rotuloPublico}>Nome</span>
+          <span className={rotuloPublico}>{tx("Nome")}</span>
           <input
             id="onboarding-name"
             value={name}
@@ -157,7 +160,7 @@ export default function OnboardingPage() {
           />
         </label>
         <label className="grid gap-1.5">
-          <span className={rotuloPublico}>E-mail</span>
+          <span className={rotuloPublico}>{tx("E-mail")}</span>
           <input
             id="onboarding-email"
             type="email"
@@ -169,7 +172,7 @@ export default function OnboardingPage() {
           />
         </label>
         <label className="grid gap-1.5">
-          <span className={rotuloPublico}>Senha</span>
+          <span className={rotuloPublico}>{tx("Senha")}</span>
           <input
             id="onboarding-password"
             type="password"
@@ -181,12 +184,12 @@ export default function OnboardingPage() {
             className={campoPublico}
           />
           <span className="text-xs text-text-tertiary">
-            Pelo menos 8 caracteres.
+            {tx("Pelo menos 8 caracteres.")}
           </span>
         </label>
         {error && <ErroPublico>{error}</ErroPublico>}
         <button type="submit" className={botaoPrimario} disabled={loading}>
-          {loading ? "Criando a conta…" : "Criar administrador"}
+          {loading ? tx("Criando a conta…") : tx("Criar administrador")}
         </button>
       </form>
     </CartaoPublico>

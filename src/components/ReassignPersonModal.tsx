@@ -6,6 +6,7 @@ import {
   type ReassignPersonResult,
 } from "@/lib/api";
 
+import { tx } from "@/lib/i18n";
 interface ReassignPersonModalProps {
   /** The received email being re-associated, or null when closed. */
   email: Email | null;
@@ -74,7 +75,7 @@ export default function ReassignPersonModal({
     if (!email) return;
     const trimmed = toEmail.trim();
     if (!trimmed) {
-      setError("Informe um endereço de e-mail.");
+      setError(tx("Informe um endereço de e-mail."));
       return;
     }
     setSubmitting(true);
@@ -88,7 +89,9 @@ export default function ReassignPersonModal({
       onClose();
     } catch {
       setError(
-        "Não deu para mover a mensagem. Confira o endereço e tente de novo.",
+        tx(
+          "Não deu para mover a mensagem. Confira o endereço e tente de novo.",
+        ),
       );
     } finally {
       setSubmitting(false);
@@ -99,17 +102,18 @@ export default function ReassignPersonModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="w-full max-w-md rounded-[12px] border border-border bg-card p-6 shadow-xl">
         <h2 className="mb-1 text-lg font-semibold text-text-primary">
-          Mover mensagem
+          {tx("Mover mensagem")}
         </h2>
         <p className="mb-4 text-sm text-text-secondary">
-          Atribui esta mensagem a outra pessoa, para as respostas chegarem a
-          ela. Hoje está com{" "}
+          {tx(
+            "Atribui esta mensagem a outra pessoa, para as respostas chegarem a ela. Hoje está com",
+          )}{" "}
           <span className="font-medium text-text-primary">{currentSender}</span>
           .
         </p>
 
         <label className="mb-1 block text-xs font-medium text-text-secondary">
-          E-mail da pessoa
+          {tx("E-mail da pessoa")}
         </label>
         <input
           type="email"
@@ -122,17 +126,18 @@ export default function ReassignPersonModal({
           onKeyDown={(e) => {
             if (e.key === "Enter") void handleSubmit();
           }}
-          placeholder="pessoa@exemplo.com"
+          placeholder={tx("pessoa@exemplo.com")}
           className="mb-1 h-9 w-full rounded-[6px] border border-border bg-card px-3 text-sm text-text-primary focus:border-primary focus:outline-none"
         />
         {prefilledFromReplyTo && (
           <p className="mb-3 text-[11px] text-text-tertiary">
-            Preenchido com o Reply-To da mensagem.
+            {tx("Preenchido com o Reply-To da mensagem.")}
           </p>
         )}
 
         <label className="mb-1 mt-3 block text-xs font-medium text-text-secondary">
-          Nome <span className="text-text-tertiary">(opcional)</span>
+          {tx("Nome")}{" "}
+          <span className="text-text-tertiary">{tx("(opcional)")}</span>
         </label>
         <input
           type="text"
@@ -141,7 +146,7 @@ export default function ReassignPersonModal({
           onKeyDown={(e) => {
             if (e.key === "Enter") void handleSubmit();
           }}
-          placeholder="Maria Silva"
+          placeholder={tx("Maria Silva")}
           className="h-9 w-full rounded-[6px] border border-border bg-card px-3 text-sm text-text-primary focus:border-primary focus:outline-none"
         />
 
@@ -152,14 +157,14 @@ export default function ReassignPersonModal({
             onClick={onClose}
             className="rounded-[6px] border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-muted"
           >
-            Cancelar
+            {tx("Cancelar")}
           </button>
           <button
             onClick={handleSubmit}
             disabled={submitting || !toEmail.trim()}
             className="rounded-[6px] bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
           >
-            {submitting ? "Movendo…" : "Mover"}
+            {submitting ? tx("Movendo…") : tx("Mover")}
           </button>
         </div>
       </div>

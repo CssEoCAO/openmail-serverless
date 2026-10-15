@@ -11,6 +11,7 @@ import {
   rotuloPublico,
 } from "@/components/Publico";
 
+import { tx } from "@/lib/i18n";
 export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -36,7 +37,7 @@ export default function LoginPage() {
   }, []);
 
   if (setupRequired === null) {
-    return <p className="text-sm text-text-tertiary">Carregando…</p>;
+    return <p className="text-sm text-text-tertiary">{tx("Carregando…")}</p>;
   }
 
   if (setupRequired) {
@@ -49,12 +50,14 @@ export default function LoginPage() {
     try {
       const result = await authClient.signIn.passkey();
       if (result?.error) {
-        setError(result.error.message || "Não deu para entrar com a passkey.");
+        setError(
+          result.error.message || tx("Não deu para entrar com a passkey."),
+        );
       } else {
         window.location.href = "/";
       }
     } catch {
-      setError("Não deu para entrar com a passkey. Tente de novo.");
+      setError(tx("Não deu para entrar com a passkey. Tente de novo."));
     } finally {
       setLoading(false);
     }
@@ -69,13 +72,13 @@ export default function LoginPage() {
       if (result?.error) {
         setError(
           result.error.message ||
-            "E-mail ou senha não conferem. Tente de novo.",
+            tx("E-mail ou senha não conferem. Tente de novo."),
         );
       } else {
         window.location.href = "/";
       }
     } catch {
-      setError("Não deu para entrar. Tente de novo.");
+      setError(tx("Não deu para entrar. Tente de novo."));
     } finally {
       setLoading(false);
     }
@@ -83,11 +86,11 @@ export default function LoginPage() {
 
   return (
     <CartaoPublico
-      titulo="Entrar"
+      titulo={tx("Entrar")}
       subtitulo={
         mode === "passkey"
           ? "Use a passkey deste aparelho."
-          : "Conta sem passkey: entre com e-mail e senha."
+          : tx("Conta sem passkey: entre com e-mail e senha.")
       }
     >
       {error && <ErroPublico>{error}</ErroPublico>}
@@ -101,7 +104,7 @@ export default function LoginPage() {
             className={botaoPrimario}
           >
             <Fingerprint size={16} />
-            {loading ? "Entrando…" : "Entrar com passkey"}
+            {loading ? tx("Entrando…") : tx("Entrar com passkey")}
           </button>
           <button
             type="button"
@@ -112,13 +115,13 @@ export default function LoginPage() {
             className={botaoSecundario}
           >
             <Mail size={16} />
-            Entrar com e-mail e senha
+            {tx("Entrar com e-mail e senha")}
           </button>
         </div>
       ) : (
         <form onSubmit={handlePasswordLogin} className="grid gap-3.5">
           <label className="grid gap-1.5">
-            <span className={rotuloPublico}>E-mail</span>
+            <span className={rotuloPublico}>{tx("E-mail")}</span>
             <input
               id="login-email"
               type="email"
@@ -130,7 +133,7 @@ export default function LoginPage() {
             />
           </label>
           <label className="grid gap-1.5">
-            <span className={rotuloPublico}>Senha</span>
+            <span className={rotuloPublico}>{tx("Senha")}</span>
             <input
               id="login-password"
               type="password"
@@ -143,10 +146,10 @@ export default function LoginPage() {
           </label>
           <button type="submit" disabled={loading} className={botaoPrimario}>
             {loading ? (
-              "Entrando…"
+              tx("Entrando…")
             ) : (
               <>
-                Entrar
+                {tx("Entrar")}
                 <ArrowRight size={16} aria-hidden />
               </>
             )}
@@ -159,7 +162,7 @@ export default function LoginPage() {
             }}
             className="text-center text-xs text-text-tertiary hover:text-text-primary"
           >
-            Entrar com passkey
+            {tx("Entrar com passkey")}
           </button>
         </form>
       )}

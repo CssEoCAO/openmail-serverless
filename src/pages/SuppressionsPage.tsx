@@ -18,20 +18,22 @@ import PageHeader, { PageContainer } from "@/components/PageHeader";
 import { SectionHeader } from "@/components/PageForm";
 import { cn } from "@/lib/utils";
 
+import { LOCALE, tx } from "@/lib/i18n";
 function formatDate(ts: number): string {
-  return new Date(ts * 1000).toLocaleDateString("pt-BR");
+  return new Date(ts * 1000).toLocaleDateString(LOCALE);
 }
 
 function relativeTime(ts: number): string {
   const diff = ts - Date.now() / 1000;
   const abs = Math.abs(diff);
-  if (abs < 3600) return diff < 0 ? "agora há pouco" : "em menos de 1 h";
+  if (abs < 3600)
+    return diff < 0 ? tx("agora há pouco") : tx("em menos de 1 h");
   if (abs < 86400)
     return diff < 0
-      ? `há ${Math.floor(abs / 3600)} h`
-      : `em ${Math.floor(abs / 3600)} h`;
+      ? tx("há {0} h", Math.floor(abs / 3600))
+      : tx("em {0} h", Math.floor(abs / 3600));
   const days = Math.floor(abs / 86400);
-  return diff < 0 ? `há ${days} d` : `em ${days} d`;
+  return diff < 0 ? tx("há {0} d", days) : tx("em {0} d", days);
 }
 
 const REASON_META: Record<
@@ -39,11 +41,11 @@ const REASON_META: Record<
   { label: string; chipClass: string }
 > = {
   unsubscribe: {
-    label: "Descadastrou",
+    label: tx("Descadastrou"),
     chipClass: "bg-primary-soft text-primary-ink ring-primary/20",
   },
   manual: {
-    label: "Manual",
+    label: tx("Manual"),
     chipClass: "bg-bg-muted text-text-secondary ring-border",
   },
 };
@@ -75,7 +77,7 @@ export default function SuppressionsPage() {
       setItems(res.items);
       setNextCursor(res.nextCursor);
     } catch {
-      setError("Não deu para carregar as supressões.");
+      setError(tx("Não deu para carregar as supressões."));
     } finally {
       setLoading(false);
     }
@@ -90,7 +92,7 @@ export default function SuppressionsPage() {
       setItems((prev) => [...prev, ...res.items]);
       setNextCursor(res.nextCursor);
     } catch {
-      setError("Não deu para carregar mais.");
+      setError(tx("Não deu para carregar mais."));
     } finally {
       setLoadingMore(false);
     }
@@ -118,7 +120,7 @@ export default function SuppressionsPage() {
       return;
     }
     if (!EMAIL_RE.test(email)) {
-      setAddError("Informe um e-mail válido.");
+      setAddError(tx("Informe um e-mail válido."));
       return;
     }
     setAddSubmitting(true);
@@ -139,7 +141,7 @@ export default function SuppressionsPage() {
       setAddOpen(false);
       resetAddDialog();
     } catch {
-      setAddError("Não deu para adicionar. Tente de novo.");
+      setAddError(tx("Não deu para adicionar. Tente de novo."));
     } finally {
       setAddSubmitting(false);
     }
@@ -154,7 +156,7 @@ export default function SuppressionsPage() {
       setItems((prev) => prev.filter((s) => s.id !== confirmDelete.id));
       setConfirmDelete(null);
     } catch {
-      setDeleteError("Não deu para remover. Tente de novo.");
+      setDeleteError(tx("Não deu para remover. Tente de novo."));
     } finally {
       setDeleteSubmitting(false);
     }
@@ -163,8 +165,10 @@ export default function SuppressionsPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Supressões"
-        subtitle="Endereços que não recebem envio de sequência nem de marketing."
+        title={tx("Supressões")}
+        subtitle={tx(
+          "Endereços que não recebem envio de sequência nem de marketing.",
+        )}
         action={
           <button
             onClick={() => {
@@ -174,7 +178,7 @@ export default function SuppressionsPage() {
             className="inline-flex items-center gap-1.5 rounded-[6px] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             <Plus size={14} />
-            Adicionar supressão
+            {tx("Adicionar supressão")}
           </button>
         }
       />
@@ -184,10 +188,14 @@ export default function SuppressionsPage() {
           <div className="border-b border-border px-5 py-4">
             <SectionHeader
               icon={Ban}
-              title={`Endereços suprimidos (${items.length}${
-                nextCursor ? "+" : ""
-              })`}
-              subtitle="Envios pela API (/api/send) e de sequências pulam esses destinatários."
+              title={tx(
+                "Endereços suprimidos ({0}{1})",
+                items.length,
+                nextCursor ? "+" : "",
+              )}
+              subtitle={tx(
+                "Envios pela API (/api/send) e de sequências pulam esses destinatários.",
+              )}
             />
           </div>
 
@@ -199,13 +207,15 @@ export default function SuppressionsPage() {
 
           {loading ? (
             <p className="px-5 py-6 text-xs font-light text-text-tertiary">
-              Carregando…
+              {tx("Carregando…")}
             </p>
           ) : items.length === 0 ? (
             <EmptyState
               icon={Ban}
-              title="Nenhuma supressão ainda"
-              hint="Quem se descadastra entra aqui sozinho. Também dá para adicionar à mão."
+              title={tx("Nenhuma supressão ainda")}
+              hint={tx(
+                "Quem se descadastra entra aqui sozinho. Também dá para adicionar à mão.",
+              )}
             />
           ) : (
             <>
@@ -236,7 +246,7 @@ export default function SuppressionsPage() {
                           </span>
                         </div>
                         <p className="truncate text-xs font-light text-text-tertiary">
-                          {item.source ?? "—"} · incluído{" "}
+                          {item.source ?? "—"} {tx("· incluído")}{" "}
                           {relativeTime(item.createdAt)} (
                           {formatDate(item.createdAt)})
                         </p>
@@ -247,11 +257,14 @@ export default function SuppressionsPage() {
                           setDeleteError(null);
                           setConfirmDelete(item);
                         }}
-                        aria-label={`Remover a supressão de ${item.email}`}
+                        aria-label={tx(
+                          "Remover a supressão de {0}",
+                          item.email,
+                        )}
                         className="inline-flex h-8 shrink-0 items-center gap-1 rounded-[6px] px-2 text-xs font-medium text-text-tertiary transition-colors hover:bg-destructive-subtle hover:text-destructive"
                       >
                         <Trash2 size={12} />
-                        Remover
+                        {tx("Remover")}
                       </button>
                     </li>
                   );
@@ -265,7 +278,7 @@ export default function SuppressionsPage() {
                     disabled={loadingMore}
                     className="w-full rounded-[6px] border border-border bg-card py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {loadingMore ? "Carregando…" : "Carregar mais"}
+                    {loadingMore ? tx("Carregando…") : tx("Carregar mais")}
                   </button>
                 </div>
               )}
@@ -285,7 +298,7 @@ export default function SuppressionsPage() {
         <DialogContent className="border-border bg-card text-text-primary ring-1 ring-border">
           <DialogHeader>
             <DialogTitle className="text-text-primary">
-              Adicionar supressão
+              {tx("Adicionar supressão")}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleAdd} className="space-y-4">
@@ -294,7 +307,7 @@ export default function SuppressionsPage() {
                 htmlFor="suppression-email"
                 className="block text-xs font-medium text-text-secondary"
               >
-                E-mail
+                {tx("E-mail")}
               </label>
               <input
                 id="suppression-email"
@@ -303,12 +316,13 @@ export default function SuppressionsPage() {
                 required
                 value={addEmail}
                 onChange={(e) => setAddEmail(e.target.value)}
-                placeholder="pessoa@exemplo.com"
+                placeholder={tx("pessoa@exemplo.com")}
                 className="h-10 w-full rounded-[6px] border border-border bg-bg-subtle px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-text-primary/20"
               />
               <p className="text-[11px] font-light text-text-tertiary">
-                Envios futuros de sequência e marketing para este endereço serão
-                pulados.
+                {tx(
+                  "Envios futuros de sequência e marketing para este endereço serão pulados.",
+                )}
               </p>
             </div>
 
@@ -322,14 +336,14 @@ export default function SuppressionsPage() {
                 onClick={() => setAddOpen(false)}
                 className="rounded-[8px] border border-border bg-card px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
               >
-                Cancelar
+                {tx("Cancelar")}
               </button>
               <button
                 type="submit"
                 disabled={addSubmitting}
                 className="rounded-[6px] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {addSubmitting ? "Adicionando…" : "Adicionar"}
+                {addSubmitting ? tx("Adicionando…") : tx("Adicionar")}
               </button>
             </div>
           </form>
@@ -349,15 +363,16 @@ export default function SuppressionsPage() {
         <DialogContent className="border-border bg-card text-text-primary ring-1 ring-border">
           <DialogHeader>
             <DialogTitle className="text-text-primary">
-              Remover a supressão?
+              {tx("Remover a supressão?")}
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm font-light text-text-secondary">
             <span className="font-medium text-text-primary">
               {confirmDelete?.email}
             </span>{" "}
-            volta a receber envios de sequência e marketing. Dá para incluir de
-            novo depois.
+            {tx(
+              "volta a receber envios de sequência e marketing. Dá para incluir de novo depois.",
+            )}
           </p>
 
           {deleteError && (
@@ -372,7 +387,7 @@ export default function SuppressionsPage() {
               onClick={() => setConfirmDelete(null)}
               className="rounded-[8px] border border-border bg-card px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
             >
-              Cancelar
+              {tx("Cancelar")}
             </button>
             <button
               type="button"
@@ -380,7 +395,7 @@ export default function SuppressionsPage() {
               disabled={deleteSubmitting}
               className="rounded-[6px] bg-destructive px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {deleteSubmitting ? "Removendo…" : "Remover"}
+              {deleteSubmitting ? tx("Removendo…") : tx("Remover")}
             </button>
           </div>
         </DialogContent>

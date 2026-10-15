@@ -20,12 +20,15 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+import { LOCALE, tx } from "@/lib/i18n";
 /** Round delay-hours into a friendlier string for the step timeline. */
 function formatDelay(hours: number): string {
-  if (hours <= 0) return "na hora";
+  if (hours <= 0) return tx("na hora");
   if (hours < 24) return `${hours} h`;
   const days = Math.round((hours / 24) * 10) / 10;
-  return days === 1 ? "1 dia" : `${String(days).replace(".", ",")} dias`;
+  return days === 1
+    ? tx("1 dia")
+    : tx("{0} dias", String(days).replace(".", ","));
 }
 
 function totalDelayLabel(steps: { delayHours: number }[]): string {
@@ -35,12 +38,12 @@ function totalDelayLabel(steps: { delayHours: number }[]): string {
 
 function relativeTime(ts: number): string {
   const diff = Date.now() / 1000 - ts;
-  if (diff < 60) return "agora há pouco";
-  if (diff < 3600) return `há ${Math.floor(diff / 60)} min`;
-  if (diff < 86400) return `há ${Math.floor(diff / 3600)} h`;
+  if (diff < 60) return tx("agora há pouco");
+  if (diff < 3600) return tx("há {0} min", Math.floor(diff / 60));
+  if (diff < 86400) return tx("há {0} h", Math.floor(diff / 3600));
   const days = Math.floor(diff / 86400);
-  if (days < 30) return `há ${days} d`;
-  return new Date(ts * 1000).toLocaleDateString("pt-BR");
+  if (days < 30) return tx("há {0} d", days);
+  return new Date(ts * 1000).toLocaleDateString(LOCALE);
 }
 
 type Status = "active" | "completed" | "cancelled";
@@ -56,21 +59,21 @@ const STATUS_META: Record<
   }
 > = {
   active: {
-    label: "Em andamento",
+    label: tx("Em andamento"),
     chipClass: "bg-success-subtle text-success ring-success/30",
     textClass: "text-success",
     barClass: "bg-success",
     Icon: Clock,
   },
   completed: {
-    label: "Concluída",
+    label: tx("Concluída"),
     chipClass: "bg-primary-soft text-primary-ink ring-primary/20",
     textClass: "text-primary-ink",
     barClass: "bg-primary",
     Icon: CheckCircle2,
   },
   cancelled: {
-    label: "Cancelada",
+    label: tx("Cancelada"),
     chipClass: "bg-bg-muted text-text-tertiary ring-border",
     textClass: "text-text-tertiary",
     barClass: "bg-text-tertiary",
@@ -115,7 +118,9 @@ export default function SequenceDetailPage() {
   }, [id]);
 
   async function handleCancel(enrollmentId: string) {
-    if (!confirm("Cancelar esta inscrição? As etapas pendentes não saem.")) {
+    if (
+      !confirm(tx("Cancelar esta inscrição? As etapas pendentes não saem."))
+    ) {
       return;
     }
     await cancelEnrollment(enrollmentId);
@@ -144,7 +149,7 @@ export default function SequenceDetailPage() {
   if (loading || !sequence) {
     return (
       <PageContainer>
-        <p className="pt-10 text-sm text-text-tertiary">Carregando…</p>
+        <p className="pt-10 text-sm text-text-tertiary">{tx("Carregando…")}</p>
       </PageContainer>
     );
   }
@@ -156,7 +161,7 @@ export default function SequenceDetailPage() {
         className="-mt-1 mb-1 inline-flex items-center gap-1 text-xs font-medium text-text-tertiary transition-colors hover:text-text-primary"
       >
         <ArrowLeft size={12} />
-        Sequências
+        {tx("Sequências")}
       </Link>
 
       <PageHeader
@@ -164,9 +169,9 @@ export default function SequenceDetailPage() {
         subtitle={
           <>
             {sequence.steps.length}{" "}
-            {sequence.steps.length === 1 ? "etapa" : "etapas"} · dura{" "}
+            {sequence.steps.length === 1 ? "etapa" : "etapas"} {tx("· dura")}{" "}
             {totalDelayLabel(sequence.steps)} · {enrollments.length}{" "}
-            {enrollments.length === 1 ? "inscrição" : "inscrições"}
+            {enrollments.length === 1 ? tx("inscrição") : tx("inscrições")}
           </>
         }
         action={
@@ -176,7 +181,7 @@ export default function SequenceDetailPage() {
             className="inline-flex items-center gap-1.5 rounded-[6px] border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
           >
             <Pencil size={12} />
-            Editar sequência
+            {tx("Editar sequência")}
           </button>
         }
       />
@@ -187,8 +192,10 @@ export default function SequenceDetailPage() {
           <div className="border-b border-border px-5 py-4">
             <SectionHeader
               icon={ListOrdered}
-              title="Etapas"
-              subtitle="O caminho de toda inscrição. O intervalo conta a partir da etapa anterior."
+              title={tx("Etapas")}
+              subtitle={tx(
+                "O caminho de toda inscrição. O intervalo conta a partir da etapa anterior.",
+              )}
             />
           </div>
           <ol className="relative space-y-0">
@@ -215,8 +222,12 @@ export default function SequenceDetailPage() {
                     </p>
                     <p className="mt-0.5 text-xs font-light text-text-tertiary">
                       {idx === 0
-                        ? "Sai assim que a pessoa é inscrita."
-                        : `Sai ${formatDelay(step.delayHours)} depois da etapa ${idx}.`}
+                        ? tx("Sai assim que a pessoa é inscrita.")
+                        : tx(
+                            "Sai {0} depois da etapa {1}.",
+                            formatDelay(step.delayHours),
+                            idx,
+                          )}
                     </p>
                   </div>
                 </li>
@@ -230,18 +241,20 @@ export default function SequenceDetailPage() {
           <div className="border-b border-border px-5 py-4">
             <SectionHeader
               icon={Users}
-              title={`Inscrições (${enrollments.length})`}
-              subtitle="Todo contato que já entrou nesta sequência."
+              title={tx("Inscrições ({0})", enrollments.length)}
+              subtitle={tx("Todo contato que já entrou nesta sequência.")}
             />
           </div>
 
           {enrollments.length === 0 ? (
             <div className="px-5 py-10 text-center">
               <p className="text-sm font-medium text-text-primary">
-                Nenhuma inscrição ainda
+                {tx("Nenhuma inscrição ainda")}
               </p>
               <p className="mt-1 text-xs font-light text-text-tertiary">
-                Abra a conversa de um contato e use "Sequência", ou chame a API.
+                {tx(
+                  'Abra a conversa de um contato e use "Sequência", ou chame a API.',
+                )}
               </p>
             </div>
           ) : (
@@ -313,7 +326,8 @@ function EnrollmentGroup({
                   <StatusBadge status={enr.status} />
                 </div>
                 <p className="truncate text-xs font-light text-text-tertiary">
-                  {enr.personEmail} · inscrito {relativeTime(enr.enrolledAt)}
+                  {enr.personEmail} {tx("· inscrito")}{" "}
+                  {relativeTime(enr.enrolledAt)}
                 </p>
               </div>
 
@@ -343,10 +357,10 @@ function EnrollmentGroup({
                 <button
                   type="button"
                   onClick={() => onCancel(enr.id)}
-                  aria-label="Cancelar inscrição"
+                  aria-label={tx("Cancelar inscrição")}
                   className="shrink-0 rounded-[6px] border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:bg-destructive/10 hover:text-destructive"
                 >
-                  Cancelar
+                  {tx("Cancelar")}
                 </button>
               )}
             </li>

@@ -4,6 +4,7 @@ import { buildEmailFrameDoc } from "@/lib/email-frame";
 import type { Attachment } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 interface EmailHtmlFrameProps {
   html: string;
   /** Used to resolve `cid:` inline images. */
@@ -78,13 +79,13 @@ export default function EmailHtmlFrame({
           className="px-3 py-1.5 text-xs font-medium text-[#1c4fc4] hover:underline"
           onClick={() => setImagesFor(html)}
         >
-          Carregar imagens externas
+          {tx("Carregar imagens externas")}
         </button>
       )}
       <div className="relative">
         <iframe
           ref={ref}
-          title="Mensagem"
+          title={tx("Mensagem")}
           sandbox={SANDBOX}
           srcDoc={doc}
           scrolling="no"
@@ -108,11 +109,11 @@ export default function EmailHtmlFrame({
         >
           {expanded ? (
             <>
-              Mostrar menos <ChevronUp size={11} />
+              {tx("Mostrar menos")} <ChevronUp size={11} />
             </>
           ) : (
             <>
-              Mostrar a mensagem inteira <ChevronDown size={11} />
+              {tx("Mostrar a mensagem inteira")} <ChevronDown size={11} />
             </>
           )}
         </button>

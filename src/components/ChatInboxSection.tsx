@@ -27,6 +27,7 @@ import {
   stripSignatureFromText,
 } from "@/lib/signatures";
 
+import { tx } from "@/lib/i18n";
 interface ChatInboxSectionProps {
   group: ThreadInboxGroup;
   personEmail: string;
@@ -220,7 +221,7 @@ function Bubble({
           {displayText ? (
             <p className="whitespace-pre-wrap break-words">{displayText}</p>
           ) : (
-            <p className="italic opacity-60">(sem texto)</p>
+            <p className="italic opacity-60">{tx("(sem texto)")}</p>
           )}
           {text.length > BUBBLE_TRUNCATE_CHARS && (
             <button
@@ -233,7 +234,7 @@ function Bubble({
                 isSent ? "opacity-80" : "text-text-secondary"
               }`}
             >
-              {expanded ? "Mostrar menos" : "Mostrar tudo"}
+              {expanded ? tx("Mostrar menos") : tx("Mostrar tudo")}
             </button>
           )}
         </div>
@@ -269,7 +270,7 @@ function Bubble({
           <Check
             size={11}
             className="text-text-tertiary"
-            aria-label="Enviada"
+            aria-label={tx("Enviada")}
           />
         )}
         {email.bodyHtml && (
@@ -280,10 +281,10 @@ function Bubble({
               onOpenHtml(email);
             }}
             className="flex items-center gap-1 hover:text-text-secondary"
-            title="Ver a mensagem original"
+            title={tx("Ver a mensagem original")}
           >
             <Maximize2 size={10} />
-            Ver original
+            {tx("Ver original")}
           </button>
         )}
         {onReply && (
@@ -295,10 +296,10 @@ function Bubble({
             }}
             data-testid="message-reply"
             className="flex items-center gap-1 hover:text-text-secondary"
-            title={temRascunho ? "Continuar rascunho" : "Responder"}
+            title={temRascunho ? tx("Continuar rascunho") : tx("Responder")}
           >
             <Reply size={10} />
-            {temRascunho ? "Continuar rascunho" : "Responder"}
+            {temRascunho ? tx("Continuar rascunho") : tx("Responder")}
           </button>
         )}
         {temRascunho && <RascunhoPill />}
@@ -310,7 +311,7 @@ function Bubble({
           }}
           data-testid="message-copy-link"
           className="flex items-center gap-1 opacity-0 transition-opacity hover:text-text-secondary group-hover:opacity-100"
-          title="Copiar link desta mensagem"
+          title={tx("Copiar link desta mensagem")}
         >
           <Link2 size={10} />
         </button>
@@ -323,7 +324,7 @@ function Bubble({
             }}
             data-testid="message-reassign"
             className="flex items-center gap-1 opacity-0 transition-opacity hover:text-text-secondary group-hover:opacity-100"
-            title="Mover para outra pessoa"
+            title={tx("Mover para outra pessoa")}
           >
             <UserPen size={10} />
           </button>
@@ -335,14 +336,14 @@ function Bubble({
             onDelete(email.id);
           }}
           className="flex items-center gap-1 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-          title="Excluir mensagem"
+          title={tx("Excluir mensagem")}
         >
           <Trash2 size={10} />
         </button>
         {isUnread && !isSent && (
           <span
             className="h-1.5 w-1.5 rounded-full bg-primary"
-            aria-label="Não lida"
+            aria-label={tx("Não lida")}
           />
         )}
       </div>
@@ -579,7 +580,7 @@ export default function ChatInboxSection({
             }`}
           >
             <ArrowDown size={12} />
-            {hasNewBelow ? "Mensagens novas" : "Ir para a mais recente"}
+            {hasNewBelow ? tx("Mensagens novas") : tx("Ir para a mais recente")}
           </button>
         )}
       </div>

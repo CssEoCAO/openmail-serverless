@@ -19,6 +19,7 @@ import { copyMessageLink, messageDomId } from "@/lib/message-link";
 import { dataHora } from "@/lib/datas";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 interface MessageBubbleProps {
   email: Email;
   personEmail: string;
@@ -58,7 +59,7 @@ export function remetenteDe(
   senderResolver?: MessageBubbleProps["senderResolver"],
 ): { nome: string; email: string } {
   if (email.type === "sent")
-    return { nome: "Você", email: email.fromAddress ?? "" };
+    return { nome: tx("Você"), email: email.fromAddress ?? "" };
   const o = senderResolver?.(email) ?? null;
   if (o) return { nome: o.name?.trim() || o.email, email: o.email };
   return {
@@ -115,7 +116,7 @@ export default function MessageBubble({
       )}
     >
       <header className="flex items-start gap-3 px-4 pb-2 pt-3">
-        <Monograma nome={isSent ? "Você" : de.nome} email={de.email} />
+        <Monograma nome={isSent ? tx("Você") : de.nome} email={de.email} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px]">
             <span className="font-semibold text-text-primary">{de.nome}</span>
@@ -123,27 +124,33 @@ export default function MessageBubble({
               <span className="text-text-tertiary"> &lt;{de.email}&gt;</span>
             )}
           </p>
-          <p className="truncate text-xs text-text-tertiary">para {para}</p>
+          <p className="truncate text-xs text-text-tertiary">
+            {tx("para")} {para}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {falhou && (
             <span
               data-testid="message-failed-badge"
-              title="O provedor recusou esta mensagem; ela não foi entregue."
+              title={tx(
+                "O provedor recusou esta mensagem; ela não foi entregue.",
+              )}
               className="inline-flex items-center gap-1 rounded-[4px] bg-destructive-subtle px-1.5 py-0.5 text-[11px] font-semibold text-destructive"
             >
               <AlertTriangle size={11} />
-              Não enviada
+              {tx("Não enviada")}
             </span>
           )}
           {tentando && (
             <span
               data-testid="message-retrying-badge"
-              title="O provedor recusou o envio; vamos tentar de novo sozinhos. Detalhes na Saída."
+              title={tx(
+                "O provedor recusou o envio; vamos tentar de novo sozinhos. Detalhes na Saída.",
+              )}
               className="inline-flex items-center gap-1 rounded-[4px] bg-warning-bg px-1.5 py-0.5 text-[11px] font-semibold text-warning-text"
             >
               <Clock size={11} />
-              Tentando de novo
+              {tx("Tentando de novo")}
             </span>
           )}
           <time className="text-xs text-text-tertiary tabular-nums">
@@ -152,7 +159,7 @@ export default function MessageBubble({
           {isUnread && (
             <span
               className="h-2 w-2 rounded-full bg-primary"
-              aria-label="Não lida"
+              aria-label={tx("Não lida")}
             />
           )}
         </div>
@@ -197,12 +204,14 @@ export default function MessageBubble({
                 }}
                 className="mt-1 text-xs font-medium text-primary-ink hover:underline"
               >
-                {expanded ? "Mostrar menos" : "Mostrar tudo"}
+                {expanded ? tx("Mostrar menos") : tx("Mostrar tudo")}
               </button>
             )}
           </div>
         ) : (
-          <p className="text-sm italic text-text-tertiary">(sem texto)</p>
+          <p className="text-sm italic text-text-tertiary">
+            {tx("(sem texto)")}
+          </p>
         )}
 
         <AttachmentList attachments={email.attachments ?? []} />
@@ -220,7 +229,7 @@ export default function MessageBubble({
           className={acao}
         >
           <ReplyIcon size={13} />
-          {temRascunho ? "Continuar rascunho" : "Responder"}
+          {temRascunho ? tx("Continuar rascunho") : tx("Responder")}
         </button>
         {temRascunho && <RascunhoPill />}
         {email.bodyHtml && (
@@ -231,10 +240,10 @@ export default function MessageBubble({
               onOpenHtml(email);
             }}
             className={acao}
-            title="Ver a mensagem original em tela cheia"
+            title={tx("Ver a mensagem original em tela cheia")}
           >
             <Maximize2 size={13} />
-            Ver original
+            {tx("Ver original")}
           </button>
         )}
         <button
@@ -245,10 +254,10 @@ export default function MessageBubble({
           }}
           data-testid="message-copy-link"
           className={acao}
-          title="Copiar link desta mensagem"
+          title={tx("Copiar link desta mensagem")}
         >
           <Link2 size={13} />
-          Copiar link
+          {tx("Copiar link")}
         </button>
         {onReassign && (
           <button
@@ -259,10 +268,10 @@ export default function MessageBubble({
             }}
             data-testid="message-reassign"
             className={acao}
-            title="Mover para outra pessoa"
+            title={tx("Mover para outra pessoa")}
           >
             <UserPen size={13} />
-            Mover
+            {tx("Mover")}
           </button>
         )}
         <button
@@ -272,10 +281,10 @@ export default function MessageBubble({
             onDelete(email.id);
           }}
           className={cn(acao, "ml-auto hover:text-destructive")}
-          title="Excluir mensagem"
+          title={tx("Excluir mensagem")}
         >
           <Trash2 size={13} />
-          <span className="sr-only">Excluir</span>
+          <span className="sr-only">{tx("Excluir")}</span>
         </button>
       </footer>
     </article>

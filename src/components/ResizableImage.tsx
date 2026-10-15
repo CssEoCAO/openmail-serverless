@@ -6,6 +6,7 @@ import {
 } from "@tiptap/react";
 import { useEffect, useRef, useState } from "react";
 
+import { tx } from "@/lib/i18n";
 /**
  * Tiptap Image extension that lets users drag a corner handle to resize.
  * The width is stored as an inline attribute (in pixels) on the rendered
@@ -117,7 +118,7 @@ function ResizableImageView({
       {isEditable && (
         <span
           role="slider"
-          aria-label="Resize image"
+          aria-label={tx("Resize image")}
           aria-valuemin={MIN_WIDTH}
           aria-valuenow={
             draftWidth !== null

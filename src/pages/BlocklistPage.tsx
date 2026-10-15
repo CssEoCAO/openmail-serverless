@@ -17,12 +17,13 @@ import PageHeader, { PageContainer } from "@/components/PageHeader";
 import { SectionHeader } from "@/components/PageForm";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 function relativeTime(ts: number): string {
   const diff = ts - Date.now() / 1000;
   const abs = Math.abs(diff);
-  if (abs < 3600) return "agora há pouco";
-  if (abs < 86400) return `há ${Math.floor(abs / 3600)} h`;
-  return `há ${Math.floor(abs / 86400)} d`;
+  if (abs < 3600) return tx("agora há pouco");
+  if (abs < 86400) return tx("há {0} h", Math.floor(abs / 3600));
+  return tx("há {0} d", Math.floor(abs / 86400));
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -53,7 +54,7 @@ export default function BlocklistPage() {
       setItems(res.items);
       setNextCursor(res.nextCursor);
     } catch {
-      setError("Não deu para carregar os bloqueios.");
+      setError(tx("Não deu para carregar os bloqueios."));
     } finally {
       setLoading(false);
     }
@@ -66,7 +67,7 @@ export default function BlocklistPage() {
       setItems((prev) => [...prev, ...res.items]);
       setNextCursor(res.nextCursor);
     } catch {
-      setError("Não deu para carregar mais.");
+      setError(tx("Não deu para carregar mais."));
     }
   }
 
@@ -85,11 +86,11 @@ export default function BlocklistPage() {
     e.preventDefault();
     const value = addValue.trim().toLowerCase();
     if (addType === "email" && !EMAIL_RE.test(value)) {
-      setAddError("Informe um e-mail válido.");
+      setAddError(tx("Informe um e-mail válido."));
       return;
     }
     if (addType === "domain" && !DOMAIN_RE.test(value)) {
-      setAddError("Informe só o domínio, por exemplo spammer.com.");
+      setAddError(tx("Informe só o domínio, por exemplo spammer.com."));
       return;
     }
     setAddSubmitting(true);
@@ -108,7 +109,7 @@ export default function BlocklistPage() {
       setAddOpen(false);
       resetAdd();
     } catch {
-      setAddError("Não deu para bloquear. Pode ser um endereço nosso.");
+      setAddError(tx("Não deu para bloquear. Pode ser um endereço nosso."));
     } finally {
       setAddSubmitting(false);
     }
@@ -121,7 +122,7 @@ export default function BlocklistPage() {
       setItems((prev) => prev.filter((b) => b.id !== confirmDelete.id));
       setConfirmDelete(null);
     } catch {
-      setError("Não deu para desbloquear.");
+      setError(tx("Não deu para desbloquear."));
     }
   }
 
@@ -130,10 +131,14 @@ export default function BlocklistPage() {
     try {
       const res = await purgeBlockedMail();
       setPurgeResult(
-        `${res.emailsDeleted} e-mail(s) excluído(s) de ${res.peopleDeleted} remetente(s) bloqueado(s).`,
+        tx(
+          "{0} e-mail(s) excluído(s) de {1} remetente(s) bloqueado(s).",
+          res.emailsDeleted,
+          res.peopleDeleted,
+        ),
       );
     } catch {
-      setError("Não deu para excluir os e-mails bloqueados.");
+      setError(tx("Não deu para excluir os e-mails bloqueados."));
     } finally {
       setPurgeSubmitting(false);
       setPurgeOpen(false);
@@ -143,8 +148,10 @@ export default function BlocklistPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Bloqueios"
-        subtitle="Endereços e domínios bloqueados somem da caixa, e o e-mail novo deles é descartado."
+        title={tx("Bloqueios")}
+        subtitle={tx(
+          "Endereços e domínios bloqueados somem da caixa, e o e-mail novo deles é descartado.",
+        )}
         action={
           <button
             onClick={() => {
@@ -154,7 +161,7 @@ export default function BlocklistPage() {
             className="inline-flex items-center gap-1.5 rounded-[6px] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             <Plus size={14} />
-            Bloquear
+            {tx("Bloquear")}
           </button>
         }
       />
@@ -165,7 +172,7 @@ export default function BlocklistPage() {
             <SectionHeader
               icon={ShieldBan}
               title={`Bloqueados (${items.length}${nextCursor ? "+" : ""})`}
-              subtitle="E-mail que chega desses remetentes é descartado."
+              subtitle={tx("E-mail que chega desses remetentes é descartado.")}
             />
             <button
               onClick={() => {
@@ -175,7 +182,7 @@ export default function BlocklistPage() {
               className="inline-flex h-8 shrink-0 items-center gap-1 rounded-[6px] px-2 text-xs font-medium text-text-tertiary transition-colors hover:bg-destructive-subtle hover:text-destructive"
             >
               <Trash2 size={12} />
-              Excluir e-mails bloqueados
+              {tx("Excluir e-mails bloqueados")}
             </button>
           </div>
 
@@ -192,11 +199,11 @@ export default function BlocklistPage() {
 
           {loading ? (
             <p className="px-5 py-6 text-xs font-light text-text-tertiary">
-              Carregando…
+              {tx("Carregando…")}
             </p>
           ) : items.length === 0 ? (
             <p className="px-5 py-10 text-center text-sm text-text-tertiary">
-              Nada bloqueado ainda.
+              {tx("Nada bloqueado ainda.")}
             </p>
           ) : (
             <>
@@ -222,11 +229,13 @@ export default function BlocklistPage() {
                               : "bg-bg-muted text-text-secondary ring-border",
                           )}
                         >
-                          {item.type === "domain" ? "Domínio" : "E-mail"}
+                          {item.type === "domain"
+                            ? tx("Domínio")
+                            : tx("E-mail")}
                         </span>
                       </div>
                       <p className="truncate text-xs font-light text-text-tertiary">
-                        {item.createdBy ?? "—"} · bloqueado{" "}
+                        {item.createdBy ?? "—"} {tx("· bloqueado")}{" "}
                         {relativeTime(item.createdAt)}
                       </p>
                     </div>
@@ -235,7 +244,7 @@ export default function BlocklistPage() {
                       aria-label={`Desbloquear ${item.value}`}
                       className="inline-flex h-8 shrink-0 items-center gap-1 rounded-[6px] px-2 text-xs font-medium text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
                     >
-                      Desbloquear
+                      {tx("Desbloquear")}
                     </button>
                   </li>
                 ))}
@@ -246,7 +255,7 @@ export default function BlocklistPage() {
                     onClick={loadMore}
                     className="w-full rounded-[6px] border border-border bg-card py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
                   >
-                    Carregar mais
+                    {tx("Carregar mais")}
                   </button>
                 </div>
               )}
@@ -265,7 +274,9 @@ export default function BlocklistPage() {
       >
         <DialogContent className="border-border bg-card text-text-primary ring-1 ring-border">
           <DialogHeader>
-            <DialogTitle className="text-text-primary">Bloquear</DialogTitle>
+            <DialogTitle className="text-text-primary">
+              {tx("Bloquear")}
+            </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleAdd} className="space-y-4">
             <div className="flex gap-2">
@@ -281,7 +292,7 @@ export default function BlocklistPage() {
                       : "border-border text-text-secondary hover:bg-bg-muted",
                   )}
                 >
-                  {t === "email" ? "Endereço" : "Domínio"}
+                  {t === "email" ? tx("Endereço") : tx("Domínio")}
                 </button>
               ))}
             </div>
@@ -303,14 +314,14 @@ export default function BlocklistPage() {
                 onClick={() => setAddOpen(false)}
                 className="rounded-[8px] border border-border bg-card px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-bg-muted"
               >
-                Cancelar
+                {tx("Cancelar")}
               </button>
               <button
                 type="submit"
                 disabled={addSubmitting}
                 className="rounded-[6px] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
               >
-                {addSubmitting ? "Bloqueando…" : "Bloquear"}
+                {addSubmitting ? tx("Bloqueando…") : tx("Bloquear")}
               </button>
             </div>
           </form>
@@ -327,14 +338,14 @@ export default function BlocklistPage() {
         <DialogContent className="border-border bg-card text-text-primary ring-1 ring-border">
           <DialogHeader>
             <DialogTitle className="text-text-primary">
-              Desbloquear?
+              {tx("Desbloquear?")}
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm font-light text-text-secondary">
             <span className="font-medium text-text-primary">
               {confirmDelete?.value}
             </span>{" "}
-            volta a chegar na caixa, e o e-mail escondido reaparece.
+            {tx("volta a chegar na caixa, e o e-mail escondido reaparece.")}
           </p>
           <div className="flex justify-end gap-2 pt-1">
             <button
@@ -342,14 +353,14 @@ export default function BlocklistPage() {
               onClick={() => setConfirmDelete(null)}
               className="rounded-[8px] border border-border bg-card px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-bg-muted"
             >
-              Cancelar
+              {tx("Cancelar")}
             </button>
             <button
               type="button"
               onClick={handleConfirmDelete}
               className="rounded-[6px] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
-              Desbloquear
+              {tx("Desbloquear")}
             </button>
           </div>
         </DialogContent>
@@ -360,12 +371,13 @@ export default function BlocklistPage() {
         <DialogContent className="border-border bg-card text-text-primary ring-1 ring-border">
           <DialogHeader>
             <DialogTitle className="text-text-primary">
-              Excluir todos os e-mails bloqueados?
+              {tx("Excluir todos os e-mails bloqueados?")}
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm font-light text-text-secondary">
-            Exclui para sempre todo e-mail escondido de remetentes bloqueados.
-            Não dá para desfazer.
+            {tx(
+              "Exclui para sempre todo e-mail escondido de remetentes bloqueados. Não dá para desfazer.",
+            )}
           </p>
           <div className="flex justify-end gap-2 pt-1">
             <button
@@ -373,7 +385,7 @@ export default function BlocklistPage() {
               onClick={() => setPurgeOpen(false)}
               className="rounded-[8px] border border-border bg-card px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-bg-muted"
             >
-              Cancelar
+              {tx("Cancelar")}
             </button>
             <button
               type="button"
@@ -381,7 +393,7 @@ export default function BlocklistPage() {
               disabled={purgeSubmitting}
               className="rounded-[6px] bg-destructive px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-destructive/90 disabled:opacity-60"
             >
-              {purgeSubmitting ? "Excluindo…" : "Excluir"}
+              {purgeSubmitting ? tx("Excluindo…") : tx("Excluir")}
             </button>
           </div>
         </DialogContent>

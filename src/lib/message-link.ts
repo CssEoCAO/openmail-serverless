@@ -1,5 +1,6 @@
 import { showToast } from "@/lib/toast";
 
+import { tx } from "@/lib/i18n";
 /** Stable DOM id used to scroll/flash a deep-linked message. */
 export function messageDomId(emailId: string): string {
   return `m-${emailId}`;
@@ -29,11 +30,11 @@ export async function copyMessageLink(emailId: string): Promise<void> {
   const url = buildMessageUrl(emailId);
   try {
     await navigator.clipboard.writeText(url);
-    showToast({ kind: "success", message: "Link da mensagem copiado" });
+    showToast({ kind: "success", message: tx("Link da mensagem copiado") });
   } catch {
     showToast({
       kind: "error",
-      message: "Não deu para copiar o link",
+      message: tx("Não deu para copiar o link"),
       description: url,
       durationMs: 8000,
     });

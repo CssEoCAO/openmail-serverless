@@ -10,19 +10,22 @@ import {
   botaoSecundario,
 } from "@/components/Publico";
 
+import { tx } from "@/lib/i18n";
 /**
  * Copy shown for each scope on the authorization screen. Anything not listed
  * falls back to the raw scope string rather than being hidden — a user must
  * never approve a permission we failed to describe.
  */
 const SCOPE_DESCRIPTIONS: Record<string, string> = {
-  openid: "Confirmar quem você é",
+  openid: tx("Confirmar quem você é"),
   profile: "Ler seu nome e perfil",
-  email: "Ler seu endereço de e-mail",
-  offline_access: "Continuar conectado quando você não estiver usando o app",
+  email: tx("Ler seu endereço de e-mail"),
+  offline_access: tx(
+    "Continuar conectado quando você não estiver usando o app",
+  ),
   "email:read": "Ler seus e-mails, contatos e modelos",
-  "email:send": "Enviar e-mails e inscrever contatos em sequências",
-  "email:manage": "Marcar e-mails como lidos e excluir e-mails",
+  "email:send": tx("Enviar e-mails e inscrever contatos em sequências"),
+  "email:manage": tx("Marcar e-mails como lidos e excluir e-mails"),
 };
 
 /**
@@ -52,7 +55,7 @@ export default function ConsentPage() {
         ? `${url.protocol}//${url.host}${url.pathname}`
         : url.origin;
     } catch {
-      return "Destino inválido ou ausente";
+      return tx("Destino inválido ou ausente");
     }
   };
 
@@ -102,7 +105,7 @@ export default function ConsentPage() {
       setError(
         err instanceof Error
           ? err.message
-          : "Não deu para registrar a resposta.",
+          : tx("Não deu para registrar a resposta."),
       );
       setLoading(null);
     }
@@ -111,8 +114,10 @@ export default function ConsentPage() {
   if (!clientId) {
     return (
       <CartaoPublico
-        titulo="Pedido inválido"
-        subtitulo="Este pedido de autorização está incompleto ou expirou. Comece de novo pelo aplicativo que você estava conectando."
+        titulo={tx("Pedido inválido")}
+        subtitulo={tx(
+          "Este pedido de autorização está incompleto ou expirou. Comece de novo pelo aplicativo que você estava conectando.",
+        )}
       >
         {null}
       </CartaoPublico>
@@ -122,8 +127,10 @@ export default function ConsentPage() {
   if (result) {
     return (
       <CartaoPublico
-        titulo={result === "allowed" ? "Acesso liberado" : "Acesso negado"}
-        subtitulo="Pode fechar esta janela e voltar ao aplicativo."
+        titulo={
+          result === "allowed" ? tx("Acesso liberado") : tx("Acesso negado")
+        }
+        subtitulo={tx("Pode fechar esta janela e voltar ao aplicativo.")}
       >
         {null}
       </CartaoPublico>
@@ -131,7 +138,7 @@ export default function ConsentPage() {
   }
 
   return (
-    <CartaoPublico titulo="Autorizar acesso">
+    <CartaoPublico titulo={tx("Autorizar acesso")}>
       <div className="mb-4 flex items-start gap-3">
         <ShieldCheck
           className="mt-0.5 h-5 w-5 shrink-0 text-primary"
@@ -139,8 +146,8 @@ export default function ConsentPage() {
         />
         <div className="min-w-0">
           <p className="text-sm text-text-primary">
-            <span className="font-semibold">{clientName ?? clientId}</span> quer
-            acessar sua conta em {brandName}.
+            <span className="font-semibold">{clientName ?? clientId}</span>{" "}
+            {tx("quer acessar sua conta em")} {brandName}.
           </p>
           {clientName && (
             <p className="mt-0.5 truncate font-mono text-[11px] text-text-tertiary">
@@ -151,23 +158,25 @@ export default function ConsentPage() {
       </div>
 
       <div className="mb-4 grid gap-1 rounded-[6px] border border-warning-border bg-warning-bg p-3 text-xs text-warning-text">
-        <p className="font-semibold">Aplicativo não verificado</p>
+        <p className="font-semibold">{tx("Aplicativo não verificado")}</p>
         <p>
-          Nome e site são informados pelo próprio aplicativo; não confirmam quem
-          o publicou.
+          {tx(
+            "Nome e site são informados pelo próprio aplicativo; não confirmam quem o publicou.",
+          )}
         </p>
         <p className="mt-1 break-all">
-          Destino da autorização: {normalizedOrigin(redirectUri)}
+          {tx("Destino da autorização:")} {normalizedOrigin(redirectUri)}
         </p>
         <p className="break-all">
-          Site do aplicativo:{" "}
-          {clientUri ? normalizedOrigin(clientUri) : "não informado"}
+          {tx("Site do aplicativo:")}{" "}
+          {clientUri ? normalizedOrigin(clientUri) : tx("não informado")}
         </p>
         {clientUri &&
           normalizedOrigin(clientUri) !== normalizedOrigin(redirectUri) && (
             <p className="mt-1">
-              O site e o destino são diferentes. Confira os dois antes de
-              continuar.
+              {tx(
+                "O site e o destino são diferentes. Confira os dois antes de continuar.",
+              )}
             </p>
           )}
       </div>
@@ -175,7 +184,7 @@ export default function ConsentPage() {
       {error && <ErroPublico>{error}</ErroPublico>}
 
       <p className="mb-2 text-xs font-medium text-text-secondary">
-        Ele vai poder
+        {tx("Ele vai poder")}
       </p>
       <ul className="mb-4 grid gap-1.5">
         {scopes.map((s) => {
@@ -210,9 +219,9 @@ export default function ConsentPage() {
 
       {scopes.some((s) => ELEVATED_SCOPES.has(s)) && (
         <p className="mb-5 rounded-[6px] border border-warning-border bg-warning-bg px-3 py-2 text-xs leading-relaxed text-warning-text">
-          Este aplicativo pode agir na sua caixa, não só ler. Tudo o que ele lê,
-          inclusive e-mail de desconhecidos, pode influenciar o que ele faz
-          depois. Só continue se confia nele para enviar e excluir.
+          {tx(
+            "Este aplicativo pode agir na sua caixa, não só ler. Tudo o que ele lê, inclusive e-mail de desconhecidos, pode influenciar o que ele faz depois. Só continue se confia nele para enviar e excluir.",
+          )}
         </p>
       )}
 
@@ -223,7 +232,7 @@ export default function ConsentPage() {
           disabled={loading !== null}
           className={botaoPrimario}
         >
-          {loading === "allow" ? "Autorizando…" : "Autorizar"}
+          {loading === "allow" ? tx("Autorizando…") : tx("Autorizar")}
         </button>
         <button
           type="button"
@@ -231,12 +240,14 @@ export default function ConsentPage() {
           disabled={loading !== null}
           className={botaoSecundario}
         >
-          {loading === "deny" ? "Negando…" : "Negar"}
+          {loading === "deny" ? tx("Negando…") : tx("Negar")}
         </button>
       </div>
 
       <p className="mt-5 text-center text-xs text-text-tertiary">
-        Só autorize aplicativos em que você confia. Dá para revogar depois.
+        {tx(
+          "Só autorize aplicativos em que você confia. Dá para revogar depois.",
+        )}
       </p>
     </CartaoPublico>
   );

@@ -39,20 +39,22 @@ import { SectionHeader } from "@/components/PageForm";
 import { cn } from "@/lib/utils";
 import Monograma from "@/components/Monograma";
 
+import { LOCALE, tx } from "@/lib/i18n";
 function formatDate(ts: number): string {
-  return new Date(ts * 1000).toLocaleDateString("pt-BR");
+  return new Date(ts * 1000).toLocaleDateString(LOCALE);
 }
 
 function relativeTime(ts: number): string {
   const diff = ts - Date.now() / 1000;
   const abs = Math.abs(diff);
-  if (abs < 3600) return diff < 0 ? "agora há pouco" : "em menos de 1 h";
+  if (abs < 3600)
+    return diff < 0 ? tx("agora há pouco") : tx("em menos de 1 h");
   if (abs < 86400)
     return diff < 0
-      ? `há ${Math.floor(abs / 3600)} h`
-      : `em ${Math.floor(abs / 3600)} h`;
+      ? tx("há {0} h", Math.floor(abs / 3600))
+      : tx("em {0} h", Math.floor(abs / 3600));
   const days = Math.floor(abs / 86400);
-  return diff < 0 ? `há ${days} d` : `em ${days} d`;
+  return diff < 0 ? tx("há {0} d", days) : tx("em {0} d", days);
 }
 
 type InviteStatus = "pending" | "used" | "expired";
@@ -67,15 +69,15 @@ const INVITE_STATUS_META: Record<
   { label: string; chipClass: string }
 > = {
   pending: {
-    label: "Aberto",
+    label: tx("Aberto"),
     chipClass: "bg-success-subtle text-success ring-success/30",
   },
   used: {
-    label: "Aceito",
+    label: tx("Aceito"),
     chipClass: "bg-primary-soft text-primary-ink ring-primary/20",
   },
   expired: {
-    label: "Expirado",
+    label: tx("Expirado"),
     chipClass: "bg-bg-muted text-text-tertiary ring-border",
   },
 };
@@ -143,13 +145,13 @@ export default function AdminUsersPage() {
   }
 
   async function handleDelete(userId: string) {
-    if (!confirm("Excluir este usuário? Não dá para desfazer.")) return;
+    if (!confirm(tx("Excluir este usuário? Não dá para desfazer."))) return;
     await deleteUser(userId);
     await loadData();
   }
 
   async function handleRevoke(inviteId: string) {
-    if (!confirm("Revogar este convite? Não dá para desfazer.")) return;
+    if (!confirm(tx("Revogar este convite? Não dá para desfazer."))) return;
     await revokeInvite(inviteId);
     await loadData();
   }
@@ -157,8 +159,10 @@ export default function AdminUsersPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Usuários"
-        subtitle="Convide pessoas, defina o papel de cada uma e veja quem já tem passkey."
+        title={tx("Usuários")}
+        subtitle={tx(
+          "Convide pessoas, defina o papel de cada uma e veja quem já tem passkey.",
+        )}
         action={
           <Dialog
             open={inviteDialogOpen}
@@ -175,33 +179,33 @@ export default function AdminUsersPage() {
             <DialogTrigger asChild>
               <button className="inline-flex items-center gap-1.5 rounded-[6px] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
                 <Plus size={14} />
-                Convidar
+                {tx("Convidar")}
               </button>
             </DialogTrigger>
             <DialogContent className="border-border bg-card text-text-primary ring-1 ring-border">
               <DialogHeader>
                 <DialogTitle className="text-text-primary">
-                  {generatedLink ? "Convite pronto" : "Novo convite"}
+                  {generatedLink ? tx("Convite pronto") : tx("Novo convite")}
                 </DialogTitle>
               </DialogHeader>
               {!generatedLink ? (
                 <div className="space-y-4">
                   <div className="space-y-1.5">
                     <span className="text-xs font-medium text-text-secondary">
-                      Papel
+                      {tx("Papel")}
                     </span>
                     <div className="grid grid-cols-2 gap-2">
                       <RoleButton
                         active={inviteRole === "member"}
                         onClick={() => setInviteRole("member")}
-                        label="Membro"
-                        hint="Só as caixas liberadas"
+                        label={tx("Membro")}
+                        hint={tx("Só as caixas liberadas")}
                       />
                       <RoleButton
                         active={inviteRole === "admin"}
                         onClick={() => setInviteRole("admin")}
-                        label="Administrador"
-                        hint="Acesso total"
+                        label={tx("Administrador")}
+                        hint={tx("Acesso total")}
                       />
                     </div>
                   </div>
@@ -211,20 +215,23 @@ export default function AdminUsersPage() {
                       htmlFor="invite-email"
                       className="block text-xs font-medium text-text-secondary"
                     >
-                      E-mail{" "}
-                      <span className="text-text-tertiary">(opcional)</span>
+                      {tx("E-mail")}{" "}
+                      <span className="text-text-tertiary">
+                        {tx("(opcional)")}
+                      </span>
                     </label>
                     <input
                       id="invite-email"
                       type="email"
                       value={inviteEmail}
                       onChange={(e) => setInviteEmail(e.target.value)}
-                      placeholder="pessoa@exemplo.com"
+                      placeholder={tx("pessoa@exemplo.com")}
                       className="h-10 w-full rounded-[6px] border border-border bg-card px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:border-primary focus:outline-none"
                     />
                     <p className="text-[11px] font-light text-text-tertiary">
-                      Prende o convite a um endereço; em branco, qualquer pessoa
-                      com o link aceita.
+                      {tx(
+                        "Prende o convite a um endereço; em branco, qualquer pessoa com o link aceita.",
+                      )}
                     </p>
                   </div>
 
@@ -233,7 +240,7 @@ export default function AdminUsersPage() {
                       htmlFor="invite-expiry"
                       className="block text-xs font-medium text-text-secondary"
                     >
-                      Vale por (dias)
+                      {tx("Vale por (dias)")}
                     </label>
                     <input
                       id="invite-expiry"
@@ -251,13 +258,13 @@ export default function AdminUsersPage() {
                     disabled={inviteLoading}
                     className="w-full rounded-[6px] bg-primary py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {inviteLoading ? "Criando…" : "Criar convite"}
+                    {inviteLoading ? tx("Criando…") : tx("Criar convite")}
                   </button>
                 </div>
               ) : (
                 <div className="space-y-3">
                   <p className="text-xs font-light text-text-secondary">
-                    Mande este link. Ele vale por {inviteExpiry}{" "}
+                    {tx("Mande este link. Ele vale por")} {inviteExpiry}{" "}
                     {inviteExpiry === "1" ? "dia" : "dias"}.
                   </p>
                   <div className="flex gap-2">
@@ -271,7 +278,7 @@ export default function AdminUsersPage() {
                       className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[6px] border border-border bg-card px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
                     >
                       {copied ? <Check size={12} /> : <Copy size={12} />}
-                      {copied ? "Copiado" : "Copiar"}
+                      {copied ? tx("Copiado") : tx("Copiar")}
                     </button>
                   </div>
                 </div>
@@ -287,20 +294,20 @@ export default function AdminUsersPage() {
           <div className="border-b border-border px-5 py-4">
             <SectionHeader
               icon={Users}
-              title={`Pessoas (${users.length})`}
-              subtitle="Todo mundo com login nesta caixa."
+              title={tx("Pessoas ({0})", users.length)}
+              subtitle={tx("Todo mundo com login nesta caixa.")}
             />
           </div>
 
           {loading ? (
             <p className="px-5 py-6 text-xs font-light text-text-tertiary">
-              Carregando…
+              {tx("Carregando…")}
             </p>
           ) : users.length === 0 ? (
             <EmptyState
               icon={Users}
-              title="Ninguém ainda"
-              hint="Convide a primeira pessoa pelo botão acima."
+              title={tx("Ninguém ainda")}
+              hint={tx("Convide a primeira pessoa pelo botão acima.")}
             />
           ) : (
             <ul className="divide-y divide-border/60">
@@ -321,12 +328,13 @@ export default function AdminUsersPage() {
                         </p>
                         {isMe && (
                           <span className="inline-flex items-center rounded-full bg-bg-muted px-1.5 py-0.5 text-[10px] font-medium text-text-tertiary">
-                            você
+                            {tx("você")}
                           </span>
                         )}
                       </div>
                       <p className="truncate text-xs font-light text-text-tertiary">
-                        {user.email} · desde {formatDate(user.createdAt)}
+                        {user.email} {tx("· desde")}{" "}
+                        {formatDate(user.createdAt)}
                       </p>
                     </div>
 
@@ -335,13 +343,13 @@ export default function AdminUsersPage() {
                         active={user.hasPasskey}
                         icon={Fingerprint}
                         labelOn="Passkey"
-                        labelOff="Sem passkey"
+                        labelOff={tx("Sem passkey")}
                       />
                       <UserBadge
                         active={isAdmin}
                         icon={ShieldCheck}
-                        labelOn="Administrador"
-                        labelOff="Membro"
+                        labelOn={tx("Administrador")}
+                        labelOff={tx("Membro")}
                       />
                     </div>
 
@@ -349,7 +357,7 @@ export default function AdminUsersPage() {
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button
-                            aria-label="Mais ações"
+                            aria-label={tx("Mais ações")}
                             className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
                           >
                             <MoreHorizontal size={14} />
@@ -368,13 +376,15 @@ export default function AdminUsersPage() {
                             }
                             className="text-xs text-text-secondary focus:bg-bg-muted focus:text-text-primary"
                           >
-                            {isAdmin ? "Tornar membro" : "Tornar administrador"}
+                            {isAdmin
+                              ? tx("Tornar membro")
+                              : tx("Tornar administrador")}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => handleDelete(user.id)}
                             className="text-xs text-destructive focus:bg-bg-muted"
                           >
-                            Excluir usuário
+                            {tx("Excluir usuário")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -391,16 +401,16 @@ export default function AdminUsersPage() {
           <div className="border-b border-border px-5 py-4">
             <SectionHeader
               icon={Mail}
-              title={`Convites (${invites.length})`}
-              subtitle="Convites abertos e os antigos."
+              title={tx("Convites ({0})", invites.length)}
+              subtitle={tx("Convites abertos e os antigos.")}
             />
           </div>
 
           {invites.length === 0 ? (
             <EmptyState
               icon={UserPlus}
-              title="Nenhum convite ainda"
-              hint="Crie um pelo botão acima."
+              title={tx("Nenhum convite ainda")}
+              hint={tx("Crie um pelo botão acima.")}
             />
           ) : (
             <ul className="divide-y divide-border/60">
@@ -418,7 +428,7 @@ export default function AdminUsersPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="truncate text-sm font-medium text-text-primary">
-                          {invite.email || "Convite aberto"}
+                          {invite.email || tx("Convite aberto")}
                         </p>
                         <span
                           className={cn(
@@ -432,7 +442,7 @@ export default function AdminUsersPage() {
                       <p className="truncate text-xs font-light text-text-tertiary">
                         {invite.role === "admin" ? "administrador" : "membro"} ·{" "}
                         {status === "expired"
-                          ? `expirou em ${formatDate(invite.expiresAt)}`
+                          ? tx("expirou em {0}", formatDate(invite.expiresAt))
                           : status === "used"
                             ? `aceito ${invite.usedAt ? formatDate(invite.usedAt) : ""}`
                             : `expira ${relativeTime(invite.expiresAt)}`}
@@ -442,7 +452,7 @@ export default function AdminUsersPage() {
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button
-                            aria-label="Mais ações"
+                            aria-label={tx("Mais ações")}
                             className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] text-text-tertiary transition-colors hover:bg-bg-muted hover:text-text-primary"
                           >
                             <MoreHorizontal size={14} />
@@ -456,7 +466,7 @@ export default function AdminUsersPage() {
                             onClick={() => handleRevoke(invite.id)}
                             className="text-xs text-destructive focus:bg-bg-muted"
                           >
-                            Revogar convite
+                            {tx("Revogar convite")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

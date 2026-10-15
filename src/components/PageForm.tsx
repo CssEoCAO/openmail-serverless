@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import { tx } from "@/lib/i18n";
 /**
  * Shared layout primitives for "settings-style" admin pages —
  * TemplateEditor, SequenceEditor, SequenceDetail, etc. Keeps the
@@ -107,11 +108,11 @@ export function CodeBlock({
       <button
         type="button"
         onClick={copy}
-        aria-label="Copiar"
+        aria-label={tx("Copiar")}
         className="absolute right-2 top-2 inline-flex h-6 items-center gap-1 rounded-[4px] border border-border bg-card px-1.5 text-[10px] font-medium text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
       >
         {copied ? <Check size={10} /> : <Copy size={10} />}
-        {copied ? "Copiado" : "Copiar"}
+        {copied ? tx("Copiado") : tx("Copiar")}
       </button>
     </div>
   );
