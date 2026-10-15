@@ -323,7 +323,7 @@ describe("admin router", () => {
       });
       expect(res.status).toBe(200);
       const data = await res.json();
-      expect(data.brandName).toBe("saasmail");
+      expect(data.brandName).toBe("OpenMail Serverless");
     });
 
     it("rejects brand names that are too long", async () => {

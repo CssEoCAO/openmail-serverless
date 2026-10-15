@@ -13,7 +13,7 @@ interface Branding {
 
 const DEFAULT_BRANDING: Branding = {
   passkeyRequired: true,
-  brandName: "E-mail",
+  brandName: "OpenMail Serverless",
 };
 
 interface BrandingContextValue extends Branding {

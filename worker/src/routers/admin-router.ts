@@ -7,7 +7,7 @@ import { json200Response, json201Response } from "../lib/helpers";
 import type { Variables } from "../variables";
 
 /** Default brand name when no row is set in app_settings. */
-const DEFAULT_BRAND_NAME = "saasmail";
+const DEFAULT_BRAND_NAME = "OpenMail Serverless";
 
 export const adminRouter = new OpenAPIHono<{
   Bindings: CloudflareBindings;

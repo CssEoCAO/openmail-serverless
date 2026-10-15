@@ -1,7 +1,7 @@
 {
-  "name": "E-mail",
-  "short_name": "E-mail",
-  "description": "Caixa de e-mail das contas da casa.",
+  "name": "OpenMail Serverless",
+  "short_name": "OpenMail",
+  "description": "Caixa de e-mail compartilhada no Cloudflare Workers.",
   "lang": "pt-BR",
   "start_url": "/",
   "display": "standalone",

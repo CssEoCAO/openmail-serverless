@@ -34,8 +34,8 @@ const ConfigSchema = z.object({
   }),
   brandName: z.string().openapi({
     description:
-      'Instance display name from app settings. Defaults to "saasmail" when unset.',
-    example: "saasmail",
+      'Instance display name from app settings. Defaults to "OpenMail Serverless" when unset.',
+    example: "OpenMail Serverless",
   }),
 });
 
@@ -60,7 +60,7 @@ bootstrapRouter.openapi(configRoute, async (c) => {
   const brandName =
     row.length > 0 && row[0].value && row[0].value.length > 0
       ? row[0].value
-      : "saasmail";
+      : "OpenMail Serverless";
   return c.json({
     passkeyRequired: !isDevEnvironment(c.env),
     brandName,

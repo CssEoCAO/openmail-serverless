@@ -6,7 +6,7 @@ import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
  *
  * Known keys (so far):
  *   - "brand_name": display name shown in the top nav + auth screens.
- *     Falls back to "saasmail" if NULL or unset.
+ *     Falls back to "OpenMail Serverless" if NULL or unset.
  */
 export const appSettings = sqliteTable("app_settings", {
   key: text("key").primaryKey(),
