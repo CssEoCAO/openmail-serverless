@@ -230,13 +230,11 @@ describe("people router", () => {
           email: "member@test.com",
           role: "member",
         });
-        await db
-          .insert(inboxPermissions)
-          .values({
-            userId: member.userId,
-            email: "visible@test.com",
-            createdAt: 100,
-          });
+        await db.insert(inboxPermissions).values({
+          userId: member.userId,
+          email: "visible@test.com",
+          createdAt: 100,
+        });
         const response = await authFetch("/api/people/grouped", {
           apiKey: member.apiKey,
         });

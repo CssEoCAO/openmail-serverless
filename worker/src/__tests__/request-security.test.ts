@@ -96,9 +96,9 @@ describe("session mutation Origin enforcement", () => {
 
   it("rejects missing and sibling Origins but accepts the configured origin", async () => {
     expect((await signedInMutation()).status).toBe(403);
-    expect(
-      (await signedInMutation("https://evil.example.com")).status,
-    ).toBe(403);
+    expect((await signedInMutation("https://evil.example.com")).status).toBe(
+      403,
+    );
     expect((await signedInMutation(BASE_URL)).status).toBe(200);
   });
 });
