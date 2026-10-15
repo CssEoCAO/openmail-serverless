@@ -19,6 +19,22 @@ const TEXTO = "Resposta em rascunho pelo e2e";
 // Este arquivo confere a interface em português (o resto da suíte roda em inglês).
 test.use({ locale: "pt-BR" });
 
+/** O composer grava o rascunho de resposta pelo router único: PUT /api/drafts com
+ *  contextKey "reply:<emailId>" no corpo, GET e DELETE por ?contextKey=. */
+function rascunhoDe(
+  req: { url(): string; method(): string; postDataJSON(): unknown },
+  metodo: "PUT" | "DELETE",
+  emailId?: string,
+) {
+  const url = new URL(req.url());
+  if (url.pathname !== "/api/drafts" || req.method() !== metodo) return false;
+  const chave =
+    metodo === "PUT"
+      ? (req.postDataJSON() as { contextKey?: string } | null)?.contextKey
+      : url.searchParams.get("contextKey");
+  return emailId ? chave === `reply:${emailId}` : !!chave?.startsWith("reply:");
+}
+
 async function abrirPessoa(page: Page, nome: string, tab: string) {
   await page.goto("/inbox/todas");
   await expect(page.getByText(nome)).toBeVisible();
@@ -74,10 +90,8 @@ test.describe.serial("reply drafts", () => {
     );
     await expect(salvar).toBeEnabled();
 
-    const put = page.waitForResponse(
-      (r) =>
-        r.url().includes("/api/drafts/e_s_a1") &&
-        r.request().method() === "PUT",
+    const put = page.waitForResponse((r) =>
+      rascunhoDe(r.request(), "PUT", "e_s_a1"),
     );
     await salvar.click();
     expect((await put).status()).toBe(200);
@@ -159,8 +173,8 @@ test.describe.serial("reply drafts", () => {
     );
 
     // Servidor recusa: o texto fica, o selo diz que falhou, nada de "salvo".
-    await page.route("**/api/drafts/e_s_b1", (route) =>
-      route.request().method() === "PUT"
+    await page.route("**/api/drafts", (route) =>
+      rascunhoDe(route.request(), "PUT", "e_s_b1")
         ? route.fulfill({ status: 500, body: "{}" })
         : route.continue(),
     );
@@ -173,7 +187,7 @@ test.describe.serial("reply drafts", () => {
       "texto do Bob",
     );
     await expect(composer).toBeVisible();
-    await page.unroute("**/api/drafts/e_s_b1");
+    await page.unroute("**/api/drafts");
     await composer.getByRole("button", { name: "Cancelar" }).click();
   });
 
@@ -286,18 +300,18 @@ test.describe.serial("reply drafts", () => {
 
     await composer.locator(".ProseMirror").click();
     await page.keyboard.type("rascunho em caixa sem identidade");
-    const put = page.waitForResponse(
-      (r) => r.url().includes("/api/drafts/") && r.request().method() === "PUT",
-    );
+    const put = page.waitForResponse((r) => rascunhoDe(r.request(), "PUT"));
     await composer.getByTestId("reply-save-draft").click();
     expect((await put).status()).toBe(200);
     await expect(page.getByTestId("reply-draft-hint")).toHaveText(
       /Rascunho salvo/,
     );
     await composer.getByRole("button", { name: "Cancelar" }).click();
-    await api.delete(`/api/drafts/${(await (await put).json()).emailId}`, {
-      headers: { origin: BASE_URL },
-    });
+    const { draft } = await (await put).json();
+    await api.delete(
+      `/api/drafts?contextKey=${encodeURIComponent(draft.contextKey)}`,
+      { headers: { origin: BASE_URL } },
+    );
   });
 
   test("preserves a divergent backup, locks actions during save and fits on mobile", async ({
@@ -379,8 +393,8 @@ test.describe.serial("reply drafts", () => {
     const intercepted = new Promise<void>((resolve) => {
       entered = resolve;
     });
-    await page.route("**/api/drafts/e_s_b2", async (route) => {
-      if (route.request().method() === "PUT") {
+    await page.route("**/api/drafts", async (route) => {
+      if (rascunhoDe(route.request(), "PUT", "e_s_b2")) {
         entered();
         await held;
       }
@@ -412,6 +426,7 @@ test.describe.serial("reply drafts", () => {
       "salvo",
     );
     await composer.getByRole("button", { name: "Cancelar" }).click();
+    await page.unroute("**/api/drafts");
     await api.delete("/api/drafts/e_s_b2", { headers: { origin: BASE_URL } });
     await page.evaluate(() => localStorage.clear());
     await page.route("**/api/drafts", (route) =>
@@ -438,14 +453,12 @@ test.describe.serial("reply drafts", () => {
         r.url().includes("/api/send/reply/e_s_a1") &&
         r.request().method() === "POST",
     );
-    const del = page.waitForResponse(
-      (r) =>
-        r.url().includes("/api/drafts/e_s_a1") &&
-        r.request().method() === "DELETE",
+    const del = page.waitForResponse((r) =>
+      rascunhoDe(r.request(), "DELETE", "e_s_a1"),
     );
     await composer.getByTestId(TEST_IDS.replySendButton).click();
     expect((await sent).status()).toBe(201);
-    expect((await del).status()).toBe(204);
+    expect((await del).status()).toBe(200);
     await expect(composer).not.toBeVisible();
 
     const lista = await (await api.get(`${BASE_URL}/api/drafts`)).json();

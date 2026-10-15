@@ -62,7 +62,9 @@ export default defineConfig({
   ],
   test: {
     globals: true,
-    testTimeout: 15_000,
+    // The first authenticated request of a file boots the whole worker in
+    // workerd (~7 s locally); on GitHub's runners send-reply-gmail crossed 15 s.
+    testTimeout: 30_000,
     hookTimeout: 15_000,
     include: ["worker/src/__tests__/**/*.test.ts"],
   },
