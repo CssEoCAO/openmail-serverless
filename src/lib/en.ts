@@ -863,4 +863,16 @@ export const EN: Record<string, string> = {
   "Voltar à tabela": "Back to the table",
   "Voltar ao padrão": "Reset to default",
   "Zero: a etapa 1 sai na inscrição.": "Zero: step 1 goes out on enrollment.",
+  "Origem do e-mail": "Source",
+  "Origem do e-mail de {0}": "Mail source for {0}",
+  "Não deu para conferir — ainda mapeada para {0}":
+    "Couldn't check — still mapped to {0}",
+  "Caixa do Google não está mais conectada": "Mailbox no longer connected",
+  "Não deu para carregar as caixas do Google":
+    "Couldn't load connected mailboxes",
+  "Conecte uma caixa do Google primeiro": "Connect a Google mailbox first",
+  "Não deu para trocar a origem desta caixa.":
+    "Couldn't change the source for this inbox.",
+  'diz de onde vem o e-mail desta caixa: o Email Routing da Cloudflare ou uma caixa do Google conectada que possa enviar como este endereço. O Google só aceita um endereço listado e verificado em "Enviar e-mail como" dessa caixa, então um mapeamento recusado não é salvo.':
+    "picks where this inbox's mail comes from: Cloudflare Email Routing, or a connected Google mailbox that can send as this address. Google only accepts an address listed — and verified — under that mailbox's \"Send mail as\", so a mapping it refuses is not saved.",
 };

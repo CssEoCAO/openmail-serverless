@@ -8,14 +8,32 @@ import {
   MAX_SIGNATURE_HTML_LENGTH,
   sanitizeSignatureHtml,
 } from "../lib/sanitize-signature";
+import { GmailApiError, listSendAs } from "../lib/gmail/api";
+import { GoogleAuthError } from "../lib/gmail/oauth";
+import { getAccessToken } from "../lib/gmail/token";
+import { clearGmailThreadIds } from "../lib/gmail/thread-ids";
 import type { Variables } from "../variables";
 
+type InboxesEnv = CloudflareBindings & {
+  GOOGLE_OAUTH_CLIENT_ID?: string;
+  GOOGLE_OAUTH_CLIENT_SECRET?: string;
+  TOKEN_ENCRYPTION_KEY?: string;
+};
+
 export const adminInboxesRouter = new OpenAPIHono<{
-  Bindings: CloudflareBindings;
+  Bindings: InboxesEnv;
   Variables: Variables;
 }>();
 
 const OutboundProviderSchema = z.enum(["cloudflare", "resend"]);
+/** The secrets a Gmail token refresh needs, or null when unconfigured. */
+function gmailConfig(env: InboxesEnv) {
+  const clientId = env.GOOGLE_OAUTH_CLIENT_ID;
+  const clientSecret = env.GOOGLE_OAUTH_CLIENT_SECRET;
+  const encryptionKey = env.TOKEN_ENCRYPTION_KEY;
+  if (!clientId || !clientSecret || !encryptionKey) return null;
+  return { clientId, clientSecret, encryptionKey };
+}
 
 const InboxRowSchema = z.object({
   email: z.string(),
@@ -25,6 +43,8 @@ const InboxRowSchema = z.object({
   signatureHtml: z.string().nullable(),
   forwardTo: z.string().nullable(),
   assignedUserIds: z.array(z.string()),
+  source: z.enum(["cloudflare", "gmail"]),
+  gmailAccountId: z.string().nullable(),
 });
 
 const listInboxesRoute = createRoute({
@@ -48,6 +68,8 @@ adminInboxesRouter.openapi(listInboxesRoute, async (c) => {
     signatureHtml: string | null;
     forwardTo: string | null;
     assignedUserIds: string | null;
+    source: "cloudflare" | "gmail" | null;
+    gmailAccountId: string | null;
   };
   const rows = await db.all<Row>(sql`
     WITH universe AS (
@@ -62,6 +84,8 @@ adminInboxesRouter.openapi(listInboxesRoute, async (c) => {
       s.outbound_provider AS outboundProvider,
       s.signature_html AS signatureHtml,
       s.forward_to AS forwardTo,
+      s.source AS source,
+      s.gmail_account_id AS gmailAccountId,
       (
         SELECT COALESCE(
           '[' || GROUP_CONCAT('"' || ip.user_id || '"') || ']',
@@ -84,6 +108,8 @@ adminInboxesRouter.openapi(listInboxesRoute, async (c) => {
       signatureHtml: r.signatureHtml,
       forwardTo: r.forwardTo,
       assignedUserIds: r.assignedUserIds ? JSON.parse(r.assignedUserIds) : [],
+      source: r.source ?? "cloudflare",
+      gmailAccountId: r.gmailAccountId,
     })),
     200,
   );
@@ -192,6 +218,17 @@ const PatchInboxBodySchema = z
     forwardTo: z
       .union([z.string().email(), z.literal(""), z.null()])
       .optional(),
+    // Where this inbox's mail comes from. Absent = unchanged.
+    source: z.enum(["cloudflare", "gmail"]).optional(),
+    // FK to gmail_accounts.id. Absent = unchanged; null clears it.
+    gmailAccountId: z.string().nullable().optional(),
+    // Google Group routing was attempted in this slice and withdrawn after
+    // adversarial review found List-ID and Delivered-To are both
+    // sender-forgeable — an attacker could pick which customer's timeline
+    // their message lands on. The column still exists for a later slice;
+    // nothing may configure it yet, so a non-null value here is rejected
+    // outright (see the handler) rather than silently accepted or ignored.
+    gmailGroupAddress: z.string().nullable().optional(),
   })
   .refine(
     (b) =>
@@ -199,7 +236,10 @@ const PatchInboxBodySchema = z
       b.displayMode !== undefined ||
       b.outboundProvider !== undefined ||
       b.signatureHtml !== undefined ||
-      b.forwardTo !== undefined,
+      b.forwardTo !== undefined ||
+      b.source !== undefined ||
+      b.gmailAccountId !== undefined ||
+      b.gmailGroupAddress !== undefined,
     "must update at least one field",
   );
 
@@ -208,7 +248,7 @@ const patchInboxRoute = createRoute({
   path: "/{email}",
   tags: ["Admin Inboxes"],
   description:
-    "Update display name, display mode, outbound provider, signature HTML, and/or forward destination for an inbox. Row is deleted only when every field is at its default.",
+    "Update display name, display mode, outbound provider, signature HTML, forward destination, and/or Gmail source mapping for an inbox. Row is deleted only when every field is at its default. Google Group routing (gmailGroupAddress) is not accepted in this release.",
   request: {
     params: z.object({ email: z.string() }),
     body: {
@@ -228,11 +268,31 @@ const patchInboxRoute = createRoute({
         outboundProvider: OutboundProviderSchema,
         signatureHtml: z.string().nullable(),
         forwardTo: z.string().nullable(),
+        source: z.enum(["cloudflare", "gmail"]),
+        gmailAccountId: z.string().nullable(),
       }),
       "Updated",
     ),
     400: {
-      description: "Invalid forward destination",
+      description:
+        "Invalid forward destination, invalid source, a group address was supplied, or the connected Google account cannot send as this inbox",
+      content: {
+        "application/json": {
+          schema: z.object({ error: z.string() }),
+        },
+      },
+    },
+    502: {
+      description:
+        "Gmail could not be reached to verify the mapping; nothing was saved",
+      content: {
+        "application/json": {
+          schema: z.object({ error: z.string() }),
+        },
+      },
+    },
+    503: {
+      description: "Gmail integration is not configured on this instance",
       content: {
         "application/json": {
           schema: z.object({ error: z.string() }),
@@ -244,9 +304,31 @@ const patchInboxRoute = createRoute({
 
 adminInboxesRouter.openapi(patchInboxRoute, async (c) => {
   const db = c.get("db");
-  const { email } = c.req.valid("param");
+  const { email: emailParam } = c.req.valid("param");
   const body = c.req.valid("json");
   const now = Math.floor(Date.now() / 1000);
+
+  // Normalise the address the way every other site does (`POST /` above, the
+  // send path's inbox lookup, forwardTo below). Without this a PATCH to
+  // `Support@Acme.dev` writes a row the send path — which lowercases before
+  // looking up — can never find, so a mapping could pass the sendAs check
+  // below and still be dead on arrival.
+  const email = emailParam.trim().toLowerCase();
+
+  // Google Group routing was attempted in this slice and withdrawn after
+  // adversarial review found List-ID and Delivered-To are both
+  // sender-forgeable — an attacker could choose which customer's timeline
+  // their message landed on. Reject outright, before touching the row at
+  // all: a rejected request must not half-apply the rest of the body.
+  if (body.gmailGroupAddress != null) {
+    return c.json(
+      {
+        error:
+          "Google Group routing is not supported yet. Only personal mailboxes can be mapped to an inbox in this release.",
+      },
+      400,
+    );
+  }
 
   // Load current row (if any) so we can apply a partial update without losing
   // the field the caller didn't touch.
@@ -287,17 +369,150 @@ adminInboxesRouter.openapi(patchInboxRoute, async (c) => {
         ? null
         : body.forwardTo.trim().toLowerCase()
       : (currentRow?.forwardTo ?? null);
+  // `source` and `gmail_account_id` are one fact, not two.
+  //
+  // Merging them independently let either field be written without the other,
+  // and the two halves of the feature read the pair differently: the sync
+  // routes on `gmail_account_id` and the send path on `source`. So
+  // `{"gmailAccountId": "..."}` alone wrote a mapping the send-as check never
+  // saw, and `{"source": "cloudflare"}` alone left the id in place — the
+  // operator had unmapped the inbox, the cron had not, and the UI rendered
+  // "Cloudflare" for a row that was plainly Gmail-fed. Both are reachable
+  // from the documented HTTP API and the MCP surface; only the admin UI
+  // happens to always send the pair.
+  //
+  // What is written is therefore derived from the resulting STATE, and the
+  // send-as verification below keys off that same state rather than off which
+  // fields the request happened to carry.
+  const sourceGiven = body.source !== undefined;
+  const accountGiven = body.gmailAccountId !== undefined;
+
+  // One body that says both things at once is a mistake worth naming rather
+  // than silently resolving in a direction the caller may not have meant.
+  if (
+    sourceGiven &&
+    accountGiven &&
+    body.source === "cloudflare" &&
+    body.gmailAccountId !== null
+  ) {
+    return c.json(
+      {
+        error:
+          'source: "cloudflare" and a gmailAccountId contradict each other. Send source: "gmail" with the mailbox to map it, or source: "cloudflare" on its own to unmap it.',
+      },
+      400,
+    );
+  }
+
+  let nextSource = sourceGiven
+    ? body.source!
+    : (currentRow?.source ?? "cloudflare");
+  let nextGmailAccountId = accountGiven
+    ? body.gmailAccountId!
+    : (currentRow?.gmailAccountId ?? null);
+
+  // Naming a mailbox is choosing Gmail...
+  if (accountGiven && body.gmailAccountId !== null && !sourceGiven) {
+    nextSource = "gmail";
+  }
+  // ...and choosing Cloudflare is giving the mailbox up.
+  if (nextSource === "cloudflare") nextGmailAccountId = null;
 
   // Reject the tight self-forward loop at config time so the admin gets an
   // error instead of a silently-skipped forward. `buildForwardMessage` guards
   // this again at send time (and also catches forwards aimed at *other* inboxes
   // on this instance, which may not exist yet when the rule is saved).
-  if (nextForwardTo !== null && nextForwardTo === email.trim().toLowerCase()) {
+  if (nextForwardTo !== null && nextForwardTo === email) {
     return c.json(
       { error: "Forward destination cannot be the inbox itself" },
       400,
     );
   }
+
+  // A Gmail source with no mailbox names nothing to sync from, and the
+  // sendAs check below is skipped for it because there is no account to ask —
+  // so without this it is the one way to write an unverified "gmail" row.
+  // Not reachable from the UI, which always sends both fields together.
+  if (nextSource === "gmail" && nextGmailAccountId === null) {
+    return c.json(
+      {
+        error:
+          'A Gmail inbox must name the connected mailbox it reads from. Send gmailAccountId alongside source: "gmail", or use source: "cloudflare" to unmap it.',
+      },
+      400,
+    );
+  }
+
+  // A Gmail mapping is only usable if the connected account may actually put
+  // this address in a From: header. Until this check existed, a wrong mapping
+  // was saved happily and only surfaced when a real reply bounced.
+  //
+  // Keyed on the RESULTING mapping, not on `body.source`. Entering this block
+  // only when the request carried `source` is what let
+  // `{"gmailAccountId": "..."}` write a mapping with no `sendAs` call at all
+  // — the gate skipped entirely by the one field that creates the thing it
+  // gates. A non-null `nextGmailAccountId` now implies `nextSource ===
+  // "gmail"` by construction above, so this is the whole condition.
+  //
+  // Still only when the mapping is new or changed: re-checking on every
+  // unrelated edit would make renaming an inbox fail whenever Gmail is
+  // unreachable, and an unchanged mapping was already checked when it was
+  // saved.
+  if (
+    nextGmailAccountId !== null &&
+    (currentRow?.source !== "gmail" ||
+      currentRow?.gmailAccountId !== nextGmailAccountId)
+  ) {
+    const cfg = gmailConfig(c.env);
+    if (!cfg) {
+      return c.json({ error: "Gmail integration is not configured" }, 503);
+    }
+
+    let sendAs: string[];
+    try {
+      const accessToken = await getAccessToken(db, nextGmailAccountId, cfg);
+      sendAs = await listSendAs(accessToken);
+    } catch (e) {
+      // Log a code, never the error's free text and never the token: this
+      // path holds an access token, and an admin-facing message plus a log
+      // line are both places it must never reach.
+      const reason =
+        e instanceof GmailApiError || e instanceof GoogleAuthError
+          ? e.code
+          : "sendas_check_failed";
+      console.error(
+        `[admin-inboxes] could not verify the Gmail mapping for ${email} (account ${nextGmailAccountId}): ${reason}`,
+      );
+      // Refuse rather than save something unverified — an unchecked mapping
+      // that looks checked is exactly the failure this guard exists to stop.
+      return c.json(
+        {
+          error: `Could not verify that ${email} can be sent from the connected Google account, so the mapping was not saved. Please try again.`,
+        },
+        502,
+      );
+    }
+
+    // Both sides are normalised: `listSendAs` lowercases Gmail's, and `email`
+    // was normalised at the top of this handler.
+    if (!sendAs.includes(email)) {
+      return c.json(
+        {
+          error: `The connected Google account cannot send as ${email}, so the mapping was not saved. Add ${email} under "Send mail as" in that account's Gmail settings, verify it, then map this inbox again.`,
+        },
+        400,
+      );
+    }
+  }
+
+  // The mailbox this inbox's stored Gmail thread ids came from is about to
+  // stop being the mailbox it reads from. Those ids are per-MAILBOX and
+  // nothing records which account issued them, so from here on they are
+  // claims no one can check — and handing one to a different account's
+  // `messages.send` is a 4xx, which is terminal, which is never queued. See
+  // `clearGmailThreadIds`.
+  const mappingChanged =
+    nextGmailAccountId !== (currentRow?.gmailAccountId ?? null);
 
   // All fields at defaults → delete the row to keep the table sparse.
   if (
@@ -305,9 +520,12 @@ adminInboxesRouter.openapi(patchInboxRoute, async (c) => {
     nextDisplayMode === "chat" &&
     nextOutboundProvider === "cloudflare" &&
     nextSignatureHtml === null &&
-    nextForwardTo === null
+    nextForwardTo === null &&
+    nextSource === "cloudflare" &&
+    nextGmailAccountId === null
   ) {
     await db.delete(senderIdentities).where(eq(senderIdentities.email, email));
+    if (mappingChanged) await clearGmailThreadIds(db, [email]);
     return c.json(
       {
         email,
@@ -316,6 +534,8 @@ adminInboxesRouter.openapi(patchInboxRoute, async (c) => {
         outboundProvider: "cloudflare",
         signatureHtml: null,
         forwardTo: null,
+        source: "cloudflare",
+        gmailAccountId: null,
       },
       200,
     );
@@ -330,6 +550,8 @@ adminInboxesRouter.openapi(patchInboxRoute, async (c) => {
       outboundProvider: nextOutboundProvider,
       signatureHtml: nextSignatureHtml,
       forwardTo: nextForwardTo,
+      source: nextSource,
+      gmailAccountId: nextGmailAccountId,
       createdAt: now,
       updatedAt: now,
     })
@@ -341,9 +563,13 @@ adminInboxesRouter.openapi(patchInboxRoute, async (c) => {
         outboundProvider: nextOutboundProvider,
         signatureHtml: nextSignatureHtml,
         forwardTo: nextForwardTo,
+        source: nextSource,
+        gmailAccountId: nextGmailAccountId,
         updatedAt: now,
       },
     });
+
+  if (mappingChanged) await clearGmailThreadIds(db, [email]);
 
   return c.json(
     {
@@ -353,6 +579,8 @@ adminInboxesRouter.openapi(patchInboxRoute, async (c) => {
       outboundProvider: nextOutboundProvider,
       signatureHtml: nextSignatureHtml,
       forwardTo: nextForwardTo,
+      source: nextSource,
+      gmailAccountId: nextGmailAccountId,
     },
     200,
   );

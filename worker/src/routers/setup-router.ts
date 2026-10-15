@@ -2,6 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { and, eq, sql } from "drizzle-orm";
 import { users } from "../db/auth.schema";
 import { appSettings } from "../db/app-settings.schema";
+import { publicAuthFailure } from "../lib/public-error";
 import { createAuth } from "../auth";
 import { json200Response } from "../lib/helpers";
 import { hashKey } from "../lib/crypto";
@@ -203,8 +204,13 @@ setupRouter.openapi(createRouteDef, async (c) => {
           ),
         );
     }
-    const message = err instanceof Error ? err.message : "Signup failed";
-    return c.json({ error: message }, 400);
+    // Public route, same rule as the invite acceptance — and the same code,
+    // so the two cannot drift. See lib/public-error.ts.
+    const failure = publicAuthFailure(err, "Signup failed. Please try again.");
+    if (failure.internal !== null) {
+      console.error(`[setup] admin creation failed: ${failure.internal}`);
+    }
+    return c.json({ error: failure.body }, 400);
   }
   const finalized = await db
     .update(appSettings)

@@ -1,3 +1,5 @@
+import { statusFallbackMessage } from "@/lib/error-message";
+
 export interface Person {
   id: string;
   email: string;
@@ -127,13 +129,30 @@ export interface Stats {
   }>;
 }
 
+/**
+ * Throws the server's own `{ error }` message whenever it sends one, and the
+ * bare status code only when it doesn't. The body is the actionable part —
+ * a 400 naming the address that can't be sent from, a 502 saying a Gmail
+ * reply was rejected *and not queued for retry* — and a UI handed only
+ * "API error: 502" has nothing left to tell the user to do.
+ */
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     credentials: "include",
     ...options,
   });
   if (!res.ok) {
-    throw new Error(`API error: ${res.status}`);
+    let message: string | null = null;
+    try {
+      const body: unknown = await res.json();
+      const candidate = (body as { error?: unknown } | null)?.error;
+      if (typeof candidate === "string" && candidate.trim() !== "") {
+        message = candidate;
+      }
+    } catch {
+      // Non-JSON or empty body — fall back to the status code below.
+    }
+    throw new Error(message ?? statusFallbackMessage(res.status));
   }
   return res.json();
 }
@@ -206,7 +225,8 @@ export async function fetchGroupedPeople(params?: {
   q?: string;
   recipient?: string;
   unread?: boolean;
-  hasAttachment?: boolean;
+  drafts?: boolean;
+  sequenced?: boolean;
   sort?: InboxSort;
   /** Optional explicit direction. Server applies the natural default if omitted. */
   direction?: InboxSortDirection;
@@ -217,7 +237,8 @@ export async function fetchGroupedPeople(params?: {
   if (params?.q) qs.set("q", params.q);
   if (params?.recipient) qs.set("recipient", params.recipient);
   if (params?.unread) qs.set("unread", "1");
-  if (params?.hasAttachment) qs.set("hasAttachment", "1");
+  if (params?.drafts) qs.set("drafts", "1");
+  if (params?.sequenced) qs.set("sequenced", "1");
   if (params?.sort && params.sort !== "recency") qs.set("sort", params.sort);
   // Only send direction when it differs from the natural default —
   // keeps the URL stable for the common case and avoids cache-busting.
@@ -268,6 +289,46 @@ export async function fetchPersonEmails(
 
 export async function fetchEmail(id: string): Promise<Email> {
   return apiFetch(`/api/emails/${id}`);
+}
+
+// Mirrors the worker's SearchHit/SearchEmailsResult (worker/src/lib/queries/
+// search.ts). Kept as a local copy rather than imported through `@worker/*`
+// because that module's dependency chain pulls worker-only types into the
+// frontend typecheck.
+export interface SearchHit {
+  id: string;
+  type: "received" | "sent";
+  personId: string | null;
+  personEmail: string | null;
+  personName: string | null;
+  inbox: string;
+  subject: string | null;
+  snippet: string | null;
+  timestamp: number;
+  isRead: number | null;
+}
+export interface SearchResult {
+  hits: SearchHit[];
+  hasMore: boolean;
+  truncated: boolean;
+}
+export async function searchEmails(params: {
+  q: string;
+  inbox?: string;
+  personId?: string;
+  after?: number;
+  before?: number;
+  page?: number;
+  limit?: number;
+}): Promise<SearchResult> {
+  const qs = new URLSearchParams({ q: params.q });
+  if (params.inbox) qs.set("inbox", params.inbox);
+  if (params.personId) qs.set("personId", params.personId);
+  if (params.after !== undefined) qs.set("after", String(params.after));
+  if (params.before !== undefined) qs.set("before", String(params.before));
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+  return apiFetch(`/api/emails/search?${qs}`);
 }
 
 export async function markEmailRead(
@@ -434,40 +495,6 @@ export async function fetchDrafts(): Promise<ReplyDraft[]> {
   return res.drafts;
 }
 
-/** null quando não há rascunho (404). Outros erros propagam. */
-export async function fetchDraft(emailId: string): Promise<ReplyDraft | null> {
-  const res = await fetch(`/api/drafts/${emailId}`, {
-    credentials: "include",
-  });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
-}
-
-export async function saveDraft(
-  emailId: string,
-  data: {
-    fromAddress: string;
-    cc?: CcEntry[];
-    bodyHtml: string;
-    bodyText: string;
-  },
-): Promise<ReplyDraft> {
-  return apiFetch(`/api/drafts/${emailId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-}
-
-export async function deleteDraft(emailId: string): Promise<void> {
-  const res = await fetch(`/api/drafts/${emailId}`, {
-    method: "DELETE",
-    credentials: "include",
-  });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-}
-
 export async function fetchStats(recipient?: string): Promise<Stats> {
   const qs = recipient ? `?recipient=${recipient}` : "";
   return apiFetch(`/api/stats${qs}`);
@@ -519,6 +546,55 @@ export async function deleteTemplate(
   slug: string,
 ): Promise<{ success: boolean }> {
   return apiFetch(`/api/email-templates/${slug}`, {
+    method: "DELETE",
+  });
+}
+
+// --- Compose Drafts (autosave) ---
+
+/** An autosaved compose draft, keyed per user by `contextKey`. */
+export interface Draft {
+  id: string;
+  contextKey: string;
+  fromAddress: string | null;
+  toAddress: string | null;
+  cc: CcEntry[] | null;
+  subject: string | null;
+  bodyHtml: string | null;
+  bodyText: string | null;
+  replyToEmailId: string | null;
+  updatedAt: number;
+}
+
+export interface DraftInput {
+  contextKey: string;
+  fromAddress?: string;
+  to?: string;
+  cc?: CcEntry[];
+  subject?: string;
+  bodyHtml?: string;
+  bodyText?: string;
+  replyToEmailId?: string | null;
+}
+
+export async function fetchDraft(contextKey: string): Promise<Draft | null> {
+  const res = await apiFetch<{ draft: Draft | null }>(
+    `/api/drafts?contextKey=${encodeURIComponent(contextKey)}`,
+  );
+  return res.draft;
+}
+
+export async function saveDraft(data: DraftInput): Promise<Draft> {
+  const res = await apiFetch<{ draft: Draft }>("/api/drafts", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.draft;
+}
+
+export async function deleteDraft(contextKey: string): Promise<void> {
+  await apiFetch(`/api/drafts?contextKey=${encodeURIComponent(contextKey)}`, {
     method: "DELETE",
   });
 }
@@ -812,18 +888,27 @@ export interface AdminInbox {
   /** Destination address for per-inbox forwarding; null = forwarding off. */
   forwardTo: string | null;
   assignedUserIds: string[];
+  /** Where this inbox's mail comes from. */
+  source: "cloudflare" | "gmail";
+  /** Connected mailbox id when source is "gmail"; null otherwise. */
+  gmailAccountId: string | null;
 }
 
 export async function fetchAdminInboxes(): Promise<AdminInbox[]> {
   return apiFetch("/api/admin/inboxes");
 }
 
+/**
+ * POST /inboxes answers without `source`/`gmailAccountId` — a freshly created
+ * inbox is always a Cloudflare one. The caller fills the defaults in rather
+ * than pretending the server sent them.
+ */
 export async function createInbox(data: {
   email: string;
   displayName?: string | null;
   displayMode?: InboxDisplayMode;
   outboundProvider?: "cloudflare" | "resend";
-}): Promise<AdminInbox> {
+}): Promise<Omit<AdminInbox, "source" | "gmailAccountId">> {
   return apiFetch("/api/admin/inboxes", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -839,6 +924,9 @@ export async function updateInboxSettings(
     outboundProvider?: "cloudflare" | "resend";
     signatureHtml?: string | null;
     forwardTo?: string | null;
+    source?: "cloudflare" | "gmail";
+    /** Pass null to clear the mapping; omit to leave it unchanged. */
+    gmailAccountId?: string | null;
   },
 ): Promise<{
   email: string;
@@ -847,7 +935,12 @@ export async function updateInboxSettings(
   outboundProvider: "cloudflare" | "resend";
   signatureHtml: string | null;
   forwardTo: string | null;
+  source: "cloudflare" | "gmail";
+  gmailAccountId: string | null;
 }> {
+  // The failure body is the whole point here: a rejected Gmail mapping answers
+  // with the one sentence that tells the operator how to fix it ("add it under
+  // Gmail's Send mail as…"). `apiFetch` throws it verbatim.
   return apiFetch(`/api/admin/inboxes/${encodeURIComponent(email)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -887,6 +980,92 @@ export interface AdminUser {
 
 export async function fetchAdminUsers(): Promise<AdminUser[]> {
   return apiFetch("/api/admin/users");
+}
+
+// --- Admin Gmail ---
+
+/** A Google mailbox connected via OAuth, as the admin API reports it. */
+export interface GmailAccount {
+  id: string;
+  emailAddress: string;
+  /** Unix **seconds** of the last successful sync; null = never synced yet. */
+  lastSyncedAt: number | null;
+  /** Last sync failure. Non-null means this mailbox has stopped syncing. */
+  lastError: string | null;
+  /**
+   * Unix **seconds** of the last sync-cursor re-seed — an expired history
+   * cursor, or a reconnect. Mail that arrived during that window was never
+   * synced and cannot be recovered. The worker stores and returns these
+   * columns in seconds, not milliseconds; render them accordingly.
+   */
+  lastGapAt: number | null;
+  /**
+   * The one-off import of the last three months: "pending" until it starts,
+   * "running" while it pages through, "done" at the end. `count` is messages
+   * handled so far; `completedAt` is unix **seconds**.
+   */
+  backfill: {
+    status: "pending" | "running" | "done";
+    count: number;
+    completedAt: number | null;
+  };
+  /** Unix **seconds** of the connection, like the two fields above. */
+  createdAt: number;
+  /**
+   * The admin who last connected or reconnected this mailbox. Null on a row
+   * connected before the server recorded it; `name` and `email` are null when
+   * that user has since been deleted — the id is kept either way, because it
+   * is what the row actually stores.
+   */
+  connectedBy: {
+    id: string;
+    name: string | null;
+    email: string | null;
+  } | null;
+}
+
+export async function fetchGmailAccounts(): Promise<GmailAccount[]> {
+  // The endpoint wraps the list: { accounts: [...] }.
+  //
+  // No trailing slash. Hono matches paths exactly and does no trailing-slash
+  // normalisation, so `/api/admin/gmail/` matches nothing and falls through
+  // to the SPA catch-all — which in production answers `index.html` with a
+  // 200, so `res.json()` throws a parse error rather than a clean 404. The
+  // shipped contract test sends this literal string through the real worker.
+  const res = await apiFetch<{ accounts: GmailAccount[] }>("/api/admin/gmail");
+  return res.accounts;
+}
+
+export async function disconnectGmailAccount(
+  id: string,
+): Promise<{ success: boolean }> {
+  return apiFetch<{ success: boolean }>(
+    `/api/admin/gmail/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+
+/**
+ * Ask the worker for the Google consent URL to send the operator to.
+ *
+ * This endpoint answers `{ authUrl }` with a 200; it does **not** redirect.
+ * Linking an anchor straight at it lands the operator on a page of raw JSON,
+ * so the caller must fetch the URL and navigate to `authUrl` itself.
+ *
+ * `email` names the mailbox being *re*connected. It becomes Google's
+ * `login_hint` and is sealed into the OAuth state, so the callback refuses a
+ * grant for any other mailbox rather than re-seeding that one's sync cursor.
+ * Omit it for a first connection, where any account is a valid answer.
+ *
+ * On an instance with no OAuth secrets it answers 503 with
+ * `{ error: "Gmail integration is not configured" }`, which `apiFetch`
+ * rethrows verbatim — show it rather than navigating.
+ */
+export async function startGmailConnect(
+  email?: string,
+): Promise<{ authUrl: string }> {
+  const qs = email ? `?email=${encodeURIComponent(email)}` : "";
+  return apiFetch<{ authUrl: string }>(`/api/admin/gmail/connect${qs}`);
 }
 
 // --- Suppressions ---

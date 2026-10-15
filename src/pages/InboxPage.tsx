@@ -21,6 +21,7 @@ import ListHeader, {
   type InboxView,
 } from "@/components/ListHeader";
 import PeopleTable from "@/components/PeopleTable";
+import AgentPlan from "@/components/AgentPlan";
 import SelectionBar from "@/components/SelectionBar";
 import {
   addBlock,
@@ -410,6 +411,15 @@ export default function InboxPage() {
             {tx("Peça a um administrador para dar acesso a uma caixa.")}
           </p>
         </div>
+      </div>
+    );
+  }
+
+  // `?view=agent-plan`: a ferramenta WebMCP `visualize_plan` navega para cá.
+  if (searchParams.get("view") === "agent-plan") {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <AgentPlan />
       </div>
     );
   }

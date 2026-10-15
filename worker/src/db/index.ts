@@ -16,5 +16,6 @@ export * from "./push-subscriptions.schema";
 export * from "./app-settings.schema";
 export * from "./suppressions.schema";
 export * from "./blocklist.schema";
-export * from "./reply-drafts.schema";
+export * from "./drafts.schema";
+export * from "./gmail-accounts.schema";
 export * from "./schema";

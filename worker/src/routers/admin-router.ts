@@ -3,11 +3,9 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { users, passkeys } from "../db/auth.schema";
 import { invitations } from "../db/invitations.schema";
 import { appSettings } from "../db/app-settings.schema";
+import { resolveBrandName } from "../lib/brand-name";
 import { json200Response, json201Response } from "../lib/helpers";
 import type { Variables } from "../variables";
-
-/** Default brand name when no row is set in app_settings. */
-const DEFAULT_BRAND_NAME = "OpenMail Serverless";
 
 export const adminRouter = new OpenAPIHono<{
   Bindings: CloudflareBindings;
@@ -393,10 +391,5 @@ adminRouter.openapi(updateSettingsRoute, async (c) => {
     .from(appSettings)
     .where(eq(appSettings.key, "brand_name"))
     .limit(1);
-  const resolved =
-    row.length > 0 && row[0].value && row[0].value.length > 0
-      ? row[0].value
-      : DEFAULT_BRAND_NAME;
-
-  return c.json({ brandName: resolved }, 200);
+  return c.json({ brandName: resolveBrandName(row[0]?.value) }, 200);
 });

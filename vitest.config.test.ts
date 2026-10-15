@@ -1,7 +1,17 @@
 import { defineConfig } from "vitest/config";
 import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
+import path from "path";
 
 export default defineConfig({
+  // The frontend's `@/…` alias, so a worker test can import the REAL
+  // `src/lib/api.ts` and send its real path strings at the real worker
+  // (`__tests__/frontend-api-contract.test.ts`). Without this the client
+  // module cannot resolve its own `@/lib/error-message` import.
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
   plugins: [
     cloudflareTest({
       main: "./worker/src/index.ts",
@@ -42,6 +52,10 @@ export default defineConfig({
           // `createAuth` now passes `secret` explicitly rather than relying on
           // better-auth reading process.env, so tests must supply one.
           BETTER_AUTH_SECRET: "test-better-auth-secret-do-not-use-in-prod",
+          GOOGLE_OAUTH_CLIENT_ID: "test-google-client-id",
+          GOOGLE_OAUTH_CLIENT_SECRET: "test-google-client-secret",
+          // 32 bytes ("0123456789abcdef" twice), base64-encoded.
+          TOKEN_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
         },
       },
     }),

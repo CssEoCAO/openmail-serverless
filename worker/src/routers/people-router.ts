@@ -4,6 +4,8 @@ import { people } from "../db/people.schema";
 import { emails } from "../db/emails.schema";
 import { attachments } from "../db/attachments.schema";
 import { sentEmails } from "../db/sent-emails.schema";
+import { drafts } from "../db/drafts.schema";
+import { sequenceEnrollments } from "../db/sequence-enrollments.schema";
 import { json200Response, escapeLike, escapeFts } from "../lib/helpers";
 import {
   getPersonScoped,
@@ -101,6 +103,13 @@ const listGroupedPeopleRoute = createRoute({
         .enum(["1", "true"])
         .optional()
         .openapi({ description: "Only people with downloadable attachments" }),
+      drafts: z.enum(["1", "true"]).optional().openapi({
+        description:
+          "Only conversations where the current user has a reply draft",
+      }),
+      sequenced: z.enum(["1", "true"]).optional().openapi({
+        description: "Only contacts currently enrolled in a sequence (active)",
+      }),
       sort: z
         .enum(["recency", "unread", "inbox", "attachments"])
         .optional()
@@ -147,8 +156,22 @@ const listGroupedPeopleRoute = createRoute({
 
 peopleRouter.openapi(listGroupedPeopleRoute, async (c) => {
   const db = c.get("db");
-  const { q, recipient, unread, hasAttachment, sort, direction, page, limit } =
-    c.req.valid("query");
+  const user = c.get("user");
+  const {
+    q,
+    recipient,
+    unread,
+    hasAttachment,
+    drafts: draftsOnly,
+    sequenced,
+    sort,
+    direction,
+    page,
+    limit,
+  } = c.req.valid("query");
+  // Scope the drafts filter to the signed-in user. Empty id matches no
+  // drafts, so the filter safely yields nothing if the user is somehow absent.
+  const draftsUserId = user?.id ?? "";
   const offset = (page - 1) * limit;
   // Resolve effective direction. Each sort key has a "natural" default
   // (recency/unread/attachments → desc, inbox → asc) so the UI can
@@ -176,6 +199,22 @@ peopleRouter.openapi(listGroupedPeopleRoute, async (c) => {
   if (hasAttachment) {
     personConditions.push(
       sql`s.id IN (SELECT e2.person_id FROM emails e2 JOIN ${attachments} a ON a.email_id = e2.id WHERE a.content_id IS NULL ${receivedAliasInboxScope} AND e2.conversation_id IS NULL)`,
+    );
+  }
+  if (sequenced) {
+    personConditions.push(
+      sql`s.id IN (SELECT person_id FROM ${sequenceEnrollments} WHERE status = 'active')`,
+    );
+  }
+  if (draftsOnly) {
+    personConditions.push(
+      sql`s.id IN (
+        SELECT e.person_id FROM emails e
+        JOIN ${drafts} d ON d.reply_to_email_id = e.id
+        WHERE d.user_id = ${draftsUserId}
+          AND d.context_key LIKE 'reply:%'
+          AND e.conversation_id IS NULL
+      )`,
     );
   }
   if (q) {
@@ -301,6 +340,22 @@ peopleRouter.openapi(listGroupedPeopleRoute, async (c) => {
   }
   if (hasAttachment) {
     groupConditions.push(sql`g.hasAttachment = 1`);
+  }
+  if (sequenced) {
+    // Only individual contacts are enrolled in sequences — never group
+    // conversations — so this filter excludes every group row.
+    groupConditions.push(sql`0`);
+  }
+  if (draftsOnly) {
+    groupConditions.push(
+      sql`g.conversation_id IN (
+        SELECT e.conversation_id FROM emails e
+        JOIN ${drafts} d ON d.reply_to_email_id = e.id
+        WHERE d.user_id = ${draftsUserId}
+          AND d.context_key LIKE 'reply:%'
+          AND e.conversation_id IS NOT NULL
+      )`,
+    );
   }
   if (q) {
     const pattern = `%${escapeLike(q)}%`;

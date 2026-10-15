@@ -174,3 +174,6 @@ export function useRascunhos(): {
     erro: estado?.userId === userId && !!estado.erro,
   };
 }
+
+/** O rascunho de resposta é o rascunho com contextKey `reply:<emailId>` — uma tabela, um router. */
+export const replyKey = (emailId: string) => `reply:${emailId}`;

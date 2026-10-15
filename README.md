@@ -21,6 +21,8 @@ OpenMail Serverless is a fork of [saasmail](https://github.com/choyiny/saasmail)
 - **Pick the sender per mailbox.** Send most mail through Cloudflare Email Sending and a few identities through Resend, from the same deployment.
 - **Drafts and scheduled replies.** Drafts are saved on the server, the reply box keeps a local backup, and **Schedule** queues a reply for the next business hour.
 - **Team access.** Admins see everything; members only see the mailboxes assigned to them.
+- **Gmail and Google Workspace.** Connect a Google mailbox over OAuth: its mail lands on an inbox's timeline, and replies leave through that mailbox. See [docs/gmail.md](docs/gmail.md).
+- **WebMCP.** A browser AI agent can read the inbox and write drafts as the signed-in user, and never sends or deletes. See [docs/webmcp.md](docs/webmcp.md).
 - **English and Portuguese.** The interface follows the browser language and can be switched per browser.
 - **About $5 a month.** The Cloudflare Workers Paid plan covers it, including 3,000 outbound emails.
 
@@ -191,6 +193,10 @@ claude mcp add --transport http openmail https://your-domain.com/mcp
 | `email:manage` | `mark_read`, `delete_email`                                        |
 
 Access follows the connecting user's mailboxes. Prefer `email:read` alone: anyone can email you, so a connected assistant reads attacker-written text by design. `BASE_URL` must match the URL you give the client exactly, or every call returns 401. Admins list and revoke connected clients through the API (`GET /api/oauth-apps`, `DELETE /api/oauth-apps/{clientId}`); revocation applies on the next call.
+
+## More documentation
+
+The reference docs inherited from saasmail live in [docs/](docs/README.md): [Gmail integration](docs/gmail.md), [WebMCP](docs/webmcp.md), [inboxes](docs/inboxes.md), [email providers](docs/email-providers.md), [architecture](docs/architecture.md), [webhooks](docs/webhooks.md) and more. They were written for upstream saasmail: where they say `saasmail`, read OpenMail Serverless, and ignore the `/update-saasmail` flow in [docs/updating.md](docs/updating.md) — this fork has its own migrations.
 
 ## Setup
 

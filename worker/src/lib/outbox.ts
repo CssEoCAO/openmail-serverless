@@ -44,10 +44,19 @@ import {
   fitsD1EmailTextBudget,
 } from "./email-limits";
 
-/** Total provider attempts before a transient failure becomes terminal.
- *  With the hourly cron this is ~24h — enough to ride out Cloudflare's
- *  daily send-quota reset. */
-export const MAX_OUTBOX_ATTEMPTS = 24;
+/**
+ * Total provider attempts before a transient failure becomes terminal.
+ *
+ * COUNTED IN CRON TICKS, NOT HOURS. A transient failure re-arms the row as due
+ * immediately, so it is retried once per tick and this constant divided by the
+ * cron frequency is the real retry window.
+ *
+ * The cron in `wrangler.jsonc` runs every 15 minutes, so 96 ticks is ~24h —
+ * enough to ride out Cloudflare's daily send-quota reset. **Changing the cron
+ * schedule changes this budget.** It was 24 while the cron was hourly; on an
+ * hourly deployment 96 stretches the window to ~4 days, which is the safe side.
+ */
+export const MAX_OUTBOX_ATTEMPTS = 96;
 
 /** Caps one cron tick's work; anything beyond drains on subsequent ticks. */
 const OUTBOX_BATCH_LIMIT = 200;

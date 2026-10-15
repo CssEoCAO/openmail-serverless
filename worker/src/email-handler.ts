@@ -1,4 +1,5 @@
 import { drizzle } from "drizzle-orm/d1";
+import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { and, eq, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { schema } from "./db/schema";
@@ -9,6 +10,8 @@ import { inboxPermissions } from "./db/inbox-permissions.schema";
 import { senderIdentities } from "./db/sender-identities.schema";
 import { users } from "./db/auth.schema";
 import { parseEmail } from "./lib/email-parser";
+import type { ParsedEmail } from "./lib/email-parser";
+import { internalDomainsFrom } from "./lib/internal-domains";
 import { isBlocked } from "./lib/blocklist";
 import { computeConversationId, externalsOnly } from "./lib/conversation-id";
 import { cancelSequencesForPerson } from "./lib/cancel-sequence";
@@ -43,7 +46,73 @@ export async function handleEmail(
   const db = drizzle(env.DB, { schema });
   const parsed = await parseEmail(message);
   if (await handleForwardReply(db, env, ctx, message, parsed)) return;
+  const outcome = await ingestParsedEmail(db, parsed, env, ctx);
+  if (outcome.status === "rejected") message.setReject(outcome.reason);
+}
+
+/**
+ * What an ingest actually did.
+ *
+ * This used to be `void` for every outcome, so a caller counting deliveries
+ * could not tell a stored message from one the blocklist or the dedupe threw
+ * away. The Gmail sync counted every one of them as `ingested` and advanced
+ * its history cursor accordingly — a drop reported as a success. Naming the
+ * outcome is what lets a caller decide, and `emailId` is what lets the sync
+ * stamp Gmail's ids onto the row this call created instead of guessing at it
+ * by Message-ID.
+ */
+export type IngestOutcome =
+  /** A new `emails` row was written; `emailId` is its primary key. */
+  | { status: "stored"; emailId: string }
+  /** The sender is on the blocklist. Nothing was written. */
+  | { status: "blocked" }
+  /**
+   * This inbox already holds this Message-ID — a retry, a replayed Gmail
+   * history page, or two overlapping cron ticks. Nothing was written;
+   * `emailId` is the row that was already there.
+   */
+  | { status: "duplicate"; emailId: string }
+  /**
+   * The message cannot be stored (it does not fit a D1 row). Nothing was
+   * written. The Email Worker turns this into an SMTP reject; the Gmail sync
+   * counts it as a skip.
+   */
+  | { status: "rejected"; reason: string };
+
+export type IngestOptions = {
+  /**
+   * Set when importing old mail (the Gmail backfill). The message is stored
+   * already read, at its own `receivedAt`, and NONE of the live side effects
+   * run: no push notification, no webhook, no forward, no sequence
+   * cancellation. Replaying three months of those would page the team for
+   * mail they have already handled, re-forward it all, and stop sequences
+   * because of a reply someone sent weeks before they were enrolled.
+   */
+  historical?: { receivedAt: number };
+};
+
+/**
+ * Store an already-parsed inbound message and run every side effect that
+ * follows: dedupe, blocklist, person matching, conversation grouping,
+ * attachments, notification fan-out, webhooks, forwarding and sequence
+ * cancellation.
+ *
+ * Source-agnostic on purpose. The Cloudflare Email Worker reaches it via
+ * `handleEmail`; the Gmail sync calls it directly with a `ParsedEmail` built
+ * from `messages.get(format=raw)`, setting `parsed.to` to the inbox the
+ * message should land in.
+ */
+export async function ingestParsedEmail(
+  db: DrizzleD1Database<typeof schema>,
+  parsed: ParsedEmail,
+  env: CloudflareBindings,
+  ctx: ExecutionContext,
+  opts: IngestOptions = {},
+): Promise<IngestOutcome> {
   const now = Math.floor(Date.now() / 1000);
+  const historical = opts.historical ?? null;
+  /** When the message arrived: now for live mail, its own time for imports. */
+  const receivedAt = historical?.receivedAt ?? now;
 
   // Canonicalize inbox addresses to lowercase before storage so casing
   // variants of the same recipient don't fork into separate group-row
@@ -86,15 +155,17 @@ export async function handleEmail(
       ) {
         await cancelSequencesForPerson(db, existing[0].personId);
       }
-      console.log(`Duplicate email with Message-ID: ${parsed.messageId}`);
-      return;
+      console.log(
+        `Duplicate email with Message-ID ${parsed.messageId} for ${recipientCanonical}`,
+      );
+      return { status: "duplicate", emailId: existing[0].id };
     }
   }
 
   // Drop new mail from blocked senders/domains before storage or side effects.
   if (await isBlocked(db, fromAddressCanonical)) {
     console.log(`Dropped blocked email from ${fromAddressCanonical}`);
-    return;
+    return { status: "blocked" };
   }
 
   const rawHeadersJson = JSON.stringify(parsed.headers);
@@ -111,8 +182,7 @@ export async function handleEmail(
       fromAddressCanonical,
     )
   ) {
-    message.setReject("Message content too large");
-    return;
+    return { status: "rejected", reason: "Message content too large" };
   }
 
   // Ensure the sender row exists without incrementing counters yet. The email
@@ -126,7 +196,7 @@ export async function handleEmail(
       id: personId,
       email: fromAddressCanonical,
       name: parsed.from.name || null,
-      lastEmailAt: now,
+      lastEmailAt: receivedAt,
       unreadCount: 0,
       totalCount: 0,
       createdAt: now,
@@ -225,8 +295,7 @@ export async function handleEmail(
       fromAddressCanonical,
     )
   ) {
-    message.setReject("Message content too large");
-    return;
+    return { status: "rejected", reason: "Message content too large" };
   }
 
   // Compute the conversation_id, if this is a multi-participant thread.
@@ -245,16 +314,7 @@ export async function handleEmail(
     })
     .from(senderIdentities);
 
-  const ourDomains = Array.from(
-    new Set(
-      identityRows
-        .map((r) => {
-          const at = r.email.lastIndexOf("@");
-          return at === -1 ? "" : r.email.slice(at + 1).toLowerCase();
-        })
-        .filter(Boolean),
-    ),
-  );
+  const ourDomains = internalDomainsFrom(identityRows);
   const allParticipants = [
     fromAddressCanonical,
     ...parsed.cc.map((c) => c.email),
@@ -296,10 +356,10 @@ export async function handleEmail(
     dkim: parsed.auth.dkim,
     dmarc: parsed.auth.dmarc,
     spamScore: parsed.spamScore,
-    isRead: 0,
+    isRead: historical ? 1 : 0,
     cc: ccJson,
     conversationId,
-    receivedAt: now,
+    receivedAt,
     createdAt: now,
   });
   const attachmentInserts = storedAttachments.map(({ content: _, ...att }) =>
@@ -311,8 +371,14 @@ export async function handleEmail(
       ...(senderAuthenticated
         ? { name: sql`COALESCE(${parsed.from.name || null}, ${people.name})` }
         : {}),
-      lastEmailAt: now,
-      unreadCount: sql`${people.unreadCount} + 1`,
+      // An imported message is older than whatever is already there, so it
+      // must not drag `lastEmailAt` backwards or add to the unread badge.
+      lastEmailAt: historical
+        ? sql`MAX(${people.lastEmailAt}, ${receivedAt})`
+        : now,
+      unreadCount: historical
+        ? people.unreadCount
+        : sql`${people.unreadCount} + 1`,
       totalCount: sql`${people.totalCount} + 1`,
       updatedAt: now,
     })
@@ -359,14 +425,23 @@ export async function handleEmail(
         ) {
           await cancelSequencesForPerson(db, winner[0].personId);
         }
-        console.log(`Duplicate email with Message-ID: ${parsed.messageId}`);
-        return;
+        console.log(
+          `Duplicate email with Message-ID ${parsed.messageId} for ${recipientCanonical}`,
+        );
+        return { status: "duplicate", emailId: winner[0].id };
       }
       throw err;
     } else {
       await Promise.allSettled(uploadedKeys.map((key) => env.R2.delete(key)));
       throw err;
     }
+  }
+
+  if (historical) {
+    console.log(
+      `Imported email from ${fromAddressCanonical} to ${recipientCanonical} (historical; no notifications)`,
+    );
+    return { status: "stored", emailId };
   }
 
   // Notify connected WebSocket clients about the new email (per-user DOs).
@@ -506,11 +581,26 @@ export async function handleEmail(
 
   // Receiving/storing untrusted mail is safe; mutating the sender's automation
   // is not. A forged visible From must never cancel another contact's drip.
+  //
+  // Guarded: the `emails` row above is already committed and the per-inbox
+  // dedupe matches on it, so a throw here would make every retry skip this
+  // message and lose the cancellation for good. A sequence that keeps running
+  // is worth an operator's attention; it is not worth discarding mail that is
+  // already on the timeline.
   if (senderAuthenticated) {
-    await cancelSequencesForPerson(db, actualPersonId);
+    try {
+      await cancelSequencesForPerson(db, actualPersonId);
+    } catch (err) {
+      console.error(
+        `Stored the message from ${fromAddressCanonical} to ${recipientCanonical}, but cancelling their sequences failed; they may keep receiving automated follow-ups:`,
+        err instanceof Error ? err.message : "unknown error",
+      );
+    }
   }
 
   console.log(
     `Processed email from ${fromAddressCanonical} to ${recipientCanonical} (${parsed.attachments.length} attachments)`,
   );
+
+  return { status: "stored", emailId };
 }

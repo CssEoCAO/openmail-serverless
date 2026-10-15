@@ -54,12 +54,19 @@ export async function applyMigrations() {
     `CREATE TABLE IF NOT EXISTS oauth_client_assertions (id TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS people (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT, last_email_at INTEGER NOT NULL, unread_count INTEGER NOT NULL DEFAULT 0, total_count INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`,
     `CREATE INDEX IF NOT EXISTS people_last_email_at_idx ON people(last_email_at)`,
-    `CREATE TABLE IF NOT EXISTS emails (id TEXT PRIMARY KEY, person_id TEXT NOT NULL, recipient TEXT NOT NULL, subject TEXT, body_html TEXT, body_text TEXT, raw_headers TEXT, message_id TEXT, spf TEXT, dkim TEXT, dmarc TEXT, spam_score REAL, is_read INTEGER NOT NULL DEFAULT 0, cc TEXT, conversation_id TEXT, received_at INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
+    // `message_id` is NOT globally unique: the dedupe key is the
+    // (message_id, recipient) pair below, so one message addressed to two of
+    // our inboxes stores one row per inbox. See emails.schema.ts.
+    `CREATE TABLE IF NOT EXISTS emails (id TEXT PRIMARY KEY, person_id TEXT NOT NULL, recipient TEXT NOT NULL, subject TEXT, body_html TEXT, body_text TEXT, raw_headers TEXT, message_id TEXT, spf TEXT, dkim TEXT, dmarc TEXT, spam_score REAL, is_read INTEGER NOT NULL DEFAULT 0, cc TEXT, conversation_id TEXT, gmail_message_id TEXT, gmail_thread_id TEXT, received_at INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS emails_message_recipient_unique ON emails(message_id, recipient)`,
     `CREATE INDEX IF NOT EXISTS emails_person_received_idx ON emails(person_id, received_at)`,
     `CREATE INDEX IF NOT EXISTS emails_recipient_received_idx ON emails(recipient, received_at)`,
-    `CREATE TABLE IF NOT EXISTS sent_emails (id TEXT PRIMARY KEY, person_id TEXT, from_address TEXT NOT NULL, to_address TEXT NOT NULL, subject TEXT NOT NULL, body_html TEXT, body_text TEXT, in_reply_to TEXT, message_id TEXT, resend_id TEXT, status TEXT NOT NULL DEFAULT 'sent', cc TEXT, conversation_id TEXT, sent_at INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS sent_emails (id TEXT PRIMARY KEY, person_id TEXT, from_address TEXT NOT NULL, to_address TEXT NOT NULL, subject TEXT NOT NULL, body_html TEXT, body_text TEXT, in_reply_to TEXT, message_id TEXT, resend_id TEXT, status TEXT NOT NULL DEFAULT 'sent', cc TEXT, conversation_id TEXT, gmail_message_id TEXT, gmail_thread_id TEXT, sent_at INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
     `CREATE INDEX IF NOT EXISTS sent_emails_person_sent_idx ON sent_emails(person_id, sent_at)`,
+    // Echo suppression for mirrored Gmail SENT messages looks this pair up
+    // per message. UNIQUE, so a mirror that races the send path's own insert
+    // is refused rather than duplicating the reply. See sent-emails.schema.ts.
+    `CREATE UNIQUE INDEX IF NOT EXISTS sent_emails_gmail_message_from_unique ON sent_emails(gmail_message_id, from_address)`,
     `CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, email_id TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'inbound', filename TEXT NOT NULL, content_type TEXT NOT NULL, size INTEGER NOT NULL, r2_key TEXT NOT NULL, content_id TEXT, created_at INTEGER NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS email_templates (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL, subject TEXT NOT NULL, body_html TEXT NOT NULL, from_address TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS api_keys (id TEXT PRIMARY KEY, user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE, key_hash TEXT NOT NULL, key_prefix TEXT NOT NULL, created_at INTEGER NOT NULL)`,
@@ -70,7 +77,7 @@ export async function applyMigrations() {
     `CREATE UNIQUE INDEX IF NOT EXISTS enrollments_one_active_person_idx ON sequence_enrollments(person_id) WHERE status = 'active'`,
     `CREATE TABLE IF NOT EXISTS sequence_emails (id TEXT PRIMARY KEY, enrollment_id TEXT NOT NULL, step_order INTEGER NOT NULL, template_slug TEXT NOT NULL, scheduled_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'pending', sent_at INTEGER, sent_email_id TEXT)`,
     `CREATE INDEX IF NOT EXISTS seq_emails_status_scheduled_idx ON sequence_emails(status, scheduled_at)`,
-    `CREATE TABLE IF NOT EXISTS sender_identities (email TEXT PRIMARY KEY NOT NULL, display_name TEXT, display_mode TEXT NOT NULL DEFAULT 'thread', outbound_provider TEXT NOT NULL DEFAULT 'cloudflare', signature_html TEXT, forward_to TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS sender_identities (email TEXT PRIMARY KEY NOT NULL, display_name TEXT, display_mode TEXT NOT NULL DEFAULT 'thread', outbound_provider TEXT NOT NULL DEFAULT 'cloudflare', signature_html TEXT, forward_to TEXT, source TEXT NOT NULL DEFAULT 'cloudflare', gmail_account_id TEXT, gmail_group_address TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS inbox_permissions (user_id TEXT NOT NULL, email TEXT NOT NULL, created_at INTEGER NOT NULL, created_by TEXT, PRIMARY KEY(user_id, email), FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL)`,
     `CREATE INDEX IF NOT EXISTS inbox_permissions_email_idx ON inbox_permissions(email)`,
     `CREATE TABLE IF NOT EXISTS push_subscriptions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, endpoint TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL, user_agent TEXT, created_at INTEGER NOT NULL, last_used_at INTEGER)`,
@@ -85,11 +92,12 @@ export async function applyMigrations() {
     `CREATE INDEX IF NOT EXISTS outbox_status_retry_idx ON outbox_emails(status, next_retry_at)`,
     `CREATE INDEX IF NOT EXISTS outbox_from_idx ON outbox_emails(from_address)`,
     `CREATE INDEX IF NOT EXISTS outbox_sent_email_idx ON outbox_emails(sent_email_id)`,
-    `CREATE TABLE IF NOT EXISTS reply_drafts (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, email_id TEXT NOT NULL, from_address TEXT NOT NULL, cc TEXT, body_html TEXT NOT NULL, body_text TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(user_id, email_id))`,
-    `CREATE INDEX IF NOT EXISTS reply_drafts_user_idx ON reply_drafts(user_id)`,
     `CREATE INDEX IF NOT EXISTS outbox_sequence_email_idx ON outbox_emails(sequence_email_id)`,
     `CREATE TRIGGER IF NOT EXISTS push_subscriptions_user_cap BEFORE INSERT ON push_subscriptions WHEN (SELECT COUNT(*) FROM push_subscriptions WHERE user_id = NEW.user_id) >= 10 BEGIN SELECT RAISE(ABORT, 'push subscription limit'); END`,
     `CREATE TRIGGER IF NOT EXISTS oauth_clients_cap BEFORE INSERT ON oauth_clients WHEN (SELECT COUNT(*) FROM oauth_clients) >= 500 BEGIN SELECT RAISE(ABORT, 'OAuth client capacity reached'); END`,
+    `CREATE TABLE IF NOT EXISTS drafts (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, context_key TEXT NOT NULL, from_address TEXT, to_address TEXT, cc TEXT, subject TEXT, body_html TEXT, body_text TEXT, reply_to_email_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS drafts_user_context_idx ON drafts(user_id, context_key)`,
+    `CREATE TABLE IF NOT EXISTS gmail_accounts (id TEXT PRIMARY KEY, email_address TEXT NOT NULL UNIQUE, refresh_token_encrypted TEXT NOT NULL, access_token TEXT, expires_at INTEGER, history_id TEXT, last_synced_at INTEGER, last_error TEXT, last_gap_at INTEGER, backfill_until INTEGER, backfill_page_token TEXT, backfill_offset INTEGER NOT NULL DEFAULT 0, backfill_count INTEGER NOT NULL DEFAULT 0, backfill_completed_at INTEGER, connected_by TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`,
   ];
 
   for (const sql of statements) {
@@ -283,7 +291,8 @@ export function buildSendForm(
 export async function cleanDb() {
   const db = env.DB;
   await db.exec(`
-    DELETE FROM reply_drafts;
+    DELETE FROM gmail_accounts;
+    DELETE FROM drafts;
     DELETE FROM outbox_emails;
     DELETE FROM blocklist;
     DELETE FROM suppressions;

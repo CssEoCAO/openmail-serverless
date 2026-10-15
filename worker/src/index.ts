@@ -25,6 +25,7 @@ import { setupRouter } from "./routers/setup-router";
 import { emailTemplatesRouter } from "./routers/email-templates-router";
 import { adminRouter } from "./routers/admin-router";
 import { adminInboxesRouter } from "./routers/admin-inboxes-router";
+import { adminGmailRouter } from "./routers/admin-gmail-router";
 import { oauthAppsRouter } from "./routers/oauth-apps-router";
 import { invitesRouter } from "./routers/invites-router";
 import { userRouter } from "./routers/user-router";
@@ -33,6 +34,9 @@ import { sequencesRouter } from "./routers/sequences-router";
 import { handleScheduled, handleQueueBatch } from "./lib/sequence-processor";
 import type { SequenceEmailMessage } from "./lib/sequence-processor";
 import { processOutbox } from "./lib/outbox";
+import { syncAllGmailAccounts } from "./lib/gmail/sync";
+import { drizzle } from "drizzle-orm/d1";
+import { schema } from "./db/schema";
 import { notificationsRouter } from "./routers/notifications-router";
 import { blocklistRouter } from "./routers/blocklist-router";
 import { suppressionsRouter } from "./routers/suppressions-router";
@@ -349,6 +353,7 @@ app.route("/api/drafts", draftsRouter);
 app.use("/api/admin/*", requireAdmin);
 app.route("/api/admin", adminRouter);
 app.route("/api/admin/inboxes", adminInboxesRouter);
+app.route("/api/admin/gmail", adminGmailRouter);
 
 // Registered OAuth clients. Admin-only: registration is open to any caller so
 // MCP clients can self-register, which makes an operator-visible list and a
@@ -398,6 +403,23 @@ app.doc("/doc", {
   },
 });
 
+// Adds `Permissions-Policy: tools=(self)` to document (HTML) responses so the
+// browser enables the WebMCP API for in-page AI agents. Other assets (JS,
+// CSS, images, etc.) pass through untouched. Exported (rather than inlined in
+// the handler below) so it can be unit-tested directly — the `ASSETS` binding
+// doesn't serve real files in the vitest-pool-workers test environment (the
+// `dist/client` directory is empty there), so exercising this via an actual
+// `GET /` request isn't possible in tests.
+export function applyPermissionsPolicyToHtml(res: Response): Response {
+  const contentType = res.headers.get("Content-Type") ?? "";
+  if (contentType.includes("text/html")) {
+    const withHeader = new Response(res.body, res);
+    withHeader.headers.set("Permissions-Policy", "tools=(self)");
+    return withHeader;
+  }
+  return res;
+}
+
 // SPA fallback
 app.all("*", async (c) => {
   const response = await c.env.ASSETS.fetch(c.req.raw);
@@ -436,11 +458,13 @@ app.all("*", async (c) => {
   headers.set("X-Frame-Options", "DENY");
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Referrer-Policy", "no-referrer");
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
+  return applyPermissionsPolicyToHtml(
+    new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    }),
+  );
 });
 
 export default {
@@ -455,6 +479,35 @@ export default {
       handleScheduled(env)
         .catch((err) => console.error("[cron] sequence dispatch failed:", err))
         .then(() => processOutbox(env)),
+    );
+    // Isolated from sequence dispatch / outbox processing above: a Gmail
+    // sync failure must not be able to break either. `syncAllGmailAccounts`
+    // already isolates per-account failures internally (see its own
+    // Promise.allSettled) and no-ops when the integration isn't configured,
+    // so this call either does nothing or runs to completion.
+    //
+    // `syncAllGmailAccounts` returns `Promise<void>` — it does not hand
+    // per-account outcomes back to this handler. It logs them itself
+    // instead: a distinct line for an account that synced but failed to
+    // ingest a message, and another for an account whose history cursor
+    // expired and had to be re-seeded (see its `results.forEach` for both).
+    // The `.catch()` below only covers a hard failure of the whole call
+    // (e.g. thrown before/outside its own per-account isolation) — per
+    // -account failures never reach it, by design.
+    ctx.waitUntil(
+      (async () => {
+        const db = drizzle(env.DB, { schema });
+        await syncAllGmailAccounts(db, env, ctx);
+      })().catch((err) =>
+        // The message only, never the error object. This frame begins with
+        // `getAccessToken`, whose last act is a D1 UPDATE binding the
+        // plaintext access token and the sealed refresh token — and a D1
+        // error's serialised form carries the parameters bound to it. Same
+        // rule `syncAllGmailAccounts` and the OAuth callback already hold.
+        console.error(
+          `[cron] gmail sync failed: ${err instanceof Error ? err.message : "unknown error"}`,
+        ),
+      ),
     );
   },
   async queue(

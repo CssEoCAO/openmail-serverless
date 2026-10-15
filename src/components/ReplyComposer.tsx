@@ -34,6 +34,7 @@ import {
   type CcEntry,
 } from "@/lib/api";
 import { dispatchEmailSent } from "@/lib/email-events";
+import { serverErrorMessage } from "@/lib/error-message";
 import { getFromLabel } from "@/lib/format";
 import { sanitizeEmailHtml } from "@/lib/sanitize-html";
 import {
@@ -41,6 +42,7 @@ import {
   lerRascunho,
   notificarRascunhos,
   rascunhoVazio,
+  replyKey,
   salvarRascunho,
   type Rascunho,
 } from "@/lib/rascunho";
@@ -164,15 +166,15 @@ function ReplyComposerDoUsuario({
     setRemoto("carregando");
     setErroSalvar("");
     const local = lerRascunho(userId, emailId);
-    fetchDraft(emailId)
+    fetchDraft(replyKey(emailId))
       .then((servidor) => {
         if (cancelado) return;
         if (servidor) {
           const c: Conteudo = {
-            fromAddress: servidor.fromAddress,
-            cc: servidor.cc,
-            bodyHtml: servidor.bodyHtml,
-            bodyText: servidor.bodyText,
+            fromAddress: servidor.fromAddress ?? "",
+            cc: servidor.cc ?? [],
+            bodyHtml: servidor.bodyHtml ?? "",
+            bodyText: servidor.bodyText ?? "",
           };
           aplicar(c);
           setConfirmado(snapshot(c));
@@ -228,10 +230,12 @@ function ReplyComposerDoUsuario({
     const c = conteudo;
     try {
       if (rascunhoVazio(c)) {
-        if (confirmado !== null) await deleteDraft(emailId);
+        if (confirmado !== null) await deleteDraft(replyKey(emailId));
         setConfirmado(null);
       } else {
-        await saveDraft(emailId, {
+        await saveDraft({
+          contextKey: replyKey(emailId),
+          replyToEmailId: emailId,
           fromAddress: c.fromAddress,
           cc: (c.cc as CcEntry[]).length > 0 ? (c.cc as CcEntry[]) : undefined,
           bodyHtml: c.bodyHtml,
@@ -462,14 +466,20 @@ function ReplyComposerDoUsuario({
       // apagar antes e o envio falhar depois.
       if (userId) apagarRascunho(userId, emailId);
       if (confirmado !== null) {
-        deleteDraft(emailId)
+        deleteDraft(replyKey(emailId))
           .catch((err) => console.warn("Failed to discard sent draft", err))
           .finally(() => notificarRascunhos());
       }
       onSent();
       onClose();
-    } catch {
-      setError(tx("Não deu para enviar a resposta. Tente de novo."));
+    } catch (e) {
+      // The server's own words when it has any: a Gmail reply it refused was
+      // *not* queued, so the user has to send it again — a generic "failed"
+      // would leave them waiting for a retry that isn't coming.
+      setError(
+        serverErrorMessage(e) ??
+          tx("Não deu para enviar a resposta. Tente de novo."),
+      );
     } finally {
       setSending(false);
     }

@@ -41,6 +41,8 @@ export interface SendInput {
   onPrepared?: (params: SendEmailParams) => Promise<void>;
   /** Last-moment fencing hook, invoked immediately before sender.send. */
   beforeSend?: () => Promise<void>;
+  /** Gmail thread to reply within; ignored by every other provider. */
+  threadId?: string;
 }
 
 export interface SendOutput {
@@ -131,6 +133,7 @@ export async function sendWithSuppressionCheck(
     toName,
     onPrepared,
     beforeSend,
+    threadId,
   } = input;
   const wireSubject = sanitizeHeaderValue(subject);
   const wireHeaders = sanitizeHeaders(headers);
@@ -199,6 +202,7 @@ export async function sendWithSuppressionCheck(
       ...(wireHeaders ? { headers: wireHeaders } : {}),
       ...(attachments ? { attachments } : {}),
       ...(idempotencyKey ? { idempotencyKey } : {}),
+      ...(threadId ? { threadId } : {}),
     };
     await onPrepared?.(wireParams);
     await beforeSend?.();

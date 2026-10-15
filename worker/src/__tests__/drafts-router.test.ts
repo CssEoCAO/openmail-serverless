@@ -10,7 +10,7 @@ import {
 } from "./helpers";
 import { inboxPermissions } from "../db/inbox-permissions.schema";
 import { sentEmails } from "../db/sent-emails.schema";
-import { replyDrafts } from "../db/reply-drafts.schema";
+import { drafts } from "../db/drafts.schema";
 
 const INBOX = "inbox@saasmail.test";
 const OTHER_INBOX = "other@saasmail.test";
@@ -107,7 +107,7 @@ describe("drafts router", () => {
       body: JSON.stringify({ ...body, cc: [], bodyText: "segunda" }),
     });
     expect(put2.status).toBe(200);
-    const rows = await getDb().select().from(replyDrafts);
+    const rows = await getDb().select().from(drafts);
     expect(rows).toHaveLength(1);
     expect(rows[0].bodyText).toBe("segunda");
     expect(rows[0].cc).toBeNull();
@@ -162,7 +162,7 @@ describe("drafts router", () => {
     expect(badFrom.status).toBe(403);
 
     expect((await authFetch("/api/drafts/nope", { apiKey })).status).toBe(404);
-    expect(await getDb().select().from(replyDrafts)).toHaveLength(0);
+    expect(await getDb().select().from(drafts)).toHaveLength(0);
   });
 
   it("hides a draft from the list once the inbox is no longer allowed", async () => {
@@ -234,7 +234,7 @@ describe("drafts router", () => {
     });
     expect(again.status).toBe(412);
 
-    const rows = await getDb().select().from(replyDrafts);
+    const rows = await getDb().select().from(drafts);
     expect(rows).toHaveLength(1);
     expect(rows[0].bodyText).toBe("do CLI");
 
@@ -245,9 +245,7 @@ describe("drafts router", () => {
       body: JSON.stringify({ ...body, bodyText: "da UI" }),
     });
     expect(ui.status).toBe(200);
-    expect((await getDb().select().from(replyDrafts))[0].bodyText).toBe(
-      "da UI",
-    );
+    expect((await getDb().select().from(drafts))[0].bodyText).toBe("da UI");
   });
 
   it("saves for an allowed inbox that has no sender identity (receive-only)", async () => {

@@ -13,6 +13,8 @@ import { sendEmail, fetchStats, type CcEntry } from "@/lib/api";
 import { chaves } from "@/lib/queries";
 import { proximoHorarioComercial } from "@worker/lib/horario-comercial";
 import { rotuloHorario } from "@/lib/datas";
+import { useDraftAutosave } from "@/lib/use-draft-autosave";
+import { serverErrorMessage } from "@/lib/error-message";
 import { dispatchEmailSent } from "@/lib/email-events";
 import { getFromLabel } from "@/lib/format";
 import { sanitizeEmailHtml } from "@/lib/sanitize-html";
@@ -170,6 +172,33 @@ export default function ComposeModal({
   // 18h — um rotulo congelado prometeria um horario que ja passou.
   const rotuloSlot = rotuloHorario(proximoHorarioComercial(Date.now()));
 
+  // Autosave a "half-written" draft so it survives closing the composer.
+  // Restore only on a plain open — an explicit prefill (e.g. the chat
+  // "open in compose" handoff) should win over a stale draft.
+  const composeIsEmpty = !to.trim() && !subject.trim() && bodyIsEmpty;
+  const hasPrefill = !!(
+    prefill &&
+    (prefill.to ||
+      prefill.subject ||
+      prefill.bodyHtml ||
+      (prefill.cc && prefill.cc.length > 0))
+  );
+  const { clear: clearDraft } = useDraftAutosave({
+    contextKey: "compose",
+    enabled: open,
+    isEmpty: composeIsEmpty,
+    restore: open && !hasPrefill,
+    values: { fromAddress, to, cc, subject, bodyHtml, bodyText },
+    onRestore: (draft) => {
+      if (draft.toAddress) setTo(draft.toAddress);
+      if (draft.cc) setCc(draft.cc);
+      if (draft.subject) setSubject(draft.subject);
+      if (draft.bodyHtml) setBodyHtml(draft.bodyHtml);
+      if (draft.bodyText) setBodyText(draft.bodyText);
+      if (draft.fromAddress) setFromAddress(draft.fromAddress);
+    },
+  });
+
   async function handleSend(agendar = false) {
     if (!to || bodyIsEmpty) return;
     setSending(true);
@@ -194,10 +223,14 @@ export default function ComposeModal({
         ...(agendar ? { agendarHorarioComercial: true } : {}),
       });
       dispatchEmailSent({ fromAddress, to, origin: "compose" });
+      // The message went out — discard its draft so it doesn't reappear.
+      clearDraft();
       setFiles([]);
       onClose();
-    } catch {
-      setError(tx("Não deu para enviar. Tente de novo."));
+    } catch (e) {
+      setError(
+        serverErrorMessage(e) ?? tx("Não deu para enviar. Tente de novo."),
+      );
     } finally {
       setSending(false);
     }
