@@ -146,8 +146,7 @@ statsRouter.openapi(statsRoute, async (c) => {
     ? universe
     : universe.filter((r) => isInboxAllowed(allowed, r.email));
   // Enviar exige linha em sender_identities: e ela que carrega o `outbound_provider`.
-  // Sem ela o envio cai no provedor default e falha na cara do usuario -- foi o que
-  // aconteceu com contact@example.com em 23/08/2026.
+  // Sem ela o envio cai no provedor default e falha na cara do usuario.
   const podemEnviar = visiveis.filter((r) => !!r.configurada);
 
   return c.json(

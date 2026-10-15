@@ -1,0 +1,1 @@
+node scripts/check-leaks.mjs --message "$1"

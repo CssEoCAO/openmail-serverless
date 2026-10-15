@@ -81,41 +81,23 @@ Interface strings are written in Portuguese in the source and go through `tx("â€
 
 Backend routes are Hono + Zod OpenAPI under `worker/src/routers/`. Spec is served at `/doc` (JSON) and `/swagger-ui` (not `/openapi.json` / `/api/doc`). When changing request/response shapes, update the zod-openapi schemas so `/doc` stays accurate.
 
-## Production deployment (reference)
+## Deploying an instance
 
-- Public app: `https://mail.example.com`.
-- Worker: `saasmail`; `workers_dev` and preview URLs stay disabled.
-- D1: `saasmail-db` (`DB`).
-- R2: `saasmail-attachments` (`R2`). The older bucket named
-  `saasmail` is unrelated and must not be deleted or reused.
-- Queue: `saasmail-sequences` (`EMAIL_QUEUE`).
-- Outbound provider is selected per sender identity. Cloudflare Email Sending is
-  the default; established exceptions use Resend. `EMAIL_PROVIDER_ROUTING=identity`
-  must remain enabled, and a missing selected provider must fail closed instead of
-  silently falling back to another one.
-- Example Co identities (`support@example.com` and
-  `billing@notify.example.com`) stay on Resend and must reuse the existing key.
-  Never generate or substitute a second key just for SaaSmail.
-- Production secrets: `BETTER_AUTH_SECRET`, `UNSUBSCRIBE_SECRET`, and
-  `VAPID_PRIVATE_KEY`, plus `RESEND_API_KEY` for the established exceptions. Never
-  put them in `wrangler.jsonc`.
-- Inbound domains are Cloudflare Email Routing zones whose catch-all rule targets
-  this Worker. Before changing a zone, back up its MX records and routing rules;
-  several zones had forwarding or external MX before this deployment.
-- All 56 active zones were migrated on 2026-08-21. The pre-migration inventory and
-  verified result live in the parent workspace under
-  `.secrets/backups/email-routing-*.json` (gitignored). The repeatable migrator is
-  `scripts/configura-email-routing.mjs` in the parent workspace; it preserves the
-  original backup when applying and supports `--dominio=<zone>` for a pilot.
-- Placement: the production `wrangler.jsonc` takes
-  `"placement": { "region": "aws:us-west-1" }`. The D1 primary runs in WNAM
-  (read replication off) and every D1 query is a round trip: from the Brazilian
-  edge each one costs ~190 ms and the inbox routes make 6â€“11 of them
-  (`/api/people/grouped` measured 2.3 s, `/api/emails/by-person` 2.0 s on
-  2026-10-08). Placed next to D1, a request crosses the continent once. Because
-  `run_worker_first` is `true`, assets cross too; `/assets/*` and `/fonts/*` are
-  served `immutable` by the SPA fallback in `worker/src/index.ts`, so after the
-  first visit only `index.html` pays it. Drop the hint if D1 ever moves.
-- Deploy: `yarn tsc --noEmit && yarn test && yarn deploy`.
-- Apply D1 migrations before first deploy and after pulling schema changes:
+- Each deployer keeps their own gitignored `wrangler.jsonc` and sets secrets with
+  `wrangler secret put` (see the README's Setup and Configuration). Never put
+  secrets in `wrangler.jsonc`.
+- With `EMAIL_PROVIDER_ROUTING=identity`, a missing selected provider must fail
+  closed instead of silently falling back to another one.
+- Before changing a zone's Email Routing, back up its MX records and routing rules.
+- If users are far from the D1 primary, set `placement` to the region next to it;
+  every D1 query is a round trip and the inbox routes make several per request.
+- Apply D1 migrations before the first deploy and after pulling schema changes:
   `yarn db:migrate:prod`.
+
+## Commits are public
+
+This repository is public. Keep operational notes about a specific deployment out
+of code, comments and docs: real addresses and domains, dates of incidents,
+measurements of one installation, paths on someone's machine, account or resource
+IDs. Describe the rule or the behavior instead. `scripts/check-leaks.mjs` runs on
+every commit and in CI to catch secrets and production config.

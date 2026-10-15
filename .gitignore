@@ -20,3 +20,6 @@ docs/superpowers/
 
 # Per-developer Claude Code preview launch config
 .claude/launch.json
+
+# Termos locais do check-leaks (nunca versionar)
+.leaks.local

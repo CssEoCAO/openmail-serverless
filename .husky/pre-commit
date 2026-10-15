@@ -1,1 +1,2 @@
+node scripts/check-leaks.mjs --staged
 yarn lint-staged

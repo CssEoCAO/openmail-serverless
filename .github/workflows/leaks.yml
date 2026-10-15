@@ -1,0 +1,16 @@
+name: Leaks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check-leaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: node scripts/check-leaks.mjs
