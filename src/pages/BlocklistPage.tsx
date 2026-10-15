@@ -301,7 +301,9 @@ export default function BlocklistPage() {
               value={addValue}
               onChange={(e) => setAddValue(e.target.value)}
               placeholder={
-                addType === "email" ? "pessoa@exemplo.com" : "exemplo.com"
+                addType === "email"
+                  ? tx("pessoa@exemplo.com")
+                  : tx("exemplo.com")
               }
               className="h-10 w-full rounded-[6px] border border-border bg-bg-subtle px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-text-primary/20"
             />

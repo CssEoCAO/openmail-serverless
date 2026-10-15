@@ -18,12 +18,12 @@ import { tx } from "@/lib/i18n";
  */
 const SCOPE_DESCRIPTIONS: Record<string, string> = {
   openid: tx("Confirmar quem você é"),
-  profile: "Ler seu nome e perfil",
+  profile: tx("Ler seu nome e perfil"),
   email: tx("Ler seu endereço de e-mail"),
   offline_access: tx(
     "Continuar conectado quando você não estiver usando o app",
   ),
-  "email:read": "Ler seus e-mails, contatos e modelos",
+  "email:read": tx("Ler seus e-mails, contatos e modelos"),
   "email:send": tx("Enviar e-mails e inscrever contatos em sequências"),
   "email:manage": tx("Marcar e-mails como lidos e excluir e-mails"),
 };

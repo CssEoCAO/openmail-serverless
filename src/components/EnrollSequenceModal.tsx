@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { fetchSequences, enrollPerson, type Sequence } from "@/lib/api";
 
 import { tx } from "@/lib/i18n";
+import { plural } from "@/lib/datas";
 interface EnrollSequenceModalProps {
   personId: string;
   personName: string | null;
@@ -131,8 +132,7 @@ export default function EnrollSequenceModal({
               <option value="">{tx("Escolha uma sequência…")}</option>
               {sequences.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name} ({s.steps.length}{" "}
-                  {s.steps.length === 1 ? "etapa" : "etapas"})
+                  {s.name} ({plural(s.steps.length, "etapa", "etapas")})
                 </option>
               ))}
             </select>

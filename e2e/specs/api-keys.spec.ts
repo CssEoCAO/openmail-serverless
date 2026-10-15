@@ -59,9 +59,9 @@ test.describe.serial("api keys", () => {
       const peopleRes = await apiCtx.get("/api/people");
       expect(peopleRes.ok()).toBeTruthy();
 
-      // Wait for the card with Regenerate + Revoke buttons to appear.
+      // Wait for the card with Generate another + Revoke buttons to appear.
       await expect(
-        page.getByRole("button", { name: "Regenerate" }),
+        page.getByRole("button", { name: "Generate another" }),
       ).toBeVisible();
 
       // Revoke via UI: the outer Revoke button opens the confirm dialog.
@@ -72,7 +72,7 @@ test.describe.serial("api keys", () => {
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
       await expect(
-        dialog.getByRole("heading", { name: "Revoke API Key?" }),
+        dialog.getByRole("heading", { name: "Revoke the key?" }),
       ).toBeVisible();
       await dialog.getByRole("button", { name: "Revoke" }).click();
 

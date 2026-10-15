@@ -1,7 +1,9 @@
 // e2e/support/reset-db.ts
 import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { E2E_SETUP_TOKEN } from "./login";
 
 // Playwright always runs tests from the repo root, so process.cwd() is reliable.
 const REPO_ROOT = process.cwd();
@@ -86,10 +88,30 @@ export function wipeUsers(): void {
     "DELETE FROM users",
     // Also clear any outstanding invitations so no stale tokens linger.
     "DELETE FROM invitations",
+    "DELETE FROM app_settings WHERE key = '__setup_claim'",
   ].join("; ");
 
   execSync(
     `wrangler d1 execute ${dbName} --local --command="${sql.replace(/"/g, '\\"')}"`,
     { cwd: REPO_ROOT, stdio: "pipe" },
   );
+  authorizeSetup();
+}
+
+/**
+ * Provisions the operator bootstrap authorization that POST /api/setup
+ * requires (what scripts/prepare-bootstrap.mjs does on a real install), for
+ * the fixed E2E_SETUP_TOKEN. Safe while the dev server is running.
+ */
+export function authorizeSetup(): void {
+  const hash = createHash("sha256").update(E2E_SETUP_TOKEN).digest("hex");
+  const expires = Math.floor(Date.now() / 1000) + 3600;
+  const sql =
+    "INSERT INTO app_settings (key, value, updated_at, updated_by) " +
+    `VALUES ('__setup_authorization', '${hash}', ${expires}, NULL) ` +
+    "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at";
+  execSync(`wrangler d1 execute ${getDbName()} --local --command="${sql}"`, {
+    cwd: REPO_ROOT,
+    stdio: "pipe",
+  });
 }

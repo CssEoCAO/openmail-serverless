@@ -17,6 +17,7 @@ import {
   createAdmin,
   loginViaApi,
   createAndAcceptInvite,
+  E2E_SETUP_TOKEN,
 } from "../support/login";
 import { TEST_IDS } from "../support/selectors";
 
@@ -67,7 +68,8 @@ test.describe.serial("auth flow", () => {
       page.getByRole("button", { name: "Create administrator" }),
     ).toBeVisible();
 
-    // Fill in the onboarding form.
+    // Fill in the onboarding form. wipeUsers() authorized E2E_SETUP_TOKEN.
+    await page.getByLabel("Setup code").fill(E2E_SETUP_TOKEN);
     await page.getByLabel("Name").fill(ADMIN.name);
     await page.getByLabel("Email").fill(ADMIN.email);
     await page.getByLabel("Password").fill(ADMIN.password);
@@ -84,10 +86,10 @@ test.describe.serial("auth flow", () => {
     if (page.url().includes("/login")) {
       // Auto-login did not succeed — log in manually via the password form.
       await page
-        .getByRole("button", { name: "Sign in with email instead" })
+        .getByRole("button", { name: "Sign in with email and password" })
         .click();
-      await page.getByPlaceholder("Email").fill(ADMIN.email);
-      await page.getByPlaceholder("Password").fill(ADMIN.password);
+      await page.getByLabel("Email").fill(ADMIN.email);
+      await page.getByLabel("Password").fill(ADMIN.password);
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
     }
 
@@ -102,11 +104,11 @@ test.describe.serial("auth flow", () => {
 
     // Default mode is passkey — switch to password mode.
     await page
-      .getByRole("button", { name: "Sign in with email instead" })
+      .getByRole("button", { name: "Sign in with email and password" })
       .click();
 
-    await page.getByPlaceholder("Email").fill(ADMIN.email);
-    await page.getByPlaceholder("Password").fill(ADMIN.password);
+    await page.getByLabel("Email").fill(ADMIN.email);
+    await page.getByLabel("Password").fill(ADMIN.password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
 
     // Should land on inbox.
@@ -123,10 +125,10 @@ test.describe.serial("auth flow", () => {
 
     // Log back in with correct credentials.
     await page
-      .getByRole("button", { name: "Sign in with email instead" })
+      .getByRole("button", { name: "Sign in with email and password" })
       .click();
-    await page.getByPlaceholder("Email").fill(ADMIN.email);
-    await page.getByPlaceholder("Password").fill(ADMIN.password);
+    await page.getByLabel("Email").fill(ADMIN.email);
+    await page.getByLabel("Password").fill(ADMIN.password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
 
     await page.waitForURL((url) => url.pathname === "/");
@@ -138,11 +140,11 @@ test.describe.serial("auth flow", () => {
 
     // Switch to password mode.
     await page
-      .getByRole("button", { name: "Sign in with email instead" })
+      .getByRole("button", { name: "Sign in with email and password" })
       .click();
 
-    await page.getByPlaceholder("Email").fill(ADMIN.email);
-    await page.getByPlaceholder("Password").fill("totally-wrong-password");
+    await page.getByLabel("Email").fill(ADMIN.email);
+    await page.getByLabel("Password").fill("totally-wrong-password");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
 
     // An error message should appear — stay on /login.

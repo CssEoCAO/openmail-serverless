@@ -139,6 +139,7 @@ export const EN: Record<string, string> = {
   Bloqueios: "Blocklist",
   "Boas-vindas": "Welcome",
   "Boas-vindas, {{nome}}!": "Welcome, {{name}}!",
+  "boas-vindas": "welcome",
   Buscar: "Search",
   "Buscar por nome, e-mail ou assunto": "Search by name, email or subject",
   "Cadastrando…": "Registering…",
@@ -406,6 +407,7 @@ export const EN: Record<string, string> = {
   "Horas depois da etapa anterior.": "Hours after the previous step.",
   "HTML à esquerda, o e-mail pronto à direita.":
     "HTML on the left, the finished email on the right.",
+  "https://sua-automacao/webhook": "https://your-automation/webhook",
   Identificação: "Identification",
   Idioma: "Language",
   "Idioma da interface": "Interface language",
@@ -875,4 +877,17 @@ export const EN: Record<string, string> = {
     "Couldn't change the source for this inbox.",
   'diz de onde vem o e-mail desta caixa: o Email Routing da Cloudflare ou uma caixa do Google conectada que possa enviar como este endereço. O Google só aceita um endereço listado e verificado em "Enviar e-mail como" dessa caixa, então um mapeamento recusado não é salvo.':
     "picks where this inbox's mail comes from: Cloudflare Email Routing, or a connected Google mailbox that can send as this address. Google only accepts an address listed — and verified — under that mailbox's \"Send mail as\", so a mapping it refuses is not saved.",
+  // Plurais e textos que estavam fora do tx().
+  etapa: "step",
+  etapas: "steps",
+  anexo: "attachment",
+  anexos: "attachments",
+  dia: "day",
+  dias: "days",
+  Hoje: "Today",
+  Ontem: "Yesterday",
+  "exemplo.com": "example.com",
+  "Ler seu nome e perfil": "Read your name and profile",
+  "Ler seus e-mails, contatos e modelos":
+    "Read your emails, contacts and templates",
 };

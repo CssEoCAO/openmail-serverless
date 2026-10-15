@@ -29,6 +29,7 @@ import { analyzeTemplateClient } from "@/lib/template-syntax";
 import { cn } from "@/lib/utils";
 
 import { tx } from "@/lib/i18n";
+import { plural } from "@/lib/datas";
 /** Round delay-hours into a friendlier string for the summary line. */
 function formatDelay(hours: number): string {
   if (hours <= 0) return tx("na hora");
@@ -239,8 +240,7 @@ export default function SequenceEditorPage() {
               title={tx("Etapas")}
               subtitle={
                 <>
-                  {totalSteps} {totalSteps === 1 ? "etapa" : "etapas"}{" "}
-                  {tx("· dura")}{" "}
+                  {plural(totalSteps, "etapa", "etapas")} {tx("· dura")}{" "}
                   <span className="font-medium text-text-secondary">
                     {formatDelay(totalHours)}
                   </span>{" "}

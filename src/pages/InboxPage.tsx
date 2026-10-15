@@ -561,11 +561,14 @@ export default function InboxPage() {
         {barraSelecao}
         <PersonList
           items={items}
-          onDelete={(id) =>
+          onDelete={(id) => {
             mudarLista((itens) =>
               itens.filter((it) => !(it.type === "person" && it.id === id)),
-            )
-          }
+            );
+            // O total, a paginação e as não lidas vêm do servidor.
+            void recarregarLista();
+            void qc.invalidateQueries({ queryKey: chaves.stats });
+          }}
           loading={lista.isPending}
           stale={lista.isPlaceholderData}
           error={lista.isError}

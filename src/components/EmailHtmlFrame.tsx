@@ -50,6 +50,11 @@ export default function EmailHtmlFrame({
     function onLoad() {
       measure();
       const d = frame?.contentDocument;
+      // Clicks inside the frame never reach the page; re-dispatch them so the
+      // message around it still reacts (e.g. marking it read).
+      d?.addEventListener("click", () =>
+        frame?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
+      );
       observer?.disconnect();
       if (d?.body && typeof ResizeObserver !== "undefined") {
         observer = new ResizeObserver(measure);

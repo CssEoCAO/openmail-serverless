@@ -226,7 +226,7 @@ export default function TemplateEditorPage() {
                 <input
                   value={slugValue}
                   onChange={(e) => setSlugValue(e.target.value)}
-                  placeholder="boas-vindas"
+                  placeholder={tx("boas-vindas")}
                   pattern="[a-z0-9-]+"
                   title={tx("Só letras minúsculas, números e hífens")}
                   disabled={isEdit}

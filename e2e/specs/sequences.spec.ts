@@ -18,6 +18,7 @@ test.describe.serial("sequences CRUD", () => {
     const api = await request.newContext({
       baseURL: BASE_URL,
       storageState: "e2e/.auth/admin.json",
+      extraHTTPHeaders: { origin: BASE_URL },
     });
 
     await createTemplate(api, {
@@ -53,9 +54,8 @@ test.describe.serial("sequences CRUD", () => {
     await page.getByRole("button", { name: /new sequence/i }).click();
     await expect(page).toHaveURL(/\/sequences\/new/);
 
-    // Fill in name. The placeholder copy was tightened in the redesign:
-    //   "e.g., Welcome Sequence" → "Welcome onboarding".
-    await page.getByPlaceholder("Welcome onboarding").fill("E2E Test Sequence");
+    // Fill in name.
+    await page.getByLabel("Sequence name").fill("E2E Test Sequence");
 
     // Step 1 is pre-populated — set template + delay. Playwright's
     // selectOption({label: ...}) only accepts strings, not regex, so
@@ -119,7 +119,7 @@ test.describe.serial("sequences CRUD", () => {
     await expect(page.getByTestId(TEST_IDS.sequenceStepRow)).toHaveCount(2);
 
     // Save (button reads "Save changes" in edit mode).
-    await page.getByRole("button", { name: "Save changes" }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page).toHaveURL(/\/sequences$/);
 
     // Row now shows 2 steps
@@ -161,14 +161,12 @@ test.describe.serial("sequences CRUD", () => {
     // Visit the sequence detail page
     await page.goto(`/sequences/${apiSequenceId}`);
 
-    // Enrollment row for alice should be present and show "Active".
-    // Status badges are now case-styled ("Active") so match
-    // case-insensitively.
+    // Enrollment row for alice should be present and show "In progress".
     const enrollmentRow = page
       .getByTestId(TEST_IDS.enrollmentRow)
       .filter({ hasText: "alice@customers.test" });
     await expect(enrollmentRow).toBeVisible();
-    await expect(enrollmentRow).toContainText(/active/i);
+    await expect(enrollmentRow).toContainText(/in progress/i);
   });
 
   // ── 4. Cancel enrollment — status flips to cancelled ────────────────────────
@@ -181,7 +179,7 @@ test.describe.serial("sequences CRUD", () => {
       .getByTestId(TEST_IDS.enrollmentRow)
       .filter({ hasText: "alice@customers.test" });
     await expect(enrollmentRow).toBeVisible();
-    await expect(enrollmentRow).toContainText(/active/i);
+    await expect(enrollmentRow).toContainText(/in progress/i);
 
     // Click Cancel and accept the confirm dialog
     page.once("dialog", (dialog) => dialog.accept());

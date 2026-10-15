@@ -34,6 +34,8 @@
     "*.{js,jsx,ts,tsx,json,css,md,html}": "prettier --write"
   },
   "resolutions": {
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.14",
     "vite/postcss": "^8.5.23",
     "sharp": "^0.35.0"
   },

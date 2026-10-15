@@ -40,6 +40,7 @@ import { cn } from "@/lib/utils";
 import Monograma from "@/components/Monograma";
 
 import { LOCALE, tx } from "@/lib/i18n";
+import { plural } from "@/lib/datas";
 function formatDate(ts: number): string {
   return new Date(ts * 1000).toLocaleDateString(LOCALE);
 }
@@ -264,8 +265,8 @@ export default function AdminUsersPage() {
               ) : (
                 <div className="space-y-3">
                   <p className="text-xs font-light text-text-secondary">
-                    {tx("Mande este link. Ele vale por")} {inviteExpiry}{" "}
-                    {inviteExpiry === "1" ? "dia" : "dias"}.
+                    {tx("Mande este link. Ele vale por")}{" "}
+                    {plural(Number(inviteExpiry), "dia", "dias")}.
                   </p>
                   <div className="flex gap-2">
                     <input

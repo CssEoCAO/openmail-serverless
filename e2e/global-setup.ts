@@ -14,6 +14,7 @@ import {
   loginViaApi,
   createAndAcceptInvite,
 } from "./support/login";
+import { authorizeSetup } from "./support/reset-db";
 
 const AUTH_DIR = resolve(process.cwd(), "e2e", ".auth");
 
@@ -23,7 +24,8 @@ export default async function globalSetup(): Promise<void> {
   // Playwright has already confirmed the webServer is healthy before calling
   // globalSetup, so we can talk to the API immediately.
 
-  // 1. Create admin via setup API.
+  // 1. Create admin via setup API, which needs the operator authorization.
+  authorizeSetup();
   const adminCtx = await request.newContext();
   await createAdmin(adminCtx);
 

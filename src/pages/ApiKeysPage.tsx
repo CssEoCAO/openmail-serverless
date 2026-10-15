@@ -364,7 +364,7 @@ function WebhookSection() {
             type="text"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://sua-automacao/webhook"
+            placeholder={tx("https://sua-automacao/webhook")}
             disabled={busy}
             className="h-10 w-full rounded-[6px] border border-border bg-card px-3 text-sm text-text-primary focus:border-primary focus:outline-none"
           />

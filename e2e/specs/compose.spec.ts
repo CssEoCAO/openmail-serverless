@@ -115,8 +115,8 @@ test.describe.serial("compose & send", () => {
     await expect(replyButton).toBeVisible();
     await replyButton.click();
 
-    // ReplyComposer should appear — verify via "Freeform" tab
-    const freeformTab = page.getByRole("button", { name: "Freeform" });
+    // ReplyComposer should appear — verify via the "Free text" tab
+    const freeformTab = page.getByRole("button", { name: "Free text" });
     await expect(freeformTab).toBeVisible();
 
     // Type reply body in the ProseMirror inside the reply composer
@@ -149,7 +149,7 @@ test.describe.serial("compose & send", () => {
     expect(body.resendId).toMatch(/^demo_/);
     expect(body.status).toBe("sent");
 
-    // ReplyComposer should close (Freeform tab disappears)
+    // ReplyComposer should close (Free text tab disappears)
     await expect(freeformTab).not.toBeVisible();
   });
 

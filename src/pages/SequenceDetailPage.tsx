@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { LOCALE, tx } from "@/lib/i18n";
+import { plural } from "@/lib/datas";
 /** Round delay-hours into a friendlier string for the step timeline. */
 function formatDelay(hours: number): string {
   if (hours <= 0) return tx("na hora");
@@ -168,8 +169,7 @@ export default function SequenceDetailPage() {
         title={sequence.name}
         subtitle={
           <>
-            {sequence.steps.length}{" "}
-            {sequence.steps.length === 1 ? "etapa" : "etapas"} {tx("· dura")}{" "}
+            {plural(sequence.steps.length, "etapa", "etapas")} {tx("· dura")}{" "}
             {totalDelayLabel(sequence.steps)} · {enrollments.length}{" "}
             {enrollments.length === 1 ? tx("inscrição") : tx("inscrições")}
           </>
