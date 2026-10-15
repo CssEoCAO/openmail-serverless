@@ -182,15 +182,24 @@ describe("MCP OAuth", () => {
       expect(res.status).not.toBe(200);
     });
 
-    it("rejects a resource outside validAudiences", async () => {
-      // The resource is validated when tokens are minted, not at authorize —
-      // so this has to be asserted on the exchange.
+    it("rejects a resource that is not a configured resource", async () => {
+      // 1.7 checks the resource against the configured resources already at
+      // authorize, so the client gets the error on its redirect URI.
+      await expect(
+        runFlow(ADMIN, "openid email:read", {
+          resource: "https://evil.example.com/mcp",
+        }),
+      ).rejects.toThrow(/error=invalid_target/);
+    });
+
+    it("refuses a token for a resource the user did not authorize (GHSA-p2fr-6hmx-4528)", async () => {
+      // The user consented to the MCP resource; the client then asks the token
+      // endpoint for a token aimed at the issuer instead. 1.6 checked the
+      // resource only against validAudiences (which listed the issuer) and
+      // minted it.
       const { code, verifier, clientId } = await runFlow(
         ADMIN,
         "openid email:read",
-        {
-          resource: "https://evil.example.com/mcp",
-        },
       );
       const res = await exchangeToken({
         grant_type: "authorization_code",
@@ -198,10 +207,30 @@ describe("MCP OAuth", () => {
         redirect_uri: REDIRECT_URI,
         client_id: clientId,
         code_verifier: verifier,
-        resource: "https://evil.example.com/mcp",
+        resource: ISSUER,
       });
-      expect(res.status).not.toBe(200);
-      expect(await res.text()).toContain("invalid_request");
+      expect(res.status).toBe(400);
+      expect(await res.text()).toContain("invalid_target");
+    });
+
+    it("issues an opaque token without a resource, and /mcp refuses it", async () => {
+      const { code, verifier, clientId } = await runFlow(
+        ADMIN,
+        "openid email:read",
+        { resource: null },
+      );
+      const res = await exchangeToken({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: REDIRECT_URI,
+        client_id: clientId,
+        code_verifier: verifier,
+      });
+      expect(res.status, await res.clone().text()).toBe(200);
+      const { access_token } = (await res.json()) as { access_token: string };
+      // Not a JWT: no audience, so it can't be meant for the MCP endpoint.
+      expect(access_token.split(".")).toHaveLength(1);
+      expect((await mcpRpc(access_token, "tools/list")).status).toBe(401);
     });
   });
 
