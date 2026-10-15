@@ -70,8 +70,8 @@ export function dataHora(ts: number, agora = new Date()): string {
 export function rotuloDia(ts: number, agora = new Date()): string {
   const d = new Date(ts * 1000);
   const dias = diasAtras(d, agora);
-  if (dias === 0) return "Hoje";
-  if (dias === 1) return "Ontem";
+  if (dias === 0) return tx("Hoje");
+  if (dias === 1) return tx("Ontem");
   if (dias < 7) {
     const s = diaSemanaLongo.format(d);
     return s.charAt(0).toUpperCase() + s.slice(1);

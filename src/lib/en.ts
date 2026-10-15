@@ -139,6 +139,7 @@ export const EN: Record<string, string> = {
   Bloqueios: "Blocklist",
   "Boas-vindas": "Welcome",
   "Boas-vindas, {{nome}}!": "Welcome, {{name}}!",
+  "boas-vindas": "welcome",
   Buscar: "Search",
   "Buscar por nome, e-mail ou assunto": "Search by name, email or subject",
   "Cadastrando…": "Registering…",
@@ -406,6 +407,7 @@ export const EN: Record<string, string> = {
   "Horas depois da etapa anterior.": "Hours after the previous step.",
   "HTML à esquerda, o e-mail pronto à direita.":
     "HTML on the left, the finished email on the right.",
+  "https://sua-automacao/webhook": "https://your-automation/webhook",
   Identificação: "Identification",
   Idioma: "Language",
   "Idioma da interface": "Interface language",
@@ -863,4 +865,17 @@ export const EN: Record<string, string> = {
   "Voltar à tabela": "Back to the table",
   "Voltar ao padrão": "Reset to default",
   "Zero: a etapa 1 sai na inscrição.": "Zero: step 1 goes out on enrollment.",
+  // Plurais e textos que estavam fora do tx().
+  etapa: "step",
+  etapas: "steps",
+  anexo: "attachment",
+  anexos: "attachments",
+  dia: "day",
+  dias: "days",
+  Hoje: "Today",
+  Ontem: "Yesterday",
+  "exemplo.com": "example.com",
+  "Ler seu nome e perfil": "Read your name and profile",
+  "Ler seus e-mails, contatos e modelos":
+    "Read your emails, contacts and templates",
 };

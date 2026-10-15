@@ -33,6 +33,7 @@ import { showToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 import { tx } from "@/lib/i18n";
+import { plural } from "@/lib/datas";
 interface EmailHtmlModalProps {
   email: Email | null;
   open: boolean;
@@ -420,8 +421,7 @@ export default function EmailHtmlModal({
           {downloadable.length > 0 && (
             <div className="shrink-0 border-b border-border bg-card px-4 py-2.5 sm:px-5">
               <p className="mb-2 text-xs font-medium text-text-tertiary">
-                {downloadable.length}{" "}
-                {downloadable.length !== 1 ? "anexos" : "anexo"}
+                {plural(downloadable.length, "anexo", "anexos")}
               </p>
               <AttachmentList variant="list" attachments={downloadable} />
             </div>

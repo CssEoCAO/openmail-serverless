@@ -5,6 +5,7 @@ import { fetchSequences, deleteSequence, type Sequence } from "@/lib/api";
 import PageHeader, { PageContainer } from "@/components/PageHeader";
 
 import { tx } from "@/lib/i18n";
+import { plural } from "@/lib/datas";
 /** Round delay-hours into a friendlier string for the row chip. */
 function formatTotalDelay(hours: number): string {
   if (hours <= 0) return tx("na hora");
@@ -97,8 +98,7 @@ export default function SequencesPage() {
                             {seq.name}
                           </p>
                           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-medium tabular-nums text-primary-ink">
-                            {seq.steps.length}{" "}
-                            {seq.steps.length === 1 ? "etapa" : "etapas"}
+                            {plural(seq.steps.length, "etapa", "etapas")}
                           </span>
                         </div>
                         <p className="mt-0.5 inline-flex items-center gap-1 text-xs font-light text-text-tertiary">
