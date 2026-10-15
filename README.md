@@ -5,22 +5,23 @@
 <p>
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" /></a>
   <a href="https://workers.cloudflare.com/"><img alt="Runs on Cloudflare Workers" src="https://img.shields.io/badge/runs%20on-Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white" /></a>
-  <img alt="Interface: Brazilian Portuguese" src="https://img.shields.io/badge/interface-pt--BR-009c3b" />
+  <img alt="Interface: English and Brazilian Portuguese" src="https://img.shields.io/badge/interface-English%20%7C%20Portugu%C3%AAs-2f6fde" />
 </p>
 
 ![Demo: three domains in one inbox, replying from Support, saving a draft, inboxes and users](docs/screenshots/demo.gif)
 
-[Watch the MP4](docs/screenshots/demo.mp4) (26 seconds). Every domain, person and message in the demo is fictional.
+[Watch the MP4](docs/screenshots/demo.mp4) (28 seconds). Every domain, person and message in the demo is fictional.
 
-OpenMail Serverless is a fork of [saasmail](https://github.com/choyiny/saasmail) by Cho Yin Yong. It keeps saasmail's architecture and adds a redesigned three-pane inbox, per-sender provider routing, server-side drafts and scheduled sending. **The interface is in Brazilian Portuguese**; this documentation is in English.
+OpenMail Serverless is a fork of [saasmail](https://github.com/choyiny/saasmail) by Cho Yin Yong. It keeps saasmail's architecture and adds a redesigned three-pane inbox, per-sender provider routing, server-side drafts and scheduled sending. The interface ships in **English and Brazilian Portuguese**: it follows the browser language, and anyone can switch under **Settings → Language**.
 
 ## Highlights
 
 - **Every domain in one place.** Mailboxes are grouped by domain in the sidebar, with unread counts per domain and per mailbox.
 - **One timeline per person.** Marketing, billing and support mail from the same customer land together, split by mailbox.
 - **Pick the sender per mailbox.** Send most mail through Cloudflare Email Sending and a few identities through Resend, from the same deployment.
-- **Drafts and scheduled replies.** Drafts are saved on the server, the reply box keeps a local backup, and **Agendar** (Schedule) queues a reply for the next business hour.
+- **Drafts and scheduled replies.** Drafts are saved on the server, the reply box keeps a local backup, and **Schedule** queues a reply for the next business hour.
 - **Team access.** Admins see everything; members only see the mailboxes assigned to them.
+- **English and Portuguese.** The interface follows the browser language and can be switched per browser.
 - **About $5 a month.** The Cloudflare Workers Paid plan covers it, including 3,000 outbound emails.
 
 ## Screenshots
@@ -29,7 +30,7 @@ OpenMail Serverless is a fork of [saasmail](https://github.com/choyiny/saasmail)
 | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | ![All mailboxes grouped by domain](docs/screenshots/inbox.png)                               | ![A person's conversation, split by mailbox](docs/screenshots/conversa.png)                                            |
 | **Reply with scheduling**                                                                    | **Mailboxes, providers and access**                                                                                    |
-| ![Reply composer with draft and "Schedule 15/10 at 09:00"](docs/screenshots/responder.png)   | ![Each mailbox with reading mode, provider (Cloudflare or Resend), forwarding and access](docs/screenshots/caixas.png) |
+| ![Reply composer with draft and "Schedule Oct 15, 09:00"](docs/screenshots/responder.png)    | ![Each mailbox with reading mode, provider (Cloudflare or Resend), forwarding and access](docs/screenshots/caixas.png) |
 | **Users**                                                                                    | **Dark theme**                                                                                                         |
 | ![Admins and members, each member limited to their mailboxes](docs/screenshots/usuarios.png) | ![The same conversation in the dark theme](docs/screenshots/conversa-escuro.png)                                       |
 
@@ -57,7 +58,7 @@ Small teams that answer customers from several domains and want to own that mail
 
 When more than one is configured, the precedence is Bavimail, then Postmark, then Resend, then Cloudflare. With none, sending fails with "No email provider configured".
 
-**Sending, per mailbox.** Configure both the `EMAIL` binding and `RESEND_API_KEY`, then set `vars.EMAIL_PROVIDER_ROUTING` to `"identity"`. Each mailbox then picks Cloudflare or Resend on the **Caixas e envio** (Mailboxes) page, and new mailboxes default to Cloudflare. The choice is strict: if the chosen provider is missing its binding or secret, the send fails instead of going out through the other one.
+**Sending, per mailbox.** Configure both the `EMAIL` binding and `RESEND_API_KEY`, then set `vars.EMAIL_PROVIDER_ROUTING` to `"identity"`. Each mailbox then picks Cloudflare or Resend on the **Mailboxes** page, and new mailboxes default to Cloudflare. The choice is strict: if the chosen provider is missing its binding or secret, the send fails instead of going out through the other one.
 
 ## How it works
 
@@ -115,7 +116,7 @@ The `NotificationsHub` Durable Object is keyed per user. When mail arrives, the 
 ### Replying
 
 - **Drafts** are saved on the server and marked in the list. The composer also keeps a local backup in the browser until the draft is saved or sent.
-- **Agendar** (Schedule) queues the reply for the next business-hour slot. Scheduled mail waits in **Saída** (Outbox), where it can be cancelled, and goes out on the next hourly run.
+- **Schedule** queues the reply for the next business-hour slot. Scheduled mail waits in the **Outbox**, where it can be cancelled, and goes out on the next hourly run.
 - **Replies to forwarded mail** go out from the original mailbox.
 - **Templates and signatures** per mailbox.
 
@@ -161,7 +162,7 @@ Admins invite people with one-time links. Members sign in with email and passwor
 ### API keys and webhooks
 
 - **API keys** (`sk_…`, hashed at rest) for sending, templates, sequences and reading mail.
-- **Webhook**: one `message.received` POST per new inbound message, signed with `X-SaaSMail-Signature: sha256=<hmac>` when a secret is set. Configure it on the **Chave de API** (API keys) page; it is off by default.
+- **Webhook**: one `message.received` POST per new inbound message, signed with `X-SaaSMail-Signature: sha256=<hmac>` when a secret is set. Configure it on the **API key** page; it is off by default.
 
 ```js
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -243,7 +244,7 @@ claude   # then run /saasmail-onboarding
 
 6. **Route the mail.** In each domain's **Email Routing**, add a catch-all rule that sends to the Worker.
 
-7. **Deploy** with `yarn deploy`, open your URL and create the first admin. Then add mailboxes on **Caixas e envio** (Mailboxes) and invite people on **Usuários** (Users).
+7. **Deploy** with `yarn deploy`, open your URL and create the first admin. Then add mailboxes on **Mailboxes** and invite people on **Users**.
 
 ## Configuration
 
@@ -261,7 +262,9 @@ claude   # then run /saasmail-onboarding
 
 **`.dev.vars`** (from `.dev.vars.example`, gitignored, local only): the same secrets as above, plus `DISABLE_PASSKEY_GATE=true` to sign in with a password during development and `DEMO_MODE=1` to stub real sending. Never set either in production.
 
-**Name and icon.** The instance is called "OpenMail Serverless" until an admin renames it under **Configurações** (Settings). The browser icons live in `public/favicon.svg` and `public/favicon/`.
+**Language.** The interface picks Portuguese for `pt-*` browsers and English for everything else. **Settings → Language** overrides it per browser (stored in `localStorage` as `openmail.lang`). Interface text lives in the source in Portuguese and is translated by `src/lib/en.ts`; to add a string, wrap it in `tx("…")` and add its English line there.
+
+**Name and icon.** The instance is called "OpenMail Serverless" until an admin renames it under **Settings**. The browser icons live in `public/favicon.svg` and `public/favicon/`.
 
 ## Local development
 
