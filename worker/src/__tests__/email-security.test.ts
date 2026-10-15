@@ -71,6 +71,58 @@ describe("trusted inbound authentication results", () => {
     expect(result.dkim).toBeNull();
     expect(result.dmarc).toBeNull();
   });
+
+  // Gmail's own header, as messages.get(format=raw) returns it (folded).
+  const google = {
+    key: "Authentication-Results",
+    value:
+      "mx.google.com;\r\n       dkim=pass header.i=@example.com header.s=s1;\r\n       spf=pass (google.com: domain of sender@example.com designates 192.0.2.1 as permitted sender) smtp.mailfrom=sender@example.com;\r\n       dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=example.com",
+  };
+
+  it("accepts Google's aligned DMARC pass for mail read from Gmail", () => {
+    const result = parseTrustedAuthResults(
+      [google],
+      "sender@example.com",
+      "mx.google.com",
+    );
+    expect(result.spf).toBe("pass");
+    expect(result.dkim).toBe("pass");
+    expect(result.dmarc).toBe("pass");
+  });
+
+  it("ignores a Google-shaped header on the Cloudflare path", () => {
+    const result = parseTrustedAuthResults([google], "sender@example.com");
+    expect(result.dmarc).toBeNull();
+  });
+
+  it("ignores a Cloudflare-shaped header on the Gmail path", () => {
+    const result = parseTrustedAuthResults(
+      [
+        {
+          key: "Authentication-Results",
+          value: "mx.cloudflare.net; dmarc=pass header.from=example.com",
+        },
+      ],
+      "sender@example.com",
+      "mx.google.com",
+    );
+    expect(result.dmarc).toBeNull();
+  });
+
+  it("does not let a spoofed Google pass override Google's failure", () => {
+    const result = parseTrustedAuthResults(
+      [
+        google,
+        {
+          key: "Authentication-Results",
+          value: "mx.google.com; dmarc=fail (p=REJECT) header.from=example.com",
+        },
+      ],
+      "sender@example.com",
+      "mx.google.com",
+    );
+    expect(result.dmarc).not.toBe("pass");
+  });
 });
 
 describe("sanitizeFilename", () => {

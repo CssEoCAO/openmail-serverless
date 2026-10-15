@@ -182,7 +182,7 @@ function authVerdict(raw: string, key: string): string | null {
 }
 
 /**
- * Parse only Cloudflare's authentication verdict and require DMARC alignment
+ * Parse only the receiving MX's authentication verdict and require DMARC alignment
  * with the visible RFC5322 From domain. A sender can include arbitrary
  * Authentication-Results headers in the MIME input; treating any such header
  * (or an unaligned SPF/DKIM pass) as identity proof lets a forged From mutate
@@ -191,11 +191,21 @@ function authVerdict(raw: string, key: string): string | null {
  * Multiple Cloudflare-shaped headers are evaluated conservatively: every one
  * must report an aligned DMARC pass. That prevents a prepended spoofed "pass"
  * from overriding the receiver's real failure result when headers repeat.
+ *
+ * `authServ` is the one receiver the message actually went through:
+ * `mx.cloudflare.net` for the Email Worker, `mx.google.com` for mail read from
+ * a Gmail mailbox. Each path trusts only its own receiver, so a forged header
+ * naming the other one is ignored.
  */
 export function parseTrustedAuthResults(
   headers: readonly ParsedHeader[],
   fromAddress: string,
+  authServ: "mx.cloudflare.net" | "mx.google.com" = "mx.cloudflare.net",
 ): AuthResults {
+  const receiver = new RegExp(
+    `^\\s*(?:i\\s*=\\s*\\d+\\s*;\\s*)?${authServ.replaceAll(".", "\\.")}\\s*;`,
+    "i",
+  );
   const trusted = headers
     .filter((header) => {
       const key = header.key.toLowerCase();
@@ -205,9 +215,7 @@ export function parseTrustedAuthResults(
       ) {
         return false;
       }
-      return /^\s*(?:i\s*=\s*\d+\s*;\s*)?mx\.cloudflare\.net\s*;/i.test(
-        header.value,
-      );
+      return receiver.test(header.value);
     })
     .map((header) => header.value);
 
@@ -266,6 +274,7 @@ function parseSpamScore(headers: Record<string, string>): number | null {
 export async function parseRaw(
   raw: ArrayBuffer,
   envelope: { from: string; to: string },
+  authServ: "mx.cloudflare.net" | "mx.google.com" = "mx.cloudflare.net",
 ): Promise<ParsedEmail> {
   const parser = new PostalMime();
   const parsed = await parser.parse(raw);
@@ -372,7 +381,7 @@ export async function parseRaw(
         : null,
       disposition: att.disposition || null,
     })),
-    auth: parseTrustedAuthResults(parsed.headers ?? [], fromAddress),
+    auth: parseTrustedAuthResults(parsed.headers ?? [], fromAddress, authServ),
     spamScore: parseSpamScore(headers),
   };
 }

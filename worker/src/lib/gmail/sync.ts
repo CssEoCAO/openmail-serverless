@@ -688,11 +688,13 @@ async function processMessage(
 
   // Provisional envelope: the raw bytes carry the real addresses. For inbound
   // mail `parsed.to` decides the destination and is overwritten per inbox
-  // below; for Sent mail the headers are read back out in the mirror.
-  const parsed = await parseRaw(message.raw, {
-    from: account.emailAddress,
-    to: account.emailAddress,
-  });
+  // below; for Sent mail the headers are read back out in the mirror. Google
+  // received this mail, so its Authentication-Results is the trusted verdict.
+  const parsed = await parseRaw(
+    message.raw,
+    { from: account.emailAddress, to: account.emailAddress },
+    "mx.google.com",
+  );
 
   // The mailbox's own outgoing mail goes onto the timeline as a `sent_emails`
   // row instead of down the inbound path. Counted under `mirrored`, not
