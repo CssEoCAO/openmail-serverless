@@ -270,6 +270,12 @@ claude   # then run /saasmail-onboarding
 
 **Language.** The interface picks Portuguese for `pt-*` browsers and English for everything else. **Settings → Language** overrides it per browser (stored in `localStorage` as `openmail.lang`). Interface text lives in the source in Portuguese and is translated by `src/lib/en.ts`; to add a string, wrap it in `tx("…")` and add its English line there.
 
+**Analytics (optional): Cloudflare Zaraz.** OpenMail Serverless ships no tracking. If you want usage numbers, [Cloudflare Zaraz](https://developers.cloudflare.com/zaraz/) on the same zone runs the tools at the edge instead of in the browser:
+
+1. In the zone's Zaraz settings, turn **Auto-inject script** off and **Single Page Application support** on (the inbox changes URL without reloading).
+2. [Load Zaraz manually](https://developers.cloudflare.com/zaraz/advanced/load-zaraz-manually/): add `<script src="/cdn-cgi/zaraz/i.js" referrerpolicy="origin"></script>` before `</head>` in `index.html`. It is same-origin, so the app's `script-src 'self'` Content Security Policy allows it; tools that load scripts from other hosts in the browser are blocked by that policy, so prefer the server-side ones (Google Analytics 4 is).
+3. **Mind what leaves:** app URLs carry mailbox addresses and contact IDs (`/inbox/<address>/<person>`). Send the page path without them, or only events, and keep your privacy notice in line with what the tools collect.
+
 **Name and icon.** The instance is called "OpenMail Serverless" until an admin renames it under **Settings**. The browser icons live in `public/favicon.svg` and `public/favicon/`.
 
 ## Local development
