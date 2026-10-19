@@ -1,4 +1,4 @@
-import { OpenAPIHono } from "@hono/zod-openapi";
+import { OpenAPIHono, z } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
@@ -153,6 +153,31 @@ function isPasskeyExemptPath(path: string): boolean {
 // anonymous caller cannot enumerate accounts or their authentication method.
 app.post("/api/auth/sign-in/email", async (c, next) => {
   if (isDevEnvironment(c.env)) return next();
+  // Password sign-in budget. Better Auth's own limiter is off
+  // on Workers (it keys on NODE_ENV) and would be per-isolate memory anyway.
+  // Shards keep storage bounded; only the edge-provided address is trusted.
+  // The per-account key also caps attempts spread across many addresses.
+  const db = c.get("db");
+  const body = z.object({ email: z.string().max(320) }).safeParse(
+    await c.req.raw
+      .clone()
+      .json()
+      .catch(() => null),
+  );
+  const ip = await hashKey(c.req.header("cf-connecting-ip") ?? "unknown");
+  await reserveBudget(
+    db,
+    `signin:ip:${parseInt(ip.slice(0, 4), 16) % 128}`,
+    1,
+    10,
+    60,
+  );
+  if (body.success) {
+    const account = await hashKey(body.data.email.trim().toLowerCase());
+    const shard = `signin:account:${parseInt(account.slice(0, 4), 16) % 256}`;
+    await reserveBudget(db, shard, 1, 10, 900);
+    await reserveBudget(db, shard, 1, 30, 86400);
+  }
   const response = await createAuth(c.env).handler(c.req.raw);
   if (!response.ok) return response;
   const login = (await response.clone().json()) as {
@@ -160,7 +185,6 @@ app.post("/api/auth/sign-in/email", async (c, next) => {
     token?: string;
   };
   if (!login.user?.id || !login.token) return response;
-  const db = c.get("db");
   const pkRows = await db
     .select({ id: passkeys.id })
     .from(passkeys)

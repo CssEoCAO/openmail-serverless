@@ -1,6 +1,7 @@
 import { createEmailSender } from "./email-sender";
 import { forwardReplyAddress } from "./forward-reply";
 import { encodeDisplayName, sanitizeHeaderValue } from "./format-from-address";
+import { surfaceReplyTo } from "./queries/emails";
 import type {
   SendEmailAttachment,
   SendEmailParams,
@@ -189,7 +190,20 @@ export function buildForwardMessage(
   }
   headerLines.push(["Authentication", authLabel]);
 
+  // The relay alias hides the original Reply-To from the mail client, so the
+  // destination `handleForwardReply` will really use must be stated here
+  // Same resolution as forward-reply.ts, so the two can't drift.
+  const senderAddress = params.from.address.trim().toLowerCase();
+  const replyTo = surfaceReplyTo(JSON.stringify(params.headers), senderAddress);
+  const replyDestination = sanitizeHeaderValue(replyTo ?? senderAddress);
+  if (replyTo) headerLines.push(["Reply-To", replyDestination]);
+
   const noteLines: string[] = [];
+  if (replyTo) {
+    noteLines.push(
+      `Atenção: a resposta irá para ${replyDestination}, que não é o remetente (${senderAddress})${params.auth.dmarc === "pass" ? "" : " e o DMARC do remetente não passou"}.`,
+    );
+  }
   if (skippedAttachments.length > 0) {
     noteLines.push(
       `${skippedAttachments.length} attachment(s) were too large to forward and are not included: ${skippedAttachments.join(", ")}`,
@@ -199,7 +213,7 @@ export function buildForwardMessage(
   const htmlHeaderBlock = [
     `<div style="font:13px/1.5 -apple-system,Segoe UI,sans-serif;color:#555;border-left:3px solid #ddd;padding:8px 12px;margin:0 0 16px">`,
     `<div style="font-weight:600;margin-bottom:6px">Forwarded by saasmail</div>`,
-    `<div>Ao responder este e-mail, sua resposta será enviada por ${escapeHtml(inbox)}.</div>`,
+    `<div>Ao responder este e-mail, sua resposta será enviada por ${escapeHtml(inbox)} para ${escapeHtml(replyDestination)}.</div>`,
     ...headerLines.map(
       ([k, v]) =>
         `<div><span style="color:#888">${escapeHtml(k)}:</span> ${escapeHtml(v)}</div>`,
@@ -212,7 +226,7 @@ export function buildForwardMessage(
 
   const textHeaderBlock = [
     "---------- Forwarded by saasmail ----------",
-    `Ao responder este e-mail, sua resposta será enviada por ${inbox}.`,
+    `Ao responder este e-mail, sua resposta será enviada por ${inbox} para ${replyDestination}.`,
     ...headerLines.map(([k, v]) => `${k}: ${v}`),
     ...noteLines,
     "",
