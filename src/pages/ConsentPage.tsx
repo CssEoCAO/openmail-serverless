@@ -164,10 +164,11 @@ export default function ConsentPage() {
             "Nome e site são informados pelo próprio aplicativo; não confirmam quem o publicou.",
           )}
         </p>
-        <p className="mt-1 break-all">
-          {tx("Destino da autorização:")} {normalizedOrigin(redirectUri)}
+        <p className="mt-1 [overflow-wrap:anywhere]">
+          {tx("Destino da autorização:")}{" "}
+          <span className="font-semibold">{normalizedOrigin(redirectUri)}</span>
         </p>
-        <p className="break-all">
+        <p className="[overflow-wrap:anywhere]">
           {tx("Site do aplicativo:")}{" "}
           {clientUri ? normalizedOrigin(clientUri) : tx("não informado")}
         </p>
