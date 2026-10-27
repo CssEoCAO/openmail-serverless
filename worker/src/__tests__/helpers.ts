@@ -294,7 +294,14 @@ export function buildSendForm(
   return fd;
 }
 
-/** Clean all tables between tests. */
+/**
+ * Clean all tables between tests.
+ *
+ * `jwkss` is kept: like production, the JWT signing key outlives sessions.
+ * The MCP endpoint caches the JWKS per isolate, and better-auth 1.7.14
+ * refetches it for an unknown `kid` at most once every 30 s, so a fresh key
+ * in every test would leave later tests verifying against an older key.
+ */
 export async function cleanDb() {
   const db = env.DB;
   await db.exec(`
@@ -329,7 +336,6 @@ export async function cleanDb() {
     DELETE FROM sessions;
     DELETE FROM accounts;
     DELETE FROM verifications;
-    DELETE FROM jwkss;
     DELETE FROM users;
   `);
 }
