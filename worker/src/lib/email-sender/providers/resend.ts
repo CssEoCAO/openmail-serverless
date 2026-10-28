@@ -12,6 +12,16 @@ export class ResendSender implements EmailSender {
   }
 
   async send(params: SendEmailParams): Promise<SendEmailResult> {
+    // Resend drops a Reply-To passed in `headers` (seen on a forwarded copy:
+    // the X- headers arrived, Reply-To did not), so it goes in `replyTo`.
+    const headers = { ...params.headers };
+    let replyTo: string | undefined;
+    for (const key of Object.keys(headers)) {
+      if (key.toLowerCase() === "reply-to") {
+        replyTo = headers[key];
+        delete headers[key];
+      }
+    }
     const result = await this.client.emails.send(
       {
         from: params.from,
@@ -20,7 +30,8 @@ export class ResendSender implements EmailSender {
         subject: params.subject,
         html: params.html,
         text: params.text,
-        headers: params.headers,
+        ...(replyTo ? { replyTo } : {}),
+        ...(Object.keys(headers).length > 0 ? { headers } : {}),
         ...(params.attachments && params.attachments.length > 0
           ? {
               attachments: params.attachments.map((a) => ({

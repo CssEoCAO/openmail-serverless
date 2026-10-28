@@ -67,14 +67,24 @@ export async function handleForwardReply(
   message: ForwardableEmailMessage,
   parsed: ParsedEmail,
 ): Promise<boolean> {
-  if (!/^reply\+/i.test(message.to)) return false;
+  const ALIAS = /^reply\+([\w-]{21})\.([a-f0-9]{32})@([a-z0-9.-]+)$/i;
+  // A mail client may answer the forward's From (the inbox) instead of its
+  // Reply-To. The forward also carries the alias in References, so such a reply
+  // is relayed too; if it doesn't check out it is ingested as ordinary mail.
+  const viaReferences = !/^reply\+/i.test(message.to);
+  const alias = viaReferences
+    ? `${parsed.headers["references"] ?? ""} ${parsed.headers["in-reply-to"] ?? ""}`
+        .match(/<reply\+[^<>\s]+>/gi)
+        ?.map((id) => id.slice(1, -1))
+        .find((id) => ALIAS.test(id))
+    : message.to;
+  if (!alias) return false;
   const reject = (reason: string) => {
+    if (viaReferences) return false;
     message.setReject(reason);
     return true;
   };
-  const match = /^reply\+([\w-]{21})\.([a-f0-9]{32})@([a-z0-9.-]+)$/i.exec(
-    message.to,
-  );
+  const match = ALIAS.exec(alias);
   if (!match) return reject("Invalid forwarded reply address");
   const [original] = await db
     .select({
@@ -91,6 +101,12 @@ export async function handleForwardReply(
     return reject("Forwarded reply is no longer available");
   }
   const { email, identity, personEmail } = original;
+  if (
+    viaReferences &&
+    message.to.trim().toLowerCase() !== identity.email.toLowerCase()
+  ) {
+    return false;
+  }
   const personal = identity.forwardTo.trim().toLowerCase();
   const expected = await forwardReplyAddress(
     email.id,

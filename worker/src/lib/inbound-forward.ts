@@ -263,6 +263,9 @@ export function buildForwardMessage(
       // header block only.
       headers: {
         "Reply-To": sanitizeHeaderValue(params.replyAddress),
+        // Replies copy References, so a reply sent to the inbox itself (the
+        // From) still names the relay alias; see handleForwardReply.
+        References: `<${sanitizeHeaderValue(params.replyAddress)}>`,
         "X-Auto-Response-Suppress": "All",
         [FORWARD_LOOP_HEADER]: inbox,
         [FORWARD_ORIGINAL_FROM_HEADER]: sanitizeHeaderValue(

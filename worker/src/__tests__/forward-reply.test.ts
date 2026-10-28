@@ -369,4 +369,54 @@ describe("replying to a forwarded message", () => {
     expect(send.mock.calls[0][0].html).toBe('<div dir="ltr">Resolvido!</div>');
     expect(JSON.stringify(send.mock.calls[0][0])).not.toContain(personal);
   });
+
+  it("relays a reply sent to the inbox itself when References names the alias", async () => {
+    const { send, replyAddress } = await startForward();
+    const message = await receive(inbox, personal, "reply-to-from", [
+      `In-Reply-To: <provider-id@ses.example>`,
+      `References: <${replyAddress}> <provider-id@ses.example>`,
+    ]);
+    expect(message.setReject).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][0].to).toBe("customer@example.com");
+    expect(await getDb().select().from(emails)).toHaveLength(1);
+    expect(await getDb().select().from(sentEmails)).toHaveLength(1);
+  });
+
+  it("forwards the alias in References so replies to the From can be matched", async () => {
+    const { replyAddress } = await startForward();
+    expect(replyAddress).toMatch(/^reply\+/);
+    const send = vi
+      .spyOn(CloudflareSender.prototype, "send")
+      .mockResolvedValue({ id: "provider-id", error: null });
+    await receive(inbox, "customer@example.com", "second");
+    const forward = send.mock.calls[0][0];
+    expect(forward.headers!.References).toBe(
+      `<${forward.headers!["Reply-To"]}>`,
+    );
+  });
+
+  it.each(["stranger@gmail.com", "forged"])(
+    "ingests a reply to the inbox as ordinary mail when the References alias does not check out (%s)",
+    async (who) => {
+      const { send, replyAddress } = await startForward();
+      const message = await receive(
+        inbox,
+        who === "forged" ? personal : who,
+        "not-a-relay",
+        [
+          `References: <${replyAddress}>`,
+          ...(who === "forged"
+            ? [
+                "Authentication-Results: mx.cloudflare.net; dmarc=fail header.from=gmail.com",
+              ]
+            : []),
+        ],
+      );
+      expect(message.setReject).not.toHaveBeenCalled();
+      expect(await getDb().select().from(sentEmails)).toHaveLength(0);
+      expect(await getDb().select().from(emails)).toHaveLength(2);
+      expect(send.mock.calls.every((c) => c[0].to === personal)).toBe(true);
+    },
+  );
 });
