@@ -1,0 +1,27 @@
+name: gitleaks
+
+# Varre a arvore do commit (nao o historico: os valores antigos seguem la ate o expurgo).
+on:
+  push:
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: 8.28.0
+      GITLEAKS_SHA256: a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar gitleaks
+        run: |
+          curl -sSfL -o gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum -c -
+          tar xzf gitleaks.tgz -C "$RUNNER_TEMP" gitleaks
+          rm gitleaks.tgz
+      - name: Varrer a arvore
+        run: '"$RUNNER_TEMP/gitleaks" dir . --config .gitleaks.toml --redact --no-banner --exit-code 1'

@@ -1,0 +1,21 @@
+# gitleaks: excecao so por arquivo exato, porque curinga de pasta ou regra esconderia segredo real no futuro.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Arquivos revisados: exemplo, fixture, valor publico ou codigo que a regra confunde"
+paths = [
+  '''^vitest\.config\.test\.ts$''',
+  '''^worker/src/__tests__/admin-gmail-router\.test\.ts$''',
+  '''^worker/src/__tests__/admin-inboxes-gmail-mapping\.test\.ts$''',
+  '''^worker/src/__tests__/do-notifications\.test\.ts$''',
+  '''^worker/src/__tests__/gmail-cron\.test\.ts$''',
+  '''^worker/src/__tests__/gmail-sender\.test\.ts$''',
+  '''^worker/src/__tests__/gmail-sync-sent\.test\.ts$''',
+  '''^worker/src/__tests__/gmail-sync\.test\.ts$''',
+  '''^worker/src/__tests__/send-reply-gmail\.test\.ts$''',
+  '''^worker/src/lib/delete-email\.ts$''',
+  '''^worker/src/lib/forward-reply\.ts$''',
+  '''^worker/src/lib/send-email\.ts$''',
+  '''^worker/src/routers/people-router\.ts$''',
+]

@@ -333,3 +333,10 @@ OpenMail Serverless is maintained by the team behind [Nerd Ofertas](https://nerd
 - [Nota do Afiliado](https://notadoafiliado.com): automatic service invoices (NFS-e) for Shopee's Extra Commission.
 - [Piloto do Afiliado](https://pilotodoafiliado.com.br): publishes to every social network at once and answers DMs.
 - [MCP do Afiliado](https://mcpdoafiliado.com): your affiliate APIs inside Claude and ChatGPT.
+
+## Secret scanning gate (gitleaks)
+
+The `.github/workflows/gitleaks.yml` workflow scans the tree of every commit. When it fails:
+
+- **Real secret:** rotate the credential and open a dedicated task. Removing the value from the file is not enough, because it stays in the history.
+- **False positive:** add the exact file path to `paths` in `.gitleaks.toml`, with the reason in a comment. No folder wildcards and no per-rule exceptions.
