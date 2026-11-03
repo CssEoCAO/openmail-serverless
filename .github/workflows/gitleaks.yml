@@ -1,6 +1,6 @@
 name: gitleaks
 
-# Varre a arvore do commit (nao o historico: os valores antigos seguem la ate o expurgo).
+# Varre a arvore de cada commit; o historico nao entra nesta varredura.
 on:
   push:
   pull_request:
