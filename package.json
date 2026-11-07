@@ -18,7 +18,7 @@
     "db:studio:prod": "NODE_ENV=production drizzle-kit studio",
     "cf-typegen": "node scripts/cf-typegen.mjs",
     "vapid:generate": "tsx scripts/generate-vapid.ts",
-    "test": "vitest run --config vitest.config.test.ts",
+    "test": "node sql-cru-trava.mjs && vitest run --config vitest.config.test.ts",
     "test:watch": "vitest --config vitest.config.test.ts",
     "test:web": "vitest run --config vitest.config.web.ts",
     "prepare": "husky",

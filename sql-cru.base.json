@@ -1,0 +1,20 @@
+{
+ "src/lib/en.ts": 1,
+ "worker/src/auth/index.ts": 1,
+ "worker/src/index.ts": 1,
+ "worker/src/lib/blocklist.ts": 2,
+ "worker/src/lib/delete-email.ts": 1,
+ "worker/src/lib/email-sender/index.ts": 1,
+ "worker/src/lib/purge-blocked.ts": 1,
+ "worker/src/lib/queries/emails.ts": 1,
+ "worker/src/lib/queries/people.ts": 2,
+ "worker/src/lib/queries/search.ts": 2,
+ "worker/src/lib/resource-budget.ts": 1,
+ "worker/src/routers/admin-inboxes-router.ts": 2,
+ "worker/src/routers/conversations-router.ts": 1,
+ "worker/src/routers/emails-router.ts": 1,
+ "worker/src/routers/oauth-apps-router.ts": 2,
+ "worker/src/routers/people-router.ts": 7,
+ "worker/src/routers/setup-router.ts": 1,
+ "worker/src/routers/stats-router.ts": 1
+}

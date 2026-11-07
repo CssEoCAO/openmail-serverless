@@ -111,3 +111,5 @@ every commit and in CI to catch secrets and production config.
 ## WebMCP tools
 
 WebMCP tools live in `src/webmcp/` (runtime + hook + `tools/`), registered in `DashboardLayout` via `WebMcpTools`. Read tools call `src/lib/api.ts`; action tools drive the UI through the bridge (`src/webmcp/bridge.tsx`). Add a tool by extending `createReadTools`/`createActionTools` in `src/webmcp/tools/`.
+
+- **Consulta nova pelo Drizzle, entrada por zod** (Leo, 12 e 18/10/2026). `sql-cru-trava.mjs` roda no começo do `npm test` e sai 1 quando um arquivo de app passa da base em `sql-cru.base.json` (29 pontos em 18 arquivos em 07/11/2026): SQL cru novo não entra. Converteu um arquivo? `node sql-cru-trava.mjs --gravar` abaixa a base no mesmo commit; ela só desce, e subir é editar o JSON à vista no diff. SQL cru antigo não se reescreve no meio de outra frente.
