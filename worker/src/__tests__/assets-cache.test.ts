@@ -78,4 +78,5 @@ it("documento da SPA não ganha cache longo e a CSP não libera fonte de fora", 
   expect(csp).toContain("font-src 'self' data:;");
   expect(csp).not.toContain("googleapis");
   expect(csp).not.toContain("unsafe-inline'; style");
+  expect(r.headers.get("Strict-Transport-Security")).toBe("max-age=31536000");
 });
