@@ -8,3 +8,5 @@ migrations
 yarn.lock
 package-lock.json
 .impeccable
+sql-cru-trava.mjs
+sql-cru.base.json
