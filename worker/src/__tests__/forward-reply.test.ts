@@ -109,6 +109,17 @@ describe("replying to a forwarded message", () => {
       createdAt: 1,
       updatedAt: 1,
     });
+    // The vitest config injects RESEND_API_KEY, so `cloudflare` identities go
+    // Resend-first. Model the common production case for inbox domains: Resend
+    // refuses the unverified sender domain and the binding delivers (and keep
+    // these tests off the network).
+    vi.spyOn(ResendSender.prototype, "send").mockResolvedValue({
+      id: null,
+      error: {
+        message: "The acme.test domain is not verified",
+        transient: false,
+      },
+    });
   });
   afterEach(() => vi.restoreAllMocks());
 

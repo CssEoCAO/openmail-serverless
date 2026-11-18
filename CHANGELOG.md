@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`cloudflare` identities send through Resend first when `RESEND_API_KEY` is also configured, with Cloudflare Email Sending as the reserve.** Mailbox providers that throttle Cloudflare's shared sending IPs (Outlook / Hotmail / Live answer `451 4.7.650`) never received that mail. Any Resend refusal (unverified sender domain, 429, 5xx, network error) sends the same message through the `EMAIL` binding unchanged; without the key nothing changes. `resend` identities stay Resend-only and a missing binding still fails closed. On this path, transactional mail with Cc is one Resend call (one outbox unit) instead of one binding submission per recipient.
+
 ### Added
 
 - **Recoverable automatic spam.** New senders are classified with Workers AI (`@cf/openai/gpt-oss-120b`); only high-confidence phishing and unsolicited sales pitches go to Spam. Existing block rules now quarantine new messages for 30 days. The Spam page can restore, delete or empty messages within the caller's inbox permissions, preserving message and attachment ids. Admin restoration trusts a sender globally; member restoration only trusts the restored inboxes. Public email domains cannot be blocked as a whole. Requires migration `0043_spam` and the `AI` binding. Blocked mail from the Gmail import also lands in Spam, at its own date, without calling the AI; without AI, manual rules still quarantine mail and unknown senders reach the inbox.
