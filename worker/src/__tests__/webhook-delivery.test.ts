@@ -57,7 +57,7 @@ describe("sendWebhook", () => {
     const [url, init] = fetchImpl.mock.calls[0];
     expect(url).toBe("https://hook.d.com");
     expect(init?.method).toBe("POST");
-    expect(init?.redirect).toBe("error");
+    expect(init?.redirect).toBe("manual");
     const headers = new Headers(init?.headers);
     expect(headers.get("Content-Type")).toBe("application/json");
     expect(headers.get("X-SaaSMail-Event")).toBe("message.received");
@@ -77,6 +77,22 @@ describe("sendWebhook", () => {
     expect(result).toEqual({ ok: true, status: 204 });
     const headers = new Headers(fetchImpl.mock.calls[0][1]?.headers);
     expect(headers.has("X-SaaSMail-Signature")).toBe(false);
+  });
+
+  it("treats a redirect as a failed delivery instead of following it", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(null, {
+        status: 307,
+        headers: { Location: "https://elsewhere.example" },
+      }),
+    );
+    const result = await sendWebhook(
+      { url: "https://hook.d.com", secret: "shh" },
+      payload,
+      fetchImpl,
+    );
+    expect(result).toEqual({ ok: false, status: 307 });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it("returns ok:false with the error message when fetch throws", async () => {

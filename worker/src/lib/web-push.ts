@@ -414,9 +414,13 @@ export async function sendPush(
     plaintext: new TextEncoder().encode(JSON.stringify(payload)),
   });
 
+  // `manual`, not `error`: the Workers runtime rejects the "error" redirect mode
+  // with a TypeError on every call. A push service never legitimately
+  // redirects, and the caller only counts a 2xx as delivered, so a 3xx is a
+  // failed send.
   const res = await fetch(sub.endpoint, {
     method: "POST",
-    redirect: "error",
+    redirect: "manual",
     signal: AbortSignal.timeout(10_000),
     headers: {
       TTL: String(opts.ttl ?? 60),
