@@ -7,6 +7,7 @@ import { PostmarkSender } from "./providers/postmark";
 import { NoopSender } from "./providers/noop";
 import { DemoSender } from "./providers/demo";
 import { IdentityRoutedSender } from "./providers/identity-routed";
+import { ResendFirstSender } from "./providers/resend-first";
 
 export type {
   SendEmailAttachment,
@@ -22,11 +23,30 @@ export { BavimailSender } from "./providers/bavimail";
 export { PostmarkSender } from "./providers/postmark";
 export { NoopSender } from "./providers/noop";
 export { DemoSender } from "./providers/demo";
+export { ResendFirstSender } from "./providers/resend-first";
 export {
   IdentityRoutedSender,
   type IdentityOutboundProvider,
   type IdentityProviderResolver,
 } from "./providers/identity-routed";
+
+/**
+ * Transport for identities on `cloudflare`. With a Resend key configured too,
+ * Resend goes first and the binding is the reserve (see ResendFirstSender);
+ * without the key, the plain binding exactly as before. Without the binding,
+ * undefined, so the routed sender keeps failing closed for that identity.
+ */
+function cloudflareIdentitySender(env: {
+  RESEND_API_KEY?: string;
+  EMAIL?: SendEmail;
+}): EmailSender | undefined {
+  if (!env.EMAIL) return undefined;
+  const cloudflare = new CloudflareSender(env.EMAIL);
+  const resendKey = env.RESEND_API_KEY?.trim();
+  return resendKey
+    ? new ResendFirstSender(new ResendSender(resendKey), cloudflare)
+    : cloudflare;
+}
 
 export function createEmailSender(
   env: CloudflareBindings & {
@@ -42,7 +62,7 @@ export function createEmailSender(
     return new DemoSender();
   }
   if (env.EMAIL_PROVIDER_ROUTING === "identity") {
-    const cloudflare = env.EMAIL ? new CloudflareSender(env.EMAIL) : undefined;
+    const cloudflare = cloudflareIdentitySender(env);
     const resend = env.RESEND_API_KEY
       ? new ResendSender(env.RESEND_API_KEY)
       : undefined;
@@ -90,7 +110,7 @@ export function createEmailSenderForProvider(
         ? new ResendSender(env.RESEND_API_KEY)
         : new NoopSender();
     case "cloudflare":
-      return env.EMAIL ? new CloudflareSender(env.EMAIL) : new NoopSender();
+      return cloudflareIdentitySender(env) ?? new NoopSender();
     case "bavimail":
       return env.BAVIMAIL_API_KEY && env.BAVIMAIL_ALIAS_ID
         ? new BavimailSender(env.BAVIMAIL_API_KEY, env.BAVIMAIL_ALIAS_ID)

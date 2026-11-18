@@ -16,6 +16,12 @@ interface IdentityProviderSenders {
  * global provider to every domain. A selected-but-unconfigured provider fails
  * closed; it never falls back to the other transport and changes reputation,
  * quotas, or billing silently.
+ *
+ * The one deliberate exception is built by `createEmailSender`: when both
+ * Resend and the Cloudflare binding are configured, the `cloudflare` slot is a
+ * ResendFirstSender (Resend first, binding as the reserve). A `resend`
+ * identity stays Resend-only, and a `cloudflare` identity without the binding
+ * still fails closed.
  */
 export class IdentityRoutedSender implements EmailSender {
   readonly provider = "routed" as const;

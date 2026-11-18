@@ -93,7 +93,12 @@ Backend routes are Hono + Zod OpenAPI under `worker/src/routers/`. Spec is serve
   `wrangler secret put` (see the README's Setup and Configuration). Never put
   secrets in `wrangler.jsonc`.
 - With `EMAIL_PROVIDER_ROUTING=identity`, a missing selected provider must fail
-  closed instead of silently falling back to another one.
+  closed instead of silently falling back to another one. The one deliberate
+  exception: when both `RESEND_API_KEY` and the `EMAIL` binding are configured, a
+  `cloudflare` identity sends Resend first and keeps the binding as the reserve
+  (`ResendFirstSender`), because mailbox providers that throttle Cloudflare's
+  shared sending IPs otherwise never receive that mail. `resend` identities stay
+  Resend-only, and a `cloudflare` identity without the binding still fails closed.
 - Before changing a zone's Email Routing, back up its MX records and routing rules.
 - If users are far from the D1 primary, set `placement` to the region next to it;
   every D1 query is a round trip and the inbox routes make several per request.

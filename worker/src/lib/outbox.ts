@@ -26,6 +26,7 @@ import type { EmailSender, SendEmailAttachment } from "./email-sender";
 import {
   createEmailSender,
   createEmailSenderForProvider,
+  ResendFirstSender,
 } from "./email-sender";
 import {
   sendWithSuppressionCheck,
@@ -298,9 +299,14 @@ export async function sendViaOutbox(
     visibleTo?: string;
     envelopeTo?: string;
   };
+  // The per-recipient envelope split exists only for the Cloudflare binding,
+  // which takes one SMTP recipient per submission. Resend-first delivers To +
+  // Cc in one call (and its Cloudflare reserve fans out per recipient by
+  // itself), so it keeps transactional mail as a single unit.
   const units: SendUnit[] =
     transactional === true &&
     provider === "cloudflare" &&
+    !(concreteSender instanceof ResendFirstSender) &&
     effectiveCc.length > 0
       ? [
           { email: to, name: null },
