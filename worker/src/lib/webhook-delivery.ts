@@ -86,8 +86,10 @@ export async function sendWebhook(
       signal: controller.signal,
       // A configured automation endpoint may legitimately be private HTTP,
       // but it must not silently redirect the signed body (and its signature)
-      // to a different origin.
-      redirect: "error",
+      // to a different origin. `manual`, not `error`: the Workers runtime
+      // rejects the "error" redirect mode with a TypeError on every call. A 3xx is
+      // returned as-is and counts as a failed delivery (`res.ok` is false).
+      redirect: "manual",
     });
     return { ok: res.ok, status: res.status };
   } catch (err) {
